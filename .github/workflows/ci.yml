@@ -1,0 +1,61 @@
+# .github/workflows/ci.yml
+# Repo : EazyVTC_API — Node.js + Express
+name: CI — EasyVTC API (Node.js + Express)
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  test-api:
+    name:  API Express — Lint + Tests + Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: easyvtc_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name:  Checkout
+        uses: actions/checkout@v4
+
+      - name:  Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name:  Install dependencies
+        run: npm ci
+
+      - name:  Lint
+        run: npm run lint
+
+      - name:  Unit tests
+        run: npm test
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/easyvtc_test
+          JWT_SECRET: ci-test-secret-key
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Coverage
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/easyvtc_test
+          JWT_SECRET: ci-test-secret-key
