@@ -10,6 +10,9 @@ router.post('/login',            (req, res) => authController.login(req, res));
 router.post('/refresh',          (req, res) => authController.refresh(req, res));
 router.post('/forgot-password',  (req, res) => authController.forgotPassword(req, res));
 router.post('/reset-password',   (req, res) => authController.resetPassword(req, res));
+router.get( '/google',           (req, res) => authController.googleAuth(req, res));
+router.get( '/google/callback',  (req, res) => authController.googleCallback(req, res));
+router.post('/google/token',      (req, res) => authController.googleToken(req, res));
 
 // ── Routes protégées ──────────────────────────────────────────────────────
 router.get( '/me',     authMiddleware, (req, res) => authController.me(req, res));

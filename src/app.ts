@@ -6,7 +6,8 @@ import morgan from 'morgan';
 import { supabaseAdmin } from './database/supabase/client.js';
 
 // ── Routes ──────────────────────────────────────────────────────────────────
-import authRoutes from './modules/auth/auth.routes.js';
+import authRoutes  from './modules/auth/auth.routes.js';
+import usersRoutes from './modules/users/users.routes.js';
 
 const app = express();
 
@@ -53,7 +54,8 @@ app.get('/health/supabase', async (_req: Request, res: Response) => {
 });
 
 // ── API Routes ────────────────────────────────────────────────────────────────
-app.use('/auth', authRoutes);
+app.use('/auth',  authRoutes);
+app.use('/users', usersRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

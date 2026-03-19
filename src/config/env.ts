@@ -5,7 +5,7 @@ const envSchema = z
   .object({
     PORT:     z.coerce.number().default(4000),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-    APP_URL:  z.string().url().default('http://localhost:3000'),
+    APP_URL:  z.string().url().default('http://localhost:4000'),
 
     // ── Supabase ────────────────────────────────────────────────────────────
     SUPABASE_URL:              z.string().url(),

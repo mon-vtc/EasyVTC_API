@@ -272,3 +272,43 @@ export async function sendReservationConfirmedEmail(
 
   await sendMail(to, ` Réservation confirmée — ${reservationRef}`, html);
 }
+
+// 5. Confirmation de réinitialisation du mot de passe
+export async function sendPasswordChangedEmail(
+  to: string,
+  firstName: string,
+  loginUrl = 'easyvtc://login'
+): Promise<void> {
+  const html = layout(`
+    <h1 style="margin:0 0 6px;color:${C.bordeaux};font-size:26px;font-weight:bold;">
+       Mot de passe mis à jour</h1>
+    <p style="margin:0 0 24px;color:${C.beige};font-size:13px;font-weight:600;
+              letter-spacing:1px;text-transform:uppercase;">Confirmation de modification</p>
+    ${hr()}
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Bonjour <strong>${firstName}</strong>,</p>
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 20px;">
+      Votre mot de passe EasyVTC a bien été modifié. Vous pouvez maintenant
+      vous connecter avec votre nouveau mot de passe.</p>
+
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:#F0FFF4;border-radius:8px;border-left:4px solid #38A169;margin:0 0 20px;">
+      <tr><td style="padding:14px 20px;">
+        <p style="margin:0;color:#276749;font-size:14px;line-height:1.5;">
+           Si vous n'êtes pas à l'origine de cette modification,
+          <strong>contactez immédiatement notre support</strong>.</p>
+      </td></tr>
+    </table>
+
+    ${btn('Se connecter à EasyVTC', loginUrl)}
+
+    ${hr()}
+    <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
+      Support :
+      <a href="mailto:support@easyvtc.com"
+         style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
+        support@easyvtc.com</a></p>
+  `, `${firstName}, votre mot de passe EasyVTC a été modifié avec succès.`);
+
+  await sendMail(to, ' Mot de passe EasyVTC modifié avec succès', html);
+}
