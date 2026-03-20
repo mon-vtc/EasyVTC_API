@@ -37,7 +37,7 @@ export class AuthService {
 
     // Retry : attendre que le trigger handle_new_user s'exécute
     let userProfile: AuthUser | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       const { data } = await supabaseAdmin
         .from('users')
         .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
@@ -45,12 +45,35 @@ export class AuthService {
         .single();
 
       if (data) { userProfile = data as AuthUser; break; }
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 400));
     }
 
+    // Fallback : si le trigger n'a pas créé le profil, on le crée manuellement
     if (!userProfile) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      throw { status: 500, message: 'Erreur lors de la création du profil' };
+      console.warn('[Register] Trigger handle_new_user timed out — fallback insert manuel');
+
+      const { data: inserted, error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id:              authData.user.id,
+          email:           dto.email,
+          first_name:      dto.first_name,
+          last_name:       dto.last_name,
+          phone:           dto.phone,
+          role:            dto.role,
+          rgpd_consent:    dto.rgpd_consent ?? false,
+          rgpd_consent_at: dto.rgpd_consent ? new Date().toISOString() : null,
+        })
+        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+        .single();
+
+      if (insertError || !inserted) {
+        console.error('[Register] Fallback insert échoué :', insertError?.message);
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw { status: 500, message: 'Erreur lors de la création du profil' };
+      }
+
+      userProfile = inserted as AuthUser;
     }
 
     const { data: signIn, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
@@ -130,14 +153,12 @@ export class AuthService {
 
   // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
   async forgotPassword(email: string): Promise<void> {
-    // 1. Vérifier si l'utilisateur existe (sans révéler l'info dans la réponse)
     const { data: userProfile } = await supabaseAdmin
       .from('users')
       .select('first_name')
       .eq('email', email)
       .single();
 
-    // 2. Générer le lien Supabase
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
@@ -148,10 +169,9 @@ export class AuthService {
 
     if (error || !data) {
       console.warn('[Auth] Generate reset link warning:', error?.message);
-      return; // Ne pas révéler l'erreur
+      return;
     }
 
-    // 3. Envoyer l'email via Mailtrap (non bloquant si user inexistant)
     if (userProfile?.first_name) {
       sendResetPasswordEmail(
         email,
@@ -168,7 +188,6 @@ export class AuthService {
     let userEmail: string | null = null;
     let userFirstName: string | null = null;
 
-    // Cas 1 : JWT Supabase (commence par "eyJ") → vient du mobile/front
     if (tokenOrJwt.startsWith('eyJ')) {
       const { data: { user }, error } = await supabaseAdmin.auth.getUser(tokenOrJwt);
       if (error || !user) {
@@ -177,7 +196,6 @@ export class AuthService {
       userId = user.id;
       userEmail = user.email ?? null;
     } else {
-      // Cas 2 : OTP token (depuis le lien dans l'email)
       const { data, error } = await supabaseAdmin.auth.verifyOtp({
         token_hash: tokenOrJwt,
         type: 'recovery',
@@ -189,7 +207,6 @@ export class AuthService {
       userEmail = data.user.email ?? null;
     }
 
-    // Récupérer le prénom pour l'email de confirmation
     const { data: profile } = await supabaseAdmin
       .from('users')
       .select('first_name')
@@ -197,7 +214,6 @@ export class AuthService {
       .single();
     userFirstName = profile?.first_name ?? null;
 
-    // Mise à jour du mot de passe
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
       password: newPassword,
     });
@@ -206,7 +222,6 @@ export class AuthService {
       throw { status: 400, message: 'Impossible de mettre à jour le mot de passe' };
     }
 
-    // Email de confirmation (non bloquant)
     if (userEmail && userFirstName) {
       sendPasswordChangedEmail(userEmail, userFirstName).catch((err) =>
         console.warn('[Email] Password changed email failed:', err)
@@ -229,10 +244,8 @@ export class AuthService {
     return data as AuthUser;
   }
 
-  // ── GOOGLE AUTH — Étape 1 : Générer l'URL de redirection ─────────────────
+  // ── GOOGLE AUTH — URL de redirection ─────────────────────────────────────
   async getGoogleAuthUrl(redirectTo?: string): Promise<string> {
-    // Construction directe de l'URL Supabase OAuth
-    // (évite le problème de PKCE state, incompatible avec Express server-side)
     const callbackUrl = encodeURIComponent(
       redirectTo ?? `${env.APP_URL}/auth/google/callback`
     );
@@ -240,7 +253,7 @@ export class AuthService {
     return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${callbackUrl}`;
   }
 
-  // ── GOOGLE AUTH — Étape 2 : Échanger le code contre une session ───────────
+  // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────
   async handleGoogleCallback(code: string): Promise<AuthResponse> {
     const { data, error } = await supabaseAdmin.auth.exchangeCodeForSession(code);
 
@@ -256,7 +269,6 @@ export class AuthService {
       .eq('id', supabaseUser.id)
       .single();
 
-    // Premier login Google → créer le profil
     if (!userProfile) {
       const firstName = supabaseUser.user_metadata?.['given_name']
                      ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
@@ -268,13 +280,9 @@ export class AuthService {
       const { data: newProfile, error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
-          id:           supabaseUser.id,
-          email:        supabaseUser.email,
-          first_name:   firstName,
-          last_name:    lastName,
-          phone:        null,
-          role:         'client',
-          rgpd_consent: false,
+          id: supabaseUser.id, email: supabaseUser.email,
+          first_name: firstName, last_name: lastName,
+          phone: null, role: 'client', rgpd_consent: false,
         })
         .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
         .single();
@@ -282,9 +290,7 @@ export class AuthService {
       if (insertError || !newProfile) {
         throw { status: 500, message: 'Erreur lors de la création du profil Google' };
       }
-
       userProfile = newProfile;
-
       sendWelcomeEmail(supabaseUser.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
       );
@@ -295,16 +301,15 @@ export class AuthService {
     }
 
     return {
-      user:          userProfile as AuthUser,
-      access_token:  data.session.access_token,
+      user: userProfile as AuthUser,
+      access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
-      token_type:    'Bearer',
+      token_type: 'Bearer',
     };
   }
 
-  // ── GOOGLE AUTH — Depuis access_token fragment (flow implicite Supabase) ──
+  // ── GOOGLE AUTH — Depuis access_token fragment ────────────────────────────
   async handleGoogleToken(accessToken: string, refreshToken?: string): Promise<AuthResponse> {
-    // Vérifier le token et récupérer l'utilisateur
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (error || !user) {
@@ -317,7 +322,6 @@ export class AuthService {
       .eq('id', user.id)
       .single();
 
-    // Premier login → créer le profil
     if (!userProfile) {
       const firstName = user.user_metadata?.['given_name']
                      ?? user.user_metadata?.['full_name']?.split(' ')[0]
@@ -329,13 +333,9 @@ export class AuthService {
       const { data: newProfile, error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
-          id:           user.id,
-          email:        user.email,
-          first_name:   firstName,
-          last_name:    lastName,
-          phone:        null,
-          role:         'client',
-          rgpd_consent: false,
+          id: user.id, email: user.email,
+          first_name: firstName, last_name: lastName,
+          phone: null, role: 'client', rgpd_consent: false,
         })
         .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
         .single();
@@ -343,9 +343,7 @@ export class AuthService {
       if (insertError || !newProfile) {
         throw { status: 500, message: 'Erreur lors de la création du profil Google' };
       }
-
       userProfile = newProfile;
-
       sendWelcomeEmail(user.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
       );
@@ -356,13 +354,12 @@ export class AuthService {
     }
 
     return {
-      user:          userProfile as AuthUser,
-      access_token:  accessToken,
+      user: userProfile as AuthUser,
+      access_token: accessToken,
       refresh_token: refreshToken ?? '',
-      token_type:    'Bearer',
+      token_type: 'Bearer',
     };
   }
-
 }
 
 export const authService = new AuthService();
