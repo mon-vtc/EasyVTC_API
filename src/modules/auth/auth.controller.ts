@@ -6,6 +6,7 @@ import {
   refreshTokenSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from './auth.validator.js';
 
 export class AuthController {
@@ -170,7 +171,7 @@ export class AuthController {
 </head>
 <body>
 <div class="card">
-  <h2>✅ Connexion Google réussie</h2>
+  <h2> Connexion Google réussie</h2>
   <p>Vos tokens ont été récupérés avec succès.</p>
   <p class="success" id="status">Extraction des tokens...</p>
   <pre id="result"></pre>
@@ -184,7 +185,7 @@ export class AuthController {
   const params = Object.fromEntries(new URLSearchParams(hash));
 
   if (params.access_token) {
-    document.getElementById('status').textContent = '✅ Tokens extraits avec succès !';
+    document.getElementById('status').textContent = ' Tokens extraits avec succès !';
     document.getElementById('result').textContent = JSON.stringify({
       access_token:  params.access_token ? params.access_token.substring(0, 50) + '...' : null,
       refresh_token: params.refresh_token ?? null,
@@ -230,6 +231,31 @@ export class AuthController {
     try {
       const result = await authService.handleGoogleToken(access_token, refresh_token);
       res.status(200).json({ ok: true, message: 'Connexion Google réussie', data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /auth/change-password (protégé)
+  async changePassword(req: Request, res: Response): Promise<void> {
+    const parsed = changePasswordSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    try {
+      await authService.changePassword(
+        req.user!.id,
+        parsed.data.current_password,
+        parsed.data.new_password
+      );
+      res.status(200).json({ ok: true, message: 'Mot de passe modifié avec succès' });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

@@ -15,7 +15,8 @@ router.get( '/google/callback',  (req, res) => authController.googleCallback(req
 router.post('/google/token',      (req, res) => authController.googleToken(req, res));
 
 // ── Routes protégées ──────────────────────────────────────────────────────
-router.get( '/me',     authMiddleware, (req, res) => authController.me(req, res));
-router.post('/logout', authMiddleware, (req, res) => authController.logout(req, res));
+router.get( '/me',              authMiddleware, (req, res) => authController.me(req, res));
+router.post('/logout',          authMiddleware, (req, res) => authController.logout(req, res));
+router.post('/change-password', authMiddleware, (req, res) => authController.changePassword(req, res));
 
 export default router;

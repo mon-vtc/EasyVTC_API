@@ -360,6 +360,46 @@ export class AuthService {
       token_type: 'Bearer',
     };
   }
+
+  // ── CHANGE PASSWORD (utilisateur connecté) ─────────────────────────────────
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    // 1. Récupérer l'email de l'utilisateur
+    const { data: userProfile, error: profileError } = await supabaseAdmin
+      .from('users')
+      .select('email, first_name')
+      .eq('id', userId)
+      .single();
+
+    if (profileError || !userProfile?.email) {
+      throw { status: 404, message: 'Utilisateur introuvable' };
+    }
+
+    // 2. Vérifier l'ancien mot de passe en tentant une connexion
+    const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: userProfile.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      throw { status: 401, message: 'Mot de passe actuel incorrect' };
+    }
+
+    // 3. Mettre à jour le mot de passe
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (updateError) {
+      throw { status: 400, message: 'Impossible de mettre à jour le mot de passe' };
+    }
+
+    // 4. Envoyer l'email de confirmation
+    if (userProfile.first_name) {
+      sendPasswordChangedEmail(userProfile.email, userProfile.first_name).catch((err) =>
+        console.warn('[Email] Password changed email failed:', err)
+      );
+    }
+  }
 }
 
 export const authService = new AuthService();
