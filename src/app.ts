@@ -8,6 +8,11 @@ import { supabaseAdmin } from './database/supabase/client.js';
 // ── Routes ──────────────────────────────────────────────────────────────────
 import authRoutes  from './modules/auth/auth.routes.js';
 import usersRoutes from './modules/users/users.routes.js';
+import { 
+  driverDocumentsRoutes, 
+  adminDocumentsRoutes, 
+  cronDocumentsRoutes 
+} from './modules/driver-documents/driver-documents.routes.js';
 
 const app = express();
 
@@ -56,6 +61,11 @@ app.get('/health/supabase', async (_req: Request, res: Response) => {
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/auth',  authRoutes);
 app.use('/users', usersRoutes);
+
+// ── Driver Documents Routes ───────────────────────────────────────────────────
+app.use('/drivers/documents', driverDocumentsRoutes);
+app.use('/admin/documents', adminDocumentsRoutes);
+app.use('/cron/documents', cronDocumentsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

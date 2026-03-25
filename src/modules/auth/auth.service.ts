@@ -40,7 +40,7 @@ export class AuthService {
     for (let attempt = 0; attempt < 5; attempt++) {
       const { data } = await supabaseAdmin
         .from('users')
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+        .select('id, email, role, first_name, last_name, phone, profile_photo_url,deleted_at, created_at')
         .eq('id', authData.user.id)
         .single();
 

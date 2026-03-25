@@ -4,15 +4,6 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // MOCKS — Avec ESM, on doit utiliser unstable_mockModule AVANT les imports
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Au début du fichier de test, après les imports
-beforeEach(() => {
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-});
-
-afterEach(() => {
-  jest.restoreAllMocks();
-});
-
 const mockFrom           = jest.fn();
 const mockStorageFrom    = jest.fn();
 const mockSignOut        = jest.fn();

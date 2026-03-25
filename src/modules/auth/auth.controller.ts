@@ -171,7 +171,7 @@ export class AuthController {
 </head>
 <body>
 <div class="card">
-  <h2> Connexion Google réussie</h2>
+  <h2>✅ Connexion Google réussie</h2>
   <p>Vos tokens ont été récupérés avec succès.</p>
   <p class="success" id="status">Extraction des tokens...</p>
   <pre id="result"></pre>
@@ -185,7 +185,7 @@ export class AuthController {
   const params = Object.fromEntries(new URLSearchParams(hash));
 
   if (params.access_token) {
-    document.getElementById('status').textContent = ' Tokens extraits avec succès !';
+    document.getElementById('status').textContent = '✅ Tokens extraits avec succès !';
     document.getElementById('result').textContent = JSON.stringify({
       access_token:  params.access_token ? params.access_token.substring(0, 50) + '...' : null,
       refresh_token: params.refresh_token ?? null,

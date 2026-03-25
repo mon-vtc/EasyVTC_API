@@ -23,6 +23,7 @@ export interface AuthUser {
   first_name: string;
   last_name: string;
   phone: string;
+  profile_photo_url: string;
   deleted_at: string | null; // Soft delete — pas de champ is_active dans la BDD
   created_at: string;
 }

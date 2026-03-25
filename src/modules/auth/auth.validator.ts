@@ -10,14 +10,12 @@ export const registerSchema = z.object({
   first_name: z.string().min(2).max(100),
   last_name:  z.string().min(2).max(100),
   phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, 'Numéro de téléphone invalide (format E.164)'),
- role: z.enum(['client', 'driver', 'admin', 'manager'] as const, {  
+ role: z.enum(['client', 'driver'] as const, {
   error: "Le rôle doit être 'client' ou 'driver'",
 }),
   accept_terms: z.boolean().refine((v) => v === true, { message: 'Vous devez accepter les CGU' }),
   rgpd_consent: z.boolean().optional(),
 });
-
-//Plutard, on va restreindre à 'client' et 'driver' pour les inscriptions publiques
 
 export const loginSchema = z.object({
   email: z.email('Email invalide'),

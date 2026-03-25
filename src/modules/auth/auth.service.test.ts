@@ -16,16 +16,6 @@ const mockGetUser        = jest.fn();
 const mockExchangeCode   = jest.fn();
 const mockFrom           = jest.fn();
 
-
-// Au début du fichier de test, après les imports
-beforeEach(() => {
-  jest.spyOn(console, 'warn').mockImplementation(() => {});
-});
-
-afterEach(() => {
-  jest.restoreAllMocks();
-});
-
 // Mock du client Supabase
 jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   supabaseAdmin: {
@@ -49,9 +39,9 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 
 // Mock du service email (non bloquant)
 jest.unstable_mockModule('../../utils/email.service.js', () => ({
-  sendWelcomeEmail:         jest.fn().mockImplementation(() => Promise.resolve()),
-  sendResetPasswordEmail:   jest.fn().mockImplementation(() => Promise.resolve()),
-  sendPasswordChangedEmail: jest.fn().mockImplementation(() => Promise.resolve()),
+  sendWelcomeEmail:         jest.fn().mockResolvedValue(undefined),
+  sendResetPasswordEmail:   jest.fn().mockResolvedValue(undefined),
+  sendPasswordChangedEmail: jest.fn().mockResolvedValue(undefined),
 }));
 
 // Import dynamique APRÈS le mock (obligatoire avec ESM)
