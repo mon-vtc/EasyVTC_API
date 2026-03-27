@@ -4,16 +4,31 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Enums (correspondant à la BDD) ───────────────────────────────────────────
-export type DocumentType = 'license' | 'insurance' | 'vtc_card' | 'kbis' | 'company_doc';
+export type DocumentType =
+  | 'license'
+  | 'vtc_card'
+  | 'medical_visit'
+  | 'rc_pro'
+  | 'kbis'
+  | 'vtc_register'
+  | 'rir'
+  | 'id_card'
+  | 'vehicle_insurance'
+  | 'grey_card';
 export type DocumentStatus = 'pending' | 'validated' | 'rejected' | 'expired';
 
 // ── Labels pour affichage ────────────────────────────────────────────────────
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
-  license: 'Permis de conduire',
-  insurance: 'Attestation d\'assurance',
-  vtc_card: 'Carte professionnelle VTC',
-  kbis: 'Extrait Kbis',
-  company_doc: 'Document entreprise',
+  license:           'Permis de conduire',
+  vtc_card:          'Carte professionnelle VTC',
+  medical_visit:     'Visite médicale',
+  rc_pro:            'Assurance RC Pro',
+  kbis:              'Extrait KBIS',
+  vtc_register:      'Certificat d\'inscription au registre VTC',
+  rir:               'Relevé d\'information RIR',
+  id_card:           'Pièce d\'identité',
+  vehicle_insurance: 'Attestation d\'assurance véhicule',
+  grey_card:         'Carte grise',
 };
 
 export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {

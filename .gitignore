@@ -5,3 +5,7 @@ dist/
 .env.local
 uploads/
 *.log
+
+Claude.md
+EazyVTC_API.postman_collection.json
+EazyVTC_Local.postman_environment.json

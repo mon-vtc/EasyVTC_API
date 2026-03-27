@@ -1,9 +1,34 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
 import { env } from '../../config/env.js';
-import type { RegisterDto, LoginDto, AuthResponse, AuthUser } from './auth.types.js';
+import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
 
 export class AuthService {
+
+  // ── HELPER PRIVÉ : récupérer le profil complet (users + driver si applicable) ──
+  private async fetchFullProfile(userId: string): Promise<AuthUser> {
+    const { data: user, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      throw { status: 404, message: 'Profil utilisateur introuvable' };
+    }
+
+    let driver: DriverProfile | null = null;
+    if (user.role === 'driver') {
+      const { data: driverData } = await supabaseAdmin
+        .from('drivers')
+        .select('id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at')
+        .eq('user_id', userId)
+        .single();
+      driver = driverData ?? null;
+    }
+
+    return { ...user, driver } as AuthUser;
+  }
 
   // ── REGISTER ──────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -36,23 +61,23 @@ export class AuthService {
     }
 
     // Retry : attendre que le trigger handle_new_user s'exécute
-    let userProfile: AuthUser | null = null;
+    let profileExists = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       const { data } = await supabaseAdmin
         .from('users')
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+        .select('id')
         .eq('id', authData.user.id)
         .single();
 
-      if (data) { userProfile = data as AuthUser; break; }
+      if (data) { profileExists = true; break; }
       await new Promise((r) => setTimeout(r, 400));
     }
 
     // Fallback : si le trigger n'a pas créé le profil, on le crée manuellement
-    if (!userProfile) {
+    if (!profileExists) {
       console.warn('[Register] Trigger handle_new_user timed out — fallback insert manuel');
 
-      const { data: inserted, error: insertError } = await supabaseAdmin
+      const { error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
           id:              authData.user.id,
@@ -63,17 +88,22 @@ export class AuthService {
           role:            dto.role,
           rgpd_consent:    dto.rgpd_consent ?? false,
           rgpd_consent_at: dto.rgpd_consent ? new Date().toISOString() : null,
-        })
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
-        .single();
+        });
 
-      if (insertError || !inserted) {
+      if (insertError) {
         console.error('[Register] Fallback insert échoué :', insertError?.message);
         await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
         throw { status: 500, message: 'Erreur lors de la création du profil' };
       }
 
-      userProfile = inserted as AuthUser;
+      // Si c'est un chauffeur, créer aussi le profil driver
+      if (dto.role === 'driver') {
+        await supabaseAdmin
+          .from('drivers')
+          .insert({ user_id: authData.user.id })
+          .onConflict('user_id')
+          .ignore();
+      }
     }
 
     const { data: signIn, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
@@ -84,6 +114,8 @@ export class AuthService {
     if (signInError || !signIn.session) {
       throw { status: 500, message: 'Compte créé mais impossible de générer le token' };
     }
+
+    const userProfile = await this.fetchFullProfile(authData.user.id);
 
     // ── Email de bienvenue (non bloquant) ──────────────────────────────────
     sendWelcomeEmail(dto.email, dto.first_name).catch((err) =>
@@ -109,22 +141,14 @@ export class AuthService {
       throw { status: 401, message: 'Email ou mot de passe incorrect' };
     }
 
-    const { data: userProfile, error: profileError } = await supabaseAdmin
-      .from('users')
-      .select('id, email, role, first_name, last_name, phone, profile_photo_url, deleted_at, created_at')
-      .eq('id', data.user.id)
-      .single();
+    const userProfile = await this.fetchFullProfile(data.user.id);
 
-    if (profileError || !userProfile) {
-      throw { status: 404, message: 'Profil utilisateur introuvable' };
-    }
-
-    if (userProfile.deleted_at !== null) {
+    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
       throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
     }
 
     return {
-      user: userProfile as AuthUser,
+      user: userProfile,
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
       token_type: 'Bearer',
@@ -231,17 +255,7 @@ export class AuthService {
 
   // ── ME ────────────────────────────────────────────────────────────────────
   async getMe(userId: string): Promise<AuthUser> {
-    const { data, error } = await supabaseAdmin
-      .from('users')
-      .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
-      .eq('id', userId)
-      .single();
-
-    if (error || !data) {
-      throw { status: 404, message: 'Utilisateur introuvable' };
-    }
-
-    return data as AuthUser;
+    return this.fetchFullProfile(userId);
   }
 
   // ── GOOGLE AUTH — URL de redirection ─────────────────────────────────────
@@ -263,13 +277,14 @@ export class AuthService {
 
     const supabaseUser = data.user;
 
-    let { data: userProfile } = await supabaseAdmin
+    // Vérifier si le profil existe déjà
+    const { data: existing } = await supabaseAdmin
       .from('users')
-      .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+      .select('id')
       .eq('id', supabaseUser.id)
       .single();
 
-    if (!userProfile) {
+    if (!existing) {
       const firstName = supabaseUser.user_metadata?.['given_name']
                      ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
                      ?? 'Utilisateur';
@@ -277,31 +292,30 @@ export class AuthService {
                      ?? supabaseUser.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
                      ?? '';
 
-      const { data: newProfile, error: insertError } = await supabaseAdmin
+      const { error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
           id: supabaseUser.id, email: supabaseUser.email,
           first_name: firstName, last_name: lastName,
           phone: null, role: 'client', rgpd_consent: false,
-        })
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
-        .single();
+        });
 
-      if (insertError || !newProfile) {
+      if (insertError) {
         throw { status: 500, message: 'Erreur lors de la création du profil Google' };
       }
-      userProfile = newProfile;
       sendWelcomeEmail(supabaseUser.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
       );
     }
 
-    if (userProfile.deleted_at !== null) {
+    const userProfile = await this.fetchFullProfile(supabaseUser.id);
+
+    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
       throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
     }
 
     return {
-      user: userProfile as AuthUser,
+      user: userProfile,
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
       token_type: 'Bearer',
@@ -316,13 +330,14 @@ export class AuthService {
       throw { status: 401, message: 'Token Google invalide ou expiré' };
     }
 
-    let { data: userProfile } = await supabaseAdmin
+    // Vérifier si le profil existe déjà
+    const { data: existing } = await supabaseAdmin
       .from('users')
-      .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+      .select('id')
       .eq('id', user.id)
       .single();
 
-    if (!userProfile) {
+    if (!existing) {
       const firstName = user.user_metadata?.['given_name']
                      ?? user.user_metadata?.['full_name']?.split(' ')[0]
                      ?? 'Utilisateur';
@@ -330,31 +345,30 @@ export class AuthService {
                      ?? user.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
                      ?? '';
 
-      const { data: newProfile, error: insertError } = await supabaseAdmin
+      const { error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
           id: user.id, email: user.email,
           first_name: firstName, last_name: lastName,
           phone: null, role: 'client', rgpd_consent: false,
-        })
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
-        .single();
+        });
 
-      if (insertError || !newProfile) {
+      if (insertError) {
         throw { status: 500, message: 'Erreur lors de la création du profil Google' };
       }
-      userProfile = newProfile;
       sendWelcomeEmail(user.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
       );
     }
 
-    if (userProfile.deleted_at !== null) {
+    const userProfile = await this.fetchFullProfile(user.id);
+
+    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
       throw { status: 403, message: 'Compte désactivé. Contactez le support.' };
     }
 
     return {
-      user: userProfile as AuthUser,
+      user: userProfile,
       access_token: accessToken,
       refresh_token: refreshToken ?? '',
       token_type: 'Bearer',

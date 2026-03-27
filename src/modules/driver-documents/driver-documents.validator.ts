@@ -6,13 +6,16 @@
 import { z } from 'zod';
 
 // ── Types de documents autorisés ─────────────────────────────────────────────
-const documentTypes = ['license', 'insurance', 'vtc_card', 'kbis', 'company_doc'] as const;
+const documentTypes = [
+  'license', 'vtc_card', 'medical_visit', 'rc_pro', 'kbis',
+  'vtc_register', 'rir', 'id_card', 'vehicle_insurance', 'grey_card',
+] as const;
 const documentStatuses = ['pending', 'validated', 'rejected', 'expired'] as const;
 
 // ── Upload document ──────────────────────────────────────────────────────────
 export const uploadDocumentSchema = z.object({
   doc_type: z.enum(documentTypes, {
-    errorMap: () => ({ message: 'Type de document invalide. Valeurs acceptées: license, insurance, vtc_card, kbis, company_doc' }),
+    errorMap: () => ({ message: 'Type de document invalide. Valeurs acceptées: license, vtc_card, medical_visit, rc_pro, kbis, vtc_register, rir, id_card, vehicle_insurance, grey_card' }),
   }),
   expiry_date: z
     .string()

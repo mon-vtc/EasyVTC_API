@@ -6,13 +6,18 @@ import morgan from 'morgan';
 import { supabaseAdmin } from './database/supabase/client.js';
 
 // ── Routes ──────────────────────────────────────────────────────────────────
-import authRoutes  from './modules/auth/auth.routes.js';
-import usersRoutes from './modules/users/users.routes.js';
-import { 
-  driverDocumentsRoutes, 
-  adminDocumentsRoutes, 
-  cronDocumentsRoutes 
+import authRoutes          from './modules/auth/auth.routes.js';
+import usersRoutes         from './modules/users/users.routes.js';
+import pricingRoutes       from './modules/pricing/pricing.routes.js';
+import reservationsRoutes  from './modules/reservations/reservations.routes.js';
+import notificationsRoutes from './modules/notifications/notifications.routes.js';
+import {
+  driverDocumentsRoutes,
+  adminDocumentsRoutes,
+  cronDocumentsRoutes
 } from './modules/driver-documents/driver-documents.routes.js';
+import { vehiclesRoutes, adminVehiclesRoutes } from './modules/vehicles/vehicles.routes.js';
+import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers.routes.js';
 
 const app = express();
 
@@ -66,6 +71,13 @@ app.use('/users', usersRoutes);
 app.use('/drivers/documents', driverDocumentsRoutes);
 app.use('/admin/documents', adminDocumentsRoutes);
 app.use('/cron/documents', cronDocumentsRoutes);
+app.use('/drivers',         driversSelfRoutes);
+app.use('/drivers/vehicles', vehiclesRoutes);
+app.use('/admin/drivers',   adminDriversRoutes);
+app.use('/admin/vehicles',  adminVehiclesRoutes);
+app.use('/pricing',       pricingRoutes);
+app.use('/reservations',  reservationsRoutes);
+app.use('/notifications', notificationsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

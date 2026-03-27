@@ -1,0 +1,591 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// SERVICE — Module Réservations
+// Sprint 3 — EazyVTC
+//
+// Circuit complet VTC :
+//   [Client]  POST   /reservations             → crée (pending)
+//   [Admin]   POST   /reservations/:id/assign  → affecte chauffeur (assigned)
+//   [Driver]  PATCH  /reservations/:id/arrive  → signale arrivée (notification)
+//   [Driver]  PATCH  /reservations/:id/start   → démarre la course (in_progress)
+//   [Driver]  PATCH  /reservations/:id/complete → termine la course (completed)
+//   [Client/Admin] PATCH /reservations/:id/cancel → annule (cancelled)
+// ══════════════════════════════════════════════════════════════════════════════
+
+import { supabaseAdmin } from '../../database/supabase/client.js';
+import { pricingService } from '../pricing/pricing.service.js';
+import { notificationsService } from '../notifications/notifications.service.js';
+import type {
+  Reservation,
+  ReservationWithRelations,
+  CreateReservationDto,
+  AssignDriverDto,
+  CompleteReservationDto,
+  ReservationListFilters,
+  ReservationListResult,
+} from './reservations.types.js';
+import type { UserRole } from '../auth/auth.types.js';
+
+// ── Sélect enrichi (jointures client + chauffeur) ────────────────────────────
+const RESERVATION_SELECT = `
+  *,
+  client:users!client_id(id, first_name, last_name, phone, profile_photo_url),
+  driver:drivers!driver_id(
+    id,
+    vehicle_type,
+    user:users!user_id(first_name, last_name, phone, profile_photo_url)
+  )
+` as const;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SERVICE
+// ══════════════════════════════════════════════════════════════════════════════
+
+export class ReservationsService {
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1. CRÉATION — Client
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Crée une réservation depuis l'application mobile du client.
+   * Calcule automatiquement le prix estimé via le moteur tarifaire.
+   */
+  async createReservation(clientId: string, dto: CreateReservationDto): Promise<ReservationWithRelations> {
+    // Calculer le prix estimé
+    const { final_price, currency, breakdown } = await pricingService.computePrice({
+      country:      dto.country,
+      distance_km:  dto.distance_km,
+      duration_min: dto.duration_min,
+      flat_rate_id: dto.flat_rate_id,
+    });
+
+    const pricing_type = dto.flat_rate_id ? 'flat_rate' : 'formula';
+
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .insert({
+        client_id:       clientId,
+        status:          'pending',
+        pickup_address:  dto.pickup_address,
+        pickup_lat:      dto.pickup_lat ?? null,
+        pickup_lng:      dto.pickup_lng ?? null,
+        dest_address:    dto.dest_address,
+        dest_lat:        dto.dest_lat ?? null,
+        dest_lng:        dto.dest_lng ?? null,
+        vehicle_type:    dto.vehicle_type,
+        country:         dto.country,
+        scheduled_at:    dto.scheduled_at,
+        comment:         dto.comment ?? null,
+        pricing_type,
+        flat_rate_id:    dto.flat_rate_id ?? null,
+        price_estimated: final_price,
+        price_breakdown: breakdown,
+        distance_km:     dto.distance_km ?? null,
+        duration_min:    dto.duration_min ?? null,
+      })
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) {
+      console.error('[Reservations] Erreur création:', error);
+      throw { status: 500, message: 'Erreur lors de la création de la réservation' };
+    }
+
+    const reservation = data as unknown as ReservationWithRelations;
+
+    // Notification de confirmation au client (fire-and-forget)
+    notificationsService.sendToUser(
+      clientId,
+      'reservation_confirmed',
+      'Réservation confirmée',
+      `Votre course du ${this._formatDate(dto.scheduled_at)} est enregistrée. Prix estimé : ${final_price} ${currency}.`,
+      { reservation_id: reservation.id, status: 'pending' },
+    );
+
+    return reservation;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 2. LISTE — Admin / Manager
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async listReservations(filters: ReservationListFilters): Promise<ReservationListResult> {
+    const page  = filters.page  ?? 1;
+    const limit = filters.limit ?? 20;
+    const from  = (page - 1) * limit;
+    const to    = from + limit - 1;
+
+    let query = supabaseAdmin
+      .from('reservations')
+      .select(RESERVATION_SELECT, { count: 'exact' })
+      .order('scheduled_at', { ascending: false })
+      .range(from, to);
+
+    if (filters.status)    query = query.eq('status', filters.status);
+    if (filters.country)   query = query.eq('country', filters.country);
+    if (filters.driver_id) query = query.eq('driver_id', filters.driver_id);
+    if (filters.client_id) query = query.eq('client_id', filters.client_id);
+    if (filters.date_from) query = query.gte('scheduled_at', filters.date_from);
+    if (filters.date_to)   query = query.lte('scheduled_at', filters.date_to);
+
+    const { data, error, count } = await query;
+    if (error) throw { status: 500, message: 'Erreur lors de la récupération des réservations' };
+
+    const total = count ?? 0;
+
+    return {
+      reservations: (data ?? []) as unknown as ReservationWithRelations[],
+      total,
+      page,
+      limit,
+      total_pages: Math.ceil(total / limit),
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. MES RÉSERVATIONS — Client
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async listMyReservations(clientId: string, filters: ReservationListFilters): Promise<ReservationListResult> {
+    return this.listReservations({ ...filters, client_id: clientId });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 4. RÉSERVATION DU CHAUFFEUR — Course active
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async getDriverActiveReservation(driverId: string): Promise<ReservationWithRelations | null> {
+    const { data } = await supabaseAdmin
+      .from('reservations')
+      .select(RESERVATION_SELECT)
+      .eq('driver_id', driverId)
+      .in('status', ['assigned', 'in_progress'])
+      .order('scheduled_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    return data as unknown as ReservationWithRelations | null;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 5. DÉTAIL — Contrôle d'accès par rôle
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async getById(
+    reservationId: string,
+    requesterId:   string,
+    requesterRole: UserRole,
+  ): Promise<ReservationWithRelations> {
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .select(RESERVATION_SELECT)
+      .eq('id', reservationId)
+      .single();
+
+    if (error || !data) throw { status: 404, message: 'Réservation introuvable' };
+
+    const r = data as unknown as ReservationWithRelations;
+
+    // Un client ne peut voir que ses propres réservations
+    if (requesterRole === 'client' && r.client_id !== requesterId) {
+      throw { status: 403, message: 'Accès refusé' };
+    }
+
+    // Un chauffeur ne peut voir que ses courses assignées
+    if (requesterRole === 'driver') {
+      const { data: driverRecord } = await supabaseAdmin
+        .from('drivers')
+        .select('id')
+        .eq('user_id', requesterId)
+        .single();
+
+      if (!driverRecord || r.driver_id !== driverRecord.id) {
+        throw { status: 403, message: 'Accès refusé' };
+      }
+    }
+
+    return r;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 6. ASSIGNATION CHAUFFEUR — Admin / Manager
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Affecte un chauffeur à une réservation en attente.
+   * Vérifie que le chauffeur est actif et disponible.
+   */
+  async assignDriver(
+    reservationId: string,
+    dto:           AssignDriverDto,
+    adminId:       string,
+  ): Promise<ReservationWithRelations> {
+    // Vérifier que la réservation est en pending
+    const reservation = await this._getReservationOrThrow(reservationId);
+    if (reservation.status !== 'pending') {
+      throw {
+        status: 400,
+        message: `Impossible d'assigner : la réservation est en statut "${reservation.status}"`,
+      };
+    }
+
+    // Vérifier que le chauffeur existe et est actif
+    const { data: driver } = await supabaseAdmin
+      .from('drivers')
+      .select('id, status, user_id, users!user_id(first_name, last_name)')
+      .eq('id', dto.driver_id)
+      .single();
+
+    if (!driver) throw { status: 404, message: 'Chauffeur introuvable' };
+    if (driver.status !== 'active') {
+      throw { status: 400, message: `Ce chauffeur ne peut pas être assigné (statut : ${driver.status})` };
+    }
+
+    // Vérifier qu'il n'a pas déjà une course active
+    const activeResa = await this.getDriverActiveReservation(dto.driver_id);
+    if (activeResa) {
+      throw {
+        status: 409,
+        message: 'Ce chauffeur a déjà une course en cours ou assignée',
+      };
+    }
+
+    // Mettre à jour la réservation
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .update({
+        driver_id:   dto.driver_id,
+        assigned_by: adminId,
+        status:      'assigned',
+      })
+      .eq('id', reservationId)
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) throw { status: 500, message: "Erreur lors de l'assignation du chauffeur" };
+
+    const updated = data as unknown as ReservationWithRelations;
+    const driverUserData = (driver as any).users;
+    const driverName = driverUserData
+      ? `${driverUserData.first_name} ${driverUserData.last_name}`
+      : 'Votre chauffeur';
+
+    // Notification au chauffeur
+    notificationsService.sendToUser(
+      driver.user_id as string,
+      'trip_assigned',
+      'Nouvelle course assignée',
+      `Une course vous a été assignée pour le ${this._formatDate(reservation.scheduled_at)}.`,
+      {
+        reservation_id:  reservationId,
+        scheduled_at:    reservation.scheduled_at,
+        pickup_address:  reservation.pickup_address,
+        dest_address:    reservation.dest_address,
+      },
+    );
+
+    // Notification au client
+    notificationsService.sendToUser(
+      reservation.client_id,
+      'trip_assigned',
+      'Chauffeur assigné',
+      `${driverName} prendra en charge votre course du ${this._formatDate(reservation.scheduled_at)}.`,
+      { reservation_id: reservationId, driver_id: dto.driver_id },
+    );
+
+    return updated;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 7. ARRIVÉE CHAUFFEUR — Notification au client
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Le chauffeur signale son arrivée au point de pickup.
+   * Ne change pas le statut — déclenche uniquement la notification "driver_arrived".
+   */
+  async markDriverArrived(reservationId: string, driverUserId: string): Promise<void> {
+    const reservation = await this._getReservationOrThrow(reservationId);
+
+    // Vérifier que c'est bien ce chauffeur
+    await this._assertDriverOwnsReservation(reservation, driverUserId);
+
+    if (reservation.status !== 'assigned') {
+      throw {
+        status: 400,
+        message: `Action invalide : la course est en statut "${reservation.status}"`,
+      };
+    }
+
+    // Enregistrer l'horodatage d'arrivée
+    await supabaseAdmin
+      .from('reservations')
+      .update({ driver_arrived_at: new Date().toISOString() })
+      .eq('id', reservationId);
+
+    // Notifier le client
+    notificationsService.sendToUser(
+      reservation.client_id,
+      'driver_arrived',
+      'Votre chauffeur est arrivé',
+      'Votre chauffeur vous attend au point de prise en charge.',
+      { reservation_id: reservationId },
+    );
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 8. DÉMARRAGE COURSE — Chauffeur
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Le chauffeur démarre la course (client à bord).
+   * Crée l'enregistrement dans public.trips.
+   */
+  async startTrip(reservationId: string, driverUserId: string): Promise<ReservationWithRelations> {
+    const reservation = await this._getReservationOrThrow(reservationId);
+    await this._assertDriverOwnsReservation(reservation, driverUserId);
+
+    if (reservation.status !== 'assigned') {
+      throw {
+        status: 400,
+        message: `Impossible de démarrer : la course est en statut "${reservation.status}"`,
+      };
+    }
+
+    const now = new Date().toISOString();
+
+    // Passer en in_progress
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .update({ status: 'in_progress' })
+      .eq('id', reservationId)
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) throw { status: 500, message: 'Erreur lors du démarrage de la course' };
+
+    // Créer le trip
+    await supabaseAdmin
+      .from('trips')
+      .insert({
+        reservation_id: reservationId,
+        started_at:     now,
+      });
+
+    // Notification au client — course démarrée
+    notificationsService.sendToUser(
+      reservation.client_id,
+      'trip_reminder',
+      'Course démarrée',
+      'Votre course est en cours. Bon voyage !',
+      { reservation_id: reservationId },
+    );
+
+    return data as unknown as ReservationWithRelations;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 9. FIN DE COURSE — Chauffeur
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Le chauffeur termine la course.
+   * Met à jour le trip, recalcule le prix final si des métriques réelles sont fournies.
+   */
+  async completeTrip(
+    reservationId: string,
+    driverUserId:  string,
+    dto:           CompleteReservationDto,
+  ): Promise<ReservationWithRelations> {
+    const reservation = await this._getReservationOrThrow(reservationId);
+    await this._assertDriverOwnsReservation(reservation, driverUserId);
+
+    if (reservation.status !== 'in_progress') {
+      throw {
+        status: 400,
+        message: `Impossible de terminer : la course est en statut "${reservation.status}"`,
+      };
+    }
+
+    const now = new Date().toISOString();
+
+    // Recalculer le prix final si les métriques réelles sont fournies (mode formule uniquement)
+    let price_final = reservation.price_estimated;
+    if (
+      dto.actual_distance_km &&
+      dto.actual_duration_min &&
+      reservation.pricing_type === 'formula'
+    ) {
+      try {
+        const recalc = await pricingService.computePrice({
+          country:      reservation.country as 'france' | 'senegal',
+          distance_km:  dto.actual_distance_km,
+          duration_min: dto.actual_duration_min,
+        });
+        price_final = recalc.final_price;
+      } catch {
+        // Si le recalcul échoue, conserver le prix estimé
+        price_final = reservation.price_estimated;
+      }
+    }
+
+    // Mettre à jour la réservation
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .update({
+        status:        'completed',
+        price_final:   dto.price_adjusted ?? price_final,
+        price_adjusted: dto.price_adjusted ?? null,
+        distance_km:   dto.actual_distance_km ?? reservation.distance_km,
+        duration_min:  dto.actual_duration_min ?? reservation.duration_min,
+      })
+      .eq('id', reservationId)
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) throw { status: 500, message: 'Erreur lors de la finalisation de la course' };
+
+    // Mettre à jour le trip
+    await supabaseAdmin
+      .from('trips')
+      .update({
+        ended_at:            now,
+        actual_distance_km:  dto.actual_distance_km ?? null,
+        actual_duration_min: dto.actual_duration_min ?? null,
+        driver_notes:        dto.driver_notes ?? null,
+      })
+      .eq('reservation_id', reservationId);
+
+    // Notification au client — facture disponible
+    notificationsService.sendToUser(
+      reservation.client_id,
+      'invoice_available',
+      'Course terminée',
+      `Merci pour votre course ! Montant : ${dto.price_adjusted ?? price_final} ${reservation.country === 'senegal' ? 'XOF' : 'EUR'}.`,
+      { reservation_id: reservationId },
+    );
+
+    return data as unknown as ReservationWithRelations;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 10. ANNULATION — Client ou Admin
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async cancelReservation(
+    reservationId: string,
+    requesterId:   string,
+    requesterRole: UserRole,
+    reason?:       string,
+  ): Promise<ReservationWithRelations> {
+    const reservation = await this._getReservationOrThrow(reservationId);
+
+    // Un client ne peut annuler que ses propres réservations
+    if (requesterRole === 'client' && reservation.client_id !== requesterId) {
+      throw { status: 403, message: 'Accès refusé' };
+    }
+
+    // Statuts non annulables
+    if (reservation.status === 'completed') {
+      throw { status: 400, message: 'Une course terminée ne peut pas être annulée' };
+    }
+    if (reservation.status === 'cancelled') {
+      throw { status: 400, message: 'Cette réservation est déjà annulée' };
+    }
+    // Un client ne peut pas annuler une course en cours
+    if (requesterRole === 'client' && reservation.status === 'in_progress') {
+      throw { status: 400, message: 'Impossible d\'annuler une course en cours. Contactez le support.' };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .update({ status: 'cancelled' })
+      .eq('id', reservationId)
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) throw { status: 500, message: "Erreur lors de l'annulation" };
+
+    const updated = data as unknown as ReservationWithRelations;
+
+    // Notifier le chauffeur si une course lui était assignée
+    if (reservation.driver_id) {
+      const { data: driverRecord } = await supabaseAdmin
+        .from('drivers')
+        .select('user_id')
+        .eq('id', reservation.driver_id)
+        .single();
+
+      if (driverRecord) {
+        notificationsService.sendToUser(
+          driverRecord.user_id as string,
+          'reservation_cancelled',
+          'Course annulée',
+          `La course du ${this._formatDate(reservation.scheduled_at)} a été annulée.${reason ? ` Motif : ${reason}` : ''}`,
+          { reservation_id: reservationId },
+        );
+      }
+    }
+
+    // Notifier le client si l'annulation vient d'un admin
+    if (requesterRole !== 'client') {
+      notificationsService.sendToUser(
+        reservation.client_id,
+        'reservation_cancelled',
+        'Réservation annulée',
+        `Votre course du ${this._formatDate(reservation.scheduled_at)} a été annulée par l'équipe.${reason ? ` Motif : ${reason}` : ''}`,
+        { reservation_id: reservationId },
+      );
+    }
+
+    return updated;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // PRIVÉS — Helpers internes
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private async _getReservationOrThrow(reservationId: string): Promise<Reservation> {
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .select('*')
+      .eq('id', reservationId)
+      .single();
+
+    if (error || !data) throw { status: 404, message: 'Réservation introuvable' };
+    return data as Reservation;
+  }
+
+  /**
+   * Vérifie que le chauffeur connecté (via son user_id) possède bien cette réservation.
+   */
+  private async _assertDriverOwnsReservation(
+    reservation: Reservation,
+    driverUserId: string,
+  ): Promise<void> {
+    const { data: driverRecord } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('user_id', driverUserId)
+      .single();
+
+    if (!driverRecord || reservation.driver_id !== driverRecord.id) {
+      throw { status: 403, message: "Cette course ne vous est pas assignée" };
+    }
+  }
+
+  private _formatDate(isoDate: string): string {
+    return new Date(isoDate).toLocaleDateString('fr-FR', {
+      day:    '2-digit',
+      month:  'long',
+      year:   'numeric',
+      hour:   '2-digit',
+      minute: '2-digit',
+    });
+  }
+}
+
+export const reservationsService = new ReservationsService();
+
+// Re-export du type pour le controller
+export type { CompleteReservationDto };

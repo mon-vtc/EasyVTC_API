@@ -14,6 +14,9 @@ const envSchema = z
     SUPABASE_PUBLISHABLE_KEY:  z.string().optional(),
     SUPABASE_ANON_KEY:         z.string().optional(),
 
+    // ── Firebase Cloud Messaging (push notifications mobiles) ────────────────
+    FCM_SERVER_KEY: z.string().optional(), // Legacy server key FCM (console.firebase.google.com)
+
     // ── Mailtrap ────────────────────────────────────────────────────────────
     MAILTRAP_HOST: z.string().default('sandbox.smtp.mailtrap.io'),
     MAILTRAP_PORT: z.coerce.number().default(2525),
