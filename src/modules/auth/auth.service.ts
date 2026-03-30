@@ -1,35 +1,50 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
 import { env } from '../../config/env.js';
+import type { Vehicle } from '../vehicles/vehicles.types.js'
 import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
 
 export class AuthService {
 
   // ── HELPER PRIVÉ : récupérer le profil complet (users + driver si applicable) ──
-  private async fetchFullProfile(userId: string): Promise<AuthUser> {
-    const { data: user, error } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
+private async fetchFullProfile(userId: string): Promise<AuthUser> {
+  const { data: user, error } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
 
-    if (error || !user) {
-      throw { status: 404, message: 'Profil utilisateur introuvable' };
-    }
-
-    let driver: DriverProfile | null = null;
-    if (user.role === 'driver') {
-      const { data: driverData } = await supabaseAdmin
-        .from('drivers')
-        .select('id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at')
-        .eq('user_id', userId)
-        .single();
-      driver = driverData ?? null;
-    }
-
-    return { ...user, driver } as AuthUser;
+  if (error || !user) {
+    throw { status: 404, message: 'Profil utilisateur introuvable' };
   }
 
+  let driver: DriverProfile | null = null;
+  let vehicle: Vehicle | null = null;
+
+  if (user.role === 'driver') {
+    const { data: driverData } = await supabaseAdmin
+      .from('drivers')
+      .select('id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at')
+      .eq('user_id', userId)
+      .single();
+
+    driver = driverData ?? null;
+
+    if (driverData?.id) {
+      const { data: vehicleData } = await supabaseAdmin
+        .from('vehicles')
+        .select('*')
+        .eq('driver_id', driverData.id)
+        .eq('is_active', true)
+        .single();
+
+      vehicle = vehicleData ?? null;
+    }
+  }
+  console.log({...user, driver, vehicle} as AuthUser )
+  return { ...user, driver, vehicle } as AuthUser;
+}
+ 
   // ── REGISTER ──────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<AuthResponse> {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -141,18 +156,24 @@ export class AuthService {
       throw { status: 401, message: 'Email ou mot de passe incorrect' };
     }
 
-    const userProfile = await this.fetchFullProfile(data.user.id);
-
-    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
-      throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
+    // Dans ton ExceptionFilter ou directement dans le service
+    try {
+      const userProfile = await this.fetchFullProfile(data.user.id);
+      if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
+        throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
+      }
+      return {
+        user: userProfile,
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        token_type: 'Bearer',
+      };
+    } catch (err) {
+      console.error('[Login] Erreur fetchFullProfile:', err); // ← log complet
+      throw err;
     }
 
-    return {
-      user: userProfile,
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      token_type: 'Bearer',
-    };
+
   }
 
   // ── LOGOUT ────────────────────────────────────────────────────────────────

@@ -17,15 +17,57 @@ import {
 // CONSTANTES
 // ══════════════════════════════════════════════════════════════════════════════
 
-const BUCKET_NAME = 'driver-vehicles';
+const BUCKET_NAME        = 'driver-vehicles';
 const ALLOWED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_PHOTO_SIZE = 5 * 1024 * 1024; // 5 Mo
+const MAX_PHOTO_SIZE      = 5 * 1024 * 1024;           // 5 Mo
+const SIGNED_URL_EXPIRY   = 60 * 60 * 24 * 365;        // 1 an (comme l'avatar)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE
 // ══════════════════════════════════════════════════════════════════════════════
 
 export class VehiclesService {
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // HELPER PRIVÉ : Extraire le filePath depuis une signed URL stockée en base
+  // Format : .../object/sign/driver-vehicles/<filePath>?token=...
+  // ────────────────────────────────────────────────────────────────────────────
+  private extractFilePath(signedUrl: string): string | null {
+    try {
+      const match = signedUrl.match(/\/object\/sign\/driver-vehicles\/(.+?)(\?|$)/);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // HELPER PRIVÉ : Générer et stocker une signed URL (1 an)
+  // ────────────────────────────────────────────────────────────────────────────
+  private async createAndStoreSignedUrl(filePath: string, vehicleId: string): Promise<string> {
+    const { data, error } = await supabaseAdmin.storage
+      .from(BUCKET_NAME)
+      .createSignedUrl(filePath, SIGNED_URL_EXPIRY);
+
+    if (error || !data?.signedUrl) {
+      throw { status: 500, message: "Erreur lors de la génération de l'URL signée" };
+    }
+
+    // Stocker la signed URL en base (comme l'avatar)
+    const { error: updateError } = await supabaseAdmin
+      .from('vehicles')
+      .update({
+        photo_url:  data.signedUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', vehicleId);
+
+    if (updateError) {
+      throw { status: 500, message: "Erreur lors de la sauvegarde de l'URL" };
+    }
+
+    return data.signedUrl;
+  }
 
   // ────────────────────────────────────────────────────────────────────────────
   // Récupérer le driver_id depuis user_id
@@ -38,7 +80,10 @@ export class VehiclesService {
       .single();
 
     if (error || !data) {
-      throw { status: 404, message: 'Profil chauffeur non trouvé. Vous devez être enregistré en tant que chauffeur.' };
+      throw {
+        status: 404,
+        message: 'Profil chauffeur non trouvé. Vous devez être enregistré en tant que chauffeur.',
+      };
     }
 
     return data.id;
@@ -53,14 +98,14 @@ export class VehiclesService {
     const { data: vehicle, error } = await supabaseAdmin
       .from('vehicles')
       .insert({
-        driver_id: driverId,
+        driver_id:    driverId,
         plate_number: dto.plate_number,
-        brand: dto.brand,
-        model: dto.model,
-        year: dto.year ?? null,
-        color: dto.color ?? null,
-        type: dto.type,
-        is_active: true,
+        brand:        dto.brand,
+        model:        dto.model,
+        year:         dto.year  ?? null,
+        color:        dto.color ?? null,
+        type:         dto.type,
+        is_active:    true,
       })
       .select()
       .single();
@@ -77,75 +122,71 @@ export class VehiclesService {
   // CHAUFFEUR : Upload photo véhicule
   // ────────────────────────────────────────────────────────────────────────────
   async uploadVehiclePhoto(
-    userId: string,
-    vehicleId: string,
+    userId:     string,
+    vehicleId:  string,
     fileBuffer: Buffer,
-    mimeType: string
+    mimeType:   string
   ): Promise<Vehicle> {
+
     if (!ALLOWED_IMAGE_MIMES.includes(mimeType)) {
-      throw {
-        status: 400,
-        message: 'Format non supporté. Formats acceptés: JPG, PNG, WebP',
-      };
+      throw { status: 400, message: 'Format non supporté. Formats acceptés: JPG, PNG, WebP' };
     }
 
     if (fileBuffer.length > MAX_PHOTO_SIZE) {
-      throw {
-        status: 400,
-        message: 'Fichier trop volumineux. Taille max: 5 Mo',
-      };
+      throw { status: 400, message: 'Fichier trop volumineux. Taille max: 5 Mo' };
     }
 
-    // Vérifier l'ownership
-    const vehicle = await this.getMyVehicle(userId, vehicleId);
+    // Vérifier l'ownership — on récupère le véhicule brut (photo_url = signed URL)
+    const driverId = await this.getDriverIdFromUserId(userId);
+    const { data: vehicle, error: fetchError } = await supabaseAdmin
+      .from('vehicles')
+      .select('*')
+      .eq('id', vehicleId)
+      .eq('driver_id', driverId)
+      .single();
 
-    // Supprimer l'ancienne photo si elle existe
+    if (fetchError || !vehicle) {
+      throw { status: 404, message: 'Véhicule non trouvé' };
+    }
+
+    // Supprimer l'ancienne photo du storage si elle existe
     if (vehicle.photo_url) {
-      const oldPath = vehicle.photo_url.split(`${BUCKET_NAME}/`)[1];
+      const oldPath = this.extractFilePath(vehicle.photo_url);
       if (oldPath) {
         await supabaseAdmin.storage.from(BUCKET_NAME).remove([oldPath]);
       }
     }
 
     // Construire le chemin de stockage
-    const ext = mimeType.split('/')[1];
+    const ext       = mimeType.split('/')[1];
     const timestamp = Date.now();
-    const filePath = `${vehicle.driver_id}/${vehicleId}_${timestamp}.${ext}`;
+    const filePath  = `${vehicle.driver_id}/${vehicleId}_${timestamp}.${ext}`;
 
     // Upload vers Supabase Storage
     const { error: uploadError } = await supabaseAdmin.storage
       .from(BUCKET_NAME)
-      .upload(filePath, fileBuffer, {
-        contentType: mimeType,
-        upsert: false,
-      });
+      .upload(filePath, fileBuffer, { contentType: mimeType, upsert: false });
 
     if (uploadError) {
       console.error('[Vehicles] Photo upload error:', uploadError);
-      throw { status: 500, message: 'Erreur lors de l\'upload de la photo' };
+      throw { status: 500, message: "Erreur lors de l'upload de la photo" };
     }
 
-    // Récupérer l'URL publique
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(filePath);
+    // Générer la signed URL (1 an) et la stocker en base — comme l'avatar
+    const signedUrl = await this.createAndStoreSignedUrl(filePath, vehicleId);
 
-    const photoUrl = publicUrlData.publicUrl;
-
-    // Mettre à jour le véhicule
-    const { data: updated, error: updateError } = await supabaseAdmin
+    // Retourner le véhicule mis à jour avec la signed URL
+    const { data: updated, error: selectError } = await supabaseAdmin
       .from('vehicles')
-      .update({ photo_url: photoUrl, updated_at: new Date().toISOString() })
+      .select('*')
       .eq('id', vehicleId)
-      .select()
       .single();
 
-    if (updateError || !updated) {
-      console.error('[Vehicles] Photo update error:', updateError);
-      throw { status: 500, message: 'Erreur lors de la mise à jour de la photo' };
+    if (selectError || !updated) {
+      throw { status: 500, message: 'Erreur lors de la récupération du véhicule mis à jour' };
     }
 
-    return updated;
+    return { ...updated, photo_url: signedUrl };
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -165,6 +206,7 @@ export class VehiclesService {
       throw { status: 500, message: 'Erreur lors de la récupération des véhicules' };
     }
 
+    // La photo_url est déjà une signed URL stockée en base — on la retourne directement
     return vehicles || [];
   }
 
@@ -185,6 +227,7 @@ export class VehiclesService {
       throw { status: 404, message: 'Véhicule non trouvé' };
     }
 
+    // La photo_url est déjà une signed URL stockée en base — on la retourne directement
     return vehicle;
   }
 
@@ -238,11 +281,11 @@ export class VehiclesService {
       throw { status: 404, message: 'Véhicule non trouvé' };
     }
 
-    // Supprimer la photo du storage si elle existe
+    // Extraire le filePath depuis la signed URL stockée et supprimer du storage
     if (vehicle.photo_url) {
-      const oldPath = vehicle.photo_url.split(`${BUCKET_NAME}/`)[1];
-      if (oldPath) {
-        await supabaseAdmin.storage.from(BUCKET_NAME).remove([oldPath]);
+      const filePath = this.extractFilePath(vehicle.photo_url);
+      if (filePath) {
+        await supabaseAdmin.storage.from(BUCKET_NAME).remove([filePath]);
       }
     }
 
@@ -261,14 +304,14 @@ export class VehiclesService {
   // ADMIN : Lister tous les véhicules (avec filtres et pagination)
   // ════════════════════════════════════════════════════════════════════════════
   async getAllVehicles(filters: VehicleListFilters = {}): Promise<VehicleListResult> {
-    const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const page   = filters.page  || 1;
+    const limit  = filters.limit || 20;
     const offset = (page - 1) * limit;
 
     let query = supabaseAdmin
       .from('vehicles')
-      .select(`
-        *,
+      .select(
+        `*,
         driver:drivers!inner (
           id,
           user_id,
@@ -280,18 +323,13 @@ export class VehiclesService {
             last_name,
             phone
           )
-        )
-      `, { count: 'exact' });
+        )`,
+        { count: 'exact' }
+      );
 
-    if (filters.driver_id) {
-      query = query.eq('driver_id', filters.driver_id);
-    }
-    if (filters.type) {
-      query = query.eq('type', filters.type);
-    }
-    if (filters.is_active !== undefined) {
-      query = query.eq('is_active', filters.is_active);
-    }
+    if (filters.driver_id)           query = query.eq('driver_id',  filters.driver_id);
+    if (filters.type)                query = query.eq('type',        filters.type);
+    if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
     const { data, error, count } = await query
       .order('created_at', { ascending: false })
@@ -304,8 +342,9 @@ export class VehiclesService {
 
     const total = count || 0;
 
+    // La photo_url est déjà une signed URL en base — pas de traitement supplémentaire
     return {
-      vehicles: (data || []) as VehicleWithDriver[],
+      vehicles:    (data || []) as VehicleWithDriver[],
       total,
       page,
       limit,
@@ -319,8 +358,8 @@ export class VehiclesService {
   async getVehicleById(vehicleId: string): Promise<VehicleWithDriver> {
     const { data: vehicle, error } = await supabaseAdmin
       .from('vehicles')
-      .select(`
-        *,
+      .select(
+        `*,
         driver:drivers!inner (
           id,
           user_id,
@@ -332,8 +371,8 @@ export class VehiclesService {
             last_name,
             phone
           )
-        )
-      `)
+        )`
+      )
       .eq('id', vehicleId)
       .single();
 
