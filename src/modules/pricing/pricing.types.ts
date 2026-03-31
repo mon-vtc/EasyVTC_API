@@ -51,6 +51,7 @@ export interface PricingFlatRate {
   origin_label: string;
   destination_label: string;
   price: number;
+  pickup_surcharge: number;  // Surcharge par passager supplémentaire (0 = aucune)
   currency: string;
   is_active: boolean;
   created_at: string;
@@ -85,6 +86,7 @@ export interface CreateFlatRateDto {
   origin_label: string;
   destination_label: string;
   price: number;
+  pickup_surcharge?: number; // Surcharge par passager supp. (défaut 0)
   currency: string;
 }
 
@@ -93,6 +95,7 @@ export interface UpdateFlatRateDto {
   origin_label?: string;
   destination_label?: string;
   price?: number;
+  pickup_surcharge?: number;
   is_active?: boolean;
 }
 
@@ -103,9 +106,10 @@ export interface UpdateFlatRateDto {
 // ── Requête de calcul ─────────────────────────────────────────────────────────
 export interface PriceEstimateDto {
   country: PricingCountry;
-  distance_km?: number;  // Requis uniquement si pas de flat_rate_id
-  duration_min?: number; // Requis uniquement si pas de flat_rate_id
-  flat_rate_id?: string; // Si fourni → retourne le forfait, ignore distance/durée
+  distance_km?: number;   // Requis uniquement si pas de flat_rate_id
+  duration_min?: number;  // Requis uniquement si pas de flat_rate_id
+  flat_rate_id?: string;  // Si fourni → retourne le forfait, ignore distance/durée
+  nb_passengers?: number; // Nombre de passagers (pour calcul surcharge pick-up, défaut 1)
 }
 
 // ── Résultat public (CDC p.26 : jamais de formule sur les PDFs) ───────────────
@@ -130,6 +134,9 @@ export interface PriceBreakdown {
   minimum_applied?: boolean;
   flat_rate_id?: string;
   flat_rate_label?: string;
+  nb_passengers?: number;
+  pickup_surcharge_per_person?: number;
+  pickup_surcharge_total?: number;
 }
 
 // ── Filtres liste forfaits ────────────────────────────────────────────────────

@@ -76,6 +76,7 @@ export const createFlatRateSchema = z.object({
   origin_label:      z.string().min(2, 'Le lieu de départ est requis').max(150),
   destination_label: z.string().min(2, 'La destination est requise').max(150),
   price:             positiveNumber(),
+  pickup_surcharge:  z.number().min(0, 'La surcharge doit être >= 0').finite().optional().default(0),
   currency:          currencyEnum,
 });
 
@@ -84,6 +85,7 @@ export const updateFlatRateSchema = z.object({
   origin_label:      z.string().min(2).max(150).optional(),
   destination_label: z.string().min(2).max(150).optional(),
   price:             positiveNumber().optional(),
+  pickup_surcharge:  z.number().min(0, 'La surcharge doit être >= 0').finite().optional(),
   is_active:         z.boolean().optional(),
 }).refine(
   (d) => Object.keys(d).some((k) => d[k as keyof typeof d] !== undefined),
@@ -93,10 +95,11 @@ export const updateFlatRateSchema = z.object({
 // ── Estimation de prix ───────────────────────────────────────────────────────
 
 export const priceEstimateSchema = z.object({
-  country:      countryEnum,
-  distance_km:  z.number().positive('La distance doit être positive').optional(),
-  duration_min: z.number().positive('La durée doit être positive').optional(),
-  flat_rate_id: z.string().uuid('ID de forfait invalide').optional(),
+  country:       countryEnum,
+  distance_km:   z.number().positive('La distance doit être positive').optional(),
+  duration_min:  z.number().positive('La durée doit être positive').optional(),
+  flat_rate_id:  z.string().uuid('ID de forfait invalide').optional(),
+  nb_passengers: z.number().int('Doit être un entier').min(1, 'Minimum 1 passager').optional(),
 }).refine(
   (d) => d.flat_rate_id || (d.distance_km !== undefined && d.duration_min !== undefined),
   { message: 'Fournissez soit un flat_rate_id, soit distance_km ET duration_min' },

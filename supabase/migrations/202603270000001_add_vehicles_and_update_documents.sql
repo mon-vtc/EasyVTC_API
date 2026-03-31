@@ -49,6 +49,9 @@ alter table public.driver_documents drop column doc_type;
 -- 1e. Renommer la nouvelle colonne
 alter table public.driver_documents rename column doc_type_new to doc_type;
 
+-- 1e-bis. Supprimer les lignes dont le type n'a pas pu être mappé (valeurs inconnues)
+delete from public.driver_documents where doc_type is null;
+
 -- 1f. Remettre la contrainte NOT NULL
 alter table public.driver_documents
   alter column doc_type set not null;
@@ -136,6 +139,7 @@ create trigger trg_vehicles_updated_at
 alter table public.vehicles enable row level security;
 
 -- Le chauffeur peut voir et modifier ses propres véhicules
+drop policy if exists "driver_can_manage_own_vehicles" on public.vehicles;
 create policy "driver_can_manage_own_vehicles"
   on public.vehicles
   for all
@@ -146,6 +150,7 @@ create policy "driver_can_manage_own_vehicles"
   );
 
 -- Les admins et managers voient tous les véhicules
+drop policy if exists "admin_manager_can_view_all_vehicles" on public.vehicles;
 create policy "admin_manager_can_view_all_vehicles"
   on public.vehicles
   for select

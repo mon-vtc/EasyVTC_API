@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { pricingService } from './pricing.service.js';
 import {
   createPricingGridSchema,
@@ -15,6 +16,12 @@ import {
   pricingIdParamSchema,
 } from './pricing.validator.js';
 
+const countryParamSchema = z.object({
+  country: z.enum(['france', 'senegal'], {
+    error: () => 'Pays invalide. Valeurs acceptées : france, senegal',
+  }),
+});
+
 export class PricingController {
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -23,6 +30,13 @@ export class PricingController {
 
   // GET /pricing/grids — Admin : toutes les grilles
   async getAllGrids(req: Request, res: Response): Promise<void> {
+    if (req.query.country !== undefined) {
+      const parsed = countryParamSchema.safeParse({ country: req.query.country });
+      if (!parsed.success) {
+        res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
+        return;
+      }
+    }
     try {
       const country = req.query.country as 'france' | 'senegal' | undefined;
       const grids = await pricingService.getAllGrids(country);
@@ -33,11 +47,15 @@ export class PricingController {
     }
   }
 
-  // GET /pricing/grids/active — Public : grille active d'un pays
+  // GET /pricing/grids/active/:country — Public : grille active d'un pays
   async getActiveGrid(req: Request, res: Response): Promise<void> {
-    const { country } = req.params as { country: 'france' | 'senegal' };
+    const parsed = countryParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
+      return;
+    }
     try {
-      const grid = await pricingService.getActiveGrid(country);
+      const grid = await pricingService.getActiveGrid(parsed.data.country);
       res.status(200).json({ ok: true, data: grid });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
