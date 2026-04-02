@@ -88,7 +88,7 @@ export class DriversService {
   // PATCH /drivers/me/online — passer en ligne / hors ligne
   // ────────────────────────────────────────────────────────────────────────────
   async setOnlineStatus(userId: string, isOnline: boolean): Promise<DriverWithUser> {
-    // Seul un chauffeur avec statut 'active' peut passer en ligne
+    // Seul un chauffeur avec statut 'active' peut modifier sa disponibilité en ligne
     const { data: driver } = await supabaseAdmin
       .from('drivers')
       .select('status')
@@ -97,6 +97,13 @@ export class DriversService {
 
     if (!driver) {
       throw { status: 404, message: 'Profil chauffeur non trouvé' };
+    }
+
+    if (driver.status === 'on_trip') {
+      throw {
+        status: 403,
+        message: 'Vous ne pouvez pas modifier votre disponibilité en cours de mission',
+      };
     }
 
     if (isOnline && driver.status !== 'active') {
@@ -214,8 +221,11 @@ export class DriversService {
     if (existing.status === 'rejected' && dto.status !== 'active') {
       throw { status: 400, message: 'Un chauffeur rejeté ne peut être que réactivé (active)' };
     }
+    if (existing.status === 'on_trip' && dto.status !== 'suspended') {
+      throw { status: 400, message: 'Un chauffeur en mission ne peut être que suspendu (urgence)' };
+    }
 
-    // Si on suspend ou rejette un chauffeur en ligne, le passer hors ligne
+    // Si on suspend ou rejette un chauffeur, le passer hors ligne
     const extraFields = (dto.status === 'suspended' || dto.status === 'rejected')
       ? { is_online: false }
       : {};
@@ -237,6 +247,47 @@ export class DriversService {
     }
 
     return data as unknown as DriverWithUser;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // INTERNE — Basculer le statut on_trip (appelé par le module reservations)
+  //   onTrip = true  → active → on_trip  (affectation d'une course)
+  //   onTrip = false → on_trip → active  (course terminée / annulée)
+  // ────────────────────────────────────────────────────────────────────────────
+  async setOnTripStatus(driverId: string, onTrip: boolean): Promise<void> {
+    const { data: driver, error: fetchError } = await supabaseAdmin
+      .from('drivers')
+      .select('id, status')
+      .eq('id', driverId)
+      .single();
+
+    if (fetchError || !driver) {
+      throw { status: 404, message: 'Chauffeur non trouvé' };
+    }
+
+    if (onTrip && driver.status !== 'active') {
+      throw {
+        status: 400,
+        message: `Impossible de mettre en mission un chauffeur au statut "${driver.status}"`,
+      };
+    }
+
+    if (!onTrip && driver.status !== 'on_trip') {
+      // Pas en mission — rien à faire (idempotent)
+      return;
+    }
+
+    const newStatus = onTrip ? 'on_trip' : 'active';
+
+    const { error } = await supabaseAdmin
+      .from('drivers')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', driverId);
+
+    if (error) {
+      console.error('[Drivers] setOnTripStatus error:', error);
+      throw { status: 500, message: 'Erreur lors de la mise à jour du statut de mission' };
+    }
   }
 
   // ────────────────────────────────────────────────────────────────────────────

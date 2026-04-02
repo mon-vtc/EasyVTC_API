@@ -66,7 +66,7 @@ export const adminUpdateDriverSchema = z.object({
 
 // ── Filtres liste (admin) ─────────────────────────────────────────────────────
 export const driverListFiltersSchema = z.object({
-  status: z.enum(['pending', 'active', 'rejected', 'suspended'] as const).optional(),
+  status: z.enum(['pending', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
   zone: z.enum(zoneTypes).optional(),
   vehicle_type: z.enum(vehicleTypes).optional(),
   is_online: z

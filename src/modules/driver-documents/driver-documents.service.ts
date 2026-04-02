@@ -24,6 +24,15 @@ import {
 
 const BUCKET_NAME = 'driver-documents';
 const SIGNED_URL_EXPIRY = 3600; // 1 heure
+
+// Documents obligatoires pour activer un chauffeur.
+// Tous ces types doivent être au statut 'validated' pour que le dossier soit complet.
+const REQUIRED_DOCUMENT_TYPES: DocumentType[] = [
+  'license',          // Permis de conduire
+  'vtc_card',         // Carte professionnelle VTC
+  'rc_pro',           // Assurance RC Pro
+  'vehicle_insurance', // Attestation d'assurance véhicule
+];
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -379,6 +388,9 @@ export class DriverDocumentsService {
       throw { status: 500, message: 'Erreur lors de la validation du document' };
     }
 
+    // Vérifier si le dossier complet est validé → activer le chauffeur automatiquement
+    await this.checkAndActivateDriver(existing.driver_id);
+
     // TODO: Envoyer notification au chauffeur (push + email)
     // await this.notifyDriver(existing.driver_id, 'validated', existing.doc_type);
 
@@ -591,6 +603,52 @@ export class DriverDocumentsService {
   // ════════════════════════════════════════════════════════════════════════════
   // UTILITAIRES
   // ════════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Active automatiquement le chauffeur si tous les documents requis sont validés.
+  // Appelé après chaque validation de document (admin).
+  // N'agit que si le chauffeur est encore en statut 'pending'.
+  // ────────────────────────────────────────────────────────────────────────────
+  private async checkAndActivateDriver(driverId: string): Promise<void> {
+    // 1. Vérifier que le chauffeur est encore en attente
+    const { data: driver } = await supabaseAdmin
+      .from('drivers')
+      .select('id, status')
+      .eq('id', driverId)
+      .single();
+
+    if (!driver || driver.status !== 'pending') {
+      return; // Déjà actif, rejeté ou suspendu — rien à faire
+    }
+
+    // 2. Récupérer les types de documents validés pour ce chauffeur
+    const { data: validatedDocs } = await supabaseAdmin
+      .from('driver_documents')
+      .select('doc_type')
+      .eq('driver_id', driverId)
+      .eq('status', 'validated');
+
+    const validatedTypes = new Set((validatedDocs || []).map((d: { doc_type: string }) => d.doc_type));
+
+    // 3. Vérifier que tous les documents obligatoires sont présents
+    const allPresent = REQUIRED_DOCUMENT_TYPES.every((type) => validatedTypes.has(type));
+    if (!allPresent) {
+      return;
+    }
+
+    // 4. Activer le chauffeur
+    const { error } = await supabaseAdmin
+      .from('drivers')
+      .update({ status: 'active', updated_at: new Date().toISOString() })
+      .eq('id', driverId);
+
+    if (error) {
+      console.error('[DriverDocuments] Auto-activation error:', error);
+      // On ne lève pas d'exception : la validation du document est déjà enregistrée
+    } else {
+      console.info(`[DriverDocuments] Chauffeur ${driverId} activé automatiquement après validation du dossier`);
+    }
+  }
 
   private async generateSignedUrl(filePath: string): Promise<string> {
     const { data, error } = await supabaseAdmin.storage
