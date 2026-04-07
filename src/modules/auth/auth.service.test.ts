@@ -39,9 +39,9 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 
 // Mock du service email (non bloquant)
 jest.unstable_mockModule('../../utils/email.service.js', () => ({
-  sendWelcomeEmail:         jest.fn().mockResolvedValue(undefined),
-  sendResetPasswordEmail:   jest.fn().mockResolvedValue(undefined),
-  sendPasswordChangedEmail: jest.fn().mockResolvedValue(undefined),
+  sendWelcomeEmail:         jest.fn().mockResolvedValue(undefined as never),
+  sendResetPasswordEmail:   jest.fn().mockResolvedValue(undefined as never),
+  sendPasswordChangedEmail: jest.fn().mockResolvedValue(undefined as never),
 }));
 
 // Import dynamique APRÈS le mock (obligatoire avec ESM)
@@ -58,6 +58,7 @@ const mockUser = {
   first_name: 'Jean',
   last_name: 'Dupont',
   phone: '+33612345678',
+  status: 'active',
   deleted_at: null,
   created_at: '2026-03-16T10:00:00Z',
 };
@@ -479,6 +480,7 @@ describe('AuthService', () => {
           first_name: 'Google',
           last_name: 'User',
           phone: null,
+          status: 'active',
           deleted_at: null,
           created_at: '2026-03-16T10:00:00Z',
         });
@@ -521,6 +523,7 @@ describe('AuthService', () => {
           first_name: 'Google',
           last_name: 'User',
           phone: null,
+          status: 'active',
           deleted_at: null,
           created_at: '2026-03-16T10:00:00Z',
         });

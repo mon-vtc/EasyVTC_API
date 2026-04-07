@@ -1,3 +1,5 @@
+import type { Vehicle } from '../vehicles/vehicles.types.js';
+
 export type UserRole = 'client' | 'driver' | 'admin' | 'manager';
 export type UserStatus = 'active' | 'inactive' | 'locked';
 export type DriverStatus = 'pending' | 'active' | 'on_trip' | 'rejected' | 'suspended';
@@ -54,12 +56,14 @@ export interface AuthUser {
   updated_at: string;
   // Profil chauffeur — présent uniquement si role === 'driver'
   driver: DriverProfile | null;
+  // Véhicule actif — présent uniquement si role === 'driver'
+  vehicle: Vehicle | null;
 }
 
 export interface AuthResponse {
   user: AuthUser;
   access_token: string;
-  refresh_token: string;
+  refresh_token: string | null;
   token_type: 'Bearer';
 }
 

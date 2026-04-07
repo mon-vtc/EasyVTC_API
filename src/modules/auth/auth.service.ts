@@ -41,7 +41,6 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       vehicle = vehicleData ?? null;
     }
   }
-  console.log({...user, driver, vehicle} as AuthUser )
   return { ...user, driver, vehicle } as AuthUser;
 }
  
@@ -115,9 +114,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       if (dto.role === 'driver') {
         await supabaseAdmin
           .from('drivers')
-          .insert({ user_id: authData.user.id })
-          .onConflict('user_id')
-          .ignore();
+          .upsert({ user_id: authData.user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
       }
     }
 
@@ -391,7 +388,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     return {
       user: userProfile,
       access_token: accessToken,
-      refresh_token: refreshToken ?? '',
+      refresh_token: refreshToken ?? null,
       token_type: 'Bearer',
     };
   }
