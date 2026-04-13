@@ -20,6 +20,28 @@ jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
   notificationsService: { sendToUser: mockSendToUser },
 }));
 
+// driversService et ordersService utilisent supabaseAdmin mocké — mock minimal pour éviter
+// les appels réels lors des tests de completeTrip / assignDriver
+jest.unstable_mockModule('../drivers/drivers.service.js', () => ({
+  driversService: {
+    setOnTripStatus:  jest.fn().mockResolvedValue(undefined as never),
+    resolveDriverId:  jest.fn().mockResolvedValue('driver-uuid-333' as never),
+  },
+}));
+
+jest.unstable_mockModule('../orders/orders.service.js', () => ({
+  ordersService: {
+    createFromReservation: jest.fn().mockResolvedValue({} as never),
+  },
+}));
+
+// invoicesService — mock pour le fire-and-forget dans completeTrip
+jest.unstable_mockModule('../invoices/invoices.service.js', () => ({
+  invoicesService: {
+    createFromTrip: jest.fn().mockResolvedValue({} as never),
+  },
+}));
+
 const { ReservationsService } = await import('./reservations.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -384,14 +406,14 @@ describe('ReservationsService', () => {
         .mockReturnValueOnce(chain({ ...mockDriver, status: 'pending' }));
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
-        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('pending') });
+        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('attente') });
     });
 
     it('❌ lève 409 si le chauffeur a déjà une course active', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))
         .mockReturnValueOnce(chain(mockDriver))
-        .mockReturnValueOnce(chain(mockAssignedReservation)); // déjà une course
+        .mockReturnValueOnce(chain([mockAssignedReservation])); // déjà une course
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
         .rejects.toMatchObject({ status: 409 });

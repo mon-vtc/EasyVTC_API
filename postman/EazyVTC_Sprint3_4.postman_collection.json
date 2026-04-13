@@ -1,0 +1,628 @@
+{
+  "info": {
+    "name": "EazyVTC — Sprint 3-4 (Drivers, Notifications, Invoices, Vehicles)",
+    "_postman_id": "eazyvtc-sprint3-4",
+    "description": "Collection des endpoints ajoutés en S3-S4 : planning/revenus chauffeurs, notifications, factures, véhicules.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "{{base_url}}", "type": "string" },
+    { "key": "driver_token", "value": "{{driver_token}}", "type": "string" },
+    { "key": "admin_token", "value": "{{admin_token}}", "type": "string" },
+    { "key": "client_token", "value": "{{client_token}}", "type": "string" },
+    { "key": "driver_id", "value": "{{driver_id}}", "type": "string" },
+    { "key": "vehicle_id", "value": "{{vehicle_id}}", "type": "string" },
+    { "key": "invoice_id", "value": "{{invoice_id}}", "type": "string" },
+    { "key": "notif_id", "value": "{{notif_id}}", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "🚗 Drivers",
+      "item": [
+        {
+          "name": "GET /drivers — liste des chauffeurs (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers?page=1&limit=20&status=active",
+              "host": ["{{base_url}}"],
+              "path": ["drivers"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "active", "description": "active | pending | suspended | rejected" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/:id — profil complet (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/{{driver_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "{{driver_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /drivers/:id/status — changer statut (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/drivers/{{driver_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "{{driver_id}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/me — mon profil (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me"]
+            }
+          }
+        },
+        {
+          "name": "PUT /drivers/me — mettre à jour profil (driver)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"+33600000001\",\n  \"license_number\": \"VTC-2026-0001\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/drivers/me",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me"]
+            }
+          }
+        },
+        {
+          "name": "PUT /drivers/me/online — passer en ligne (driver)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_online\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/drivers/me/online",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me", "online"]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/me/planning — planning semaine (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=week&date=2026-04-09",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me", "planning"],
+              "query": [
+                { "key": "period", "value": "week", "description": "week | month" },
+                { "key": "date", "value": "2026-04-09", "description": "YYYY-MM-DD (optionnel, défaut = aujourd'hui)" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/me/planning — planning mois (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=month&date=2026-04-01",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me", "planning"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date", "value": "2026-04-01" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/me/revenues — revenus semaine (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=week",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me", "revenues"],
+              "query": [
+                { "key": "period", "value": "week", "description": "week | month | all" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /drivers/me/revenues — revenus tous (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=all",
+              "host": ["{{base_url}}"],
+              "path": ["drivers", "me", "revenues"],
+              "query": [
+                { "key": "period", "value": "all" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔔 Notifications",
+      "item": [
+        {
+          "name": "GET /notifications — mes notifications (paginé)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data?.notifications?.length > 0) {",
+                  "    pm.collectionVariables.set('notif_id', body.data.notifications[0].id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /notifications — non-lues uniquement",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications?unread_only=true",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "unread_only", "value": "true" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "PATCH /notifications/:id/read — marquer comme lue",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notif_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notif_id}}", "read"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /notifications/read-all — tout marquer comme lu",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/read-all",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "POST /notifications/token — enregistrer token FCM",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_token\": \"fcm-token-example-abc123xyz\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/notifications/token",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "token"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /notifications/token — supprimer token FCM",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/notifications/token",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "token"]
+            }
+          }
+        },
+        {
+          "name": "POST /notifications/send — envoyer (admin interne)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_id}}\",\n  \"type\": \"reservation_confirmed\",\n  \"channel\": \"push\",\n  \"title\": \"Test notification\",\n  \"body\": \"Ceci est un test depuis Postman.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/notifications/send",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "send"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧾 Invoices",
+      "item": [
+        {
+          "name": "GET /invoices — liste (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data?.invoices?.length > 0) {",
+                  "    pm.collectionVariables.set('invoice_id', body.data.invoices[0].id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/invoices?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["invoices"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "driver_id", "value": "", "description": "Filtrer par chauffeur (optionnel)", "disabled": true },
+                { "key": "client_id", "value": "", "description": "Filtrer par client (optionnel)", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /invoices — mes factures (client)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/invoices?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["invoices"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /invoices — mes factures (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/invoices?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["invoices"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /invoices/:id — détail facture",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/invoices/{{invoice_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["invoices", "{{invoice_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /invoices/:id/pdf — URL signée PDF",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/invoices/{{invoice_id}}/pdf",
+              "host": ["{{base_url}}"],
+              "path": ["invoices", "{{invoice_id}}", "pdf"]
+            },
+            "description": "Retourne une URL signée Supabase Storage (1h). Utiliser l'URL dans un navigateur pour télécharger le PDF."
+          }
+        },
+        {
+          "name": "PUT /invoices/:id/price — ajuster prix (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"new_amount_ttc\": 42.00,\n  \"reason\": \"Geste commercial suite à un retard de 30 minutes sur la course.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/invoices/{{invoice_id}}/price",
+              "host": ["{{base_url}}"],
+              "path": ["invoices", "{{invoice_id}}", "price"]
+            },
+            "description": "Ajuste le montant TTC, recalcule le HT, régénère le PDF et trace la modification (auteur + motif)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "🚙 Vehicles",
+      "item": [
+        {
+          "name": "POST /vehicles — créer un véhicule (driver)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data?.id) {",
+                  "    pm.collectionVariables.set('vehicle_id', body.data.id);",
+                  "  }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plate_number\": \"AB-123-CD\",\n  \"brand\": \"Peugeot\",\n  \"model\": \"508\",\n  \"year\": 2022,\n  \"color\": \"Noir\",\n  \"type\": \"berline\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles"]
+            }
+          }
+        },
+        {
+          "name": "GET /vehicles — mes véhicules (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles"]
+            }
+          }
+        },
+        {
+          "name": "GET /vehicles/:id — mon véhicule (driver)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/{{vehicle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles", "{{vehicle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /vehicles/:id — mettre à jour (driver)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"color\": \"Blanc\",\n  \"year\": 2023\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles/{{vehicle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles", "{{vehicle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /vehicles/:id — supprimer (driver)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/vehicles/{{vehicle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles", "{{vehicle_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /vehicles/:id/photo — upload photo JPEG (driver)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "photo",
+                  "type": "file",
+                  "src": "",
+                  "description": "Fichier image JPEG ou PNG, max 5 Mo"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/vehicles/{{vehicle_id}}/photo",
+              "host": ["{{base_url}}"],
+              "path": ["vehicles", "{{vehicle_id}}", "photo"]
+            },
+            "description": "Uploade la photo du véhicule. Format accepté : image/jpeg, image/png. Taille max : 5 Mo."
+          }
+        },
+        {
+          "name": "GET /admin/vehicles — tous les véhicules (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicles?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicles"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /admin/vehicles/:id — détail véhicule (admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicles/{{vehicle_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicles", "{{vehicle_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

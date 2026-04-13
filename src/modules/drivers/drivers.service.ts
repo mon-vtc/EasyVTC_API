@@ -11,6 +11,10 @@ import type {
   AdminUpdateDriverDto,
   DriverListFilters,
   DriverListResult,
+  PlanningPeriod,
+  DriverPlanningResult,
+  RevenuesPeriod,
+  DriverRevenuesResult,
 } from './drivers.types.js';
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
@@ -247,6 +251,163 @@ export class DriversService {
     }
 
     return data as unknown as DriverWithUser;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/planning — planning hebdo ou mensuel
+  // ────────────────────────────────────────────────────────────────────────────
+  async getPlanning(
+    userId:  string,
+    period:  PlanningPeriod,
+    date?:   string,
+  ): Promise<DriverPlanningResult> {
+    const driverId = await this.resolveDriverId(userId);
+
+    const { dateFrom, dateTo } = this._computeDateRange(period, date);
+
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .select(`
+        id, status, scheduled_at,
+        pickup_address, dest_address, vehicle_type,
+        price_estimated, price_final, country,
+        client:users!client_id(first_name, last_name, phone),
+        trip:trips!reservation_id(id, started_at, ended_at, actual_distance_km, actual_duration_min)
+      `)
+      .eq('driver_id', driverId)
+      .gte('scheduled_at', dateFrom)
+      .lte('scheduled_at', dateTo)
+      .order('scheduled_at', { ascending: true });
+
+    if (error) {
+      console.error('[Drivers] getPlanning error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération du planning' };
+    }
+
+    const reservations = (data ?? []).map((r: any) => ({
+      id:              r.id,
+      status:          r.status,
+      scheduled_at:    r.scheduled_at,
+      pickup_address:  r.pickup_address,
+      dest_address:    r.dest_address,
+      vehicle_type:    r.vehicle_type,
+      price_estimated: r.price_estimated,
+      price_final:     r.price_final ?? null,
+      country:         r.country,
+      client:          r.client ?? null,
+      trip:            Array.isArray(r.trip) ? (r.trip[0] ?? null) : (r.trip ?? null),
+    }));
+
+    return {
+      period,
+      date_from:    dateFrom,
+      date_to:      dateTo,
+      reservations,
+      total:        reservations.length,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/revenues — revenus sur la période
+  // ────────────────────────────────────────────────────────────────────────────
+  async getRevenues(
+    userId:  string,
+    period:  RevenuesPeriod,
+    date?:   string,
+  ): Promise<DriverRevenuesResult> {
+    const driverId = await this.resolveDriverId(userId);
+
+    let dateFrom: string | null = null;
+    let dateTo:   string | null = null;
+
+    if (period !== 'all') {
+      const range = this._computeDateRange(period as PlanningPeriod, date);
+      dateFrom = range.dateFrom;
+      dateTo   = range.dateTo;
+    }
+
+    let query = supabaseAdmin
+      .from('reservations')
+      .select('id, scheduled_at, pickup_address, dest_address, price_final, country')
+      .eq('driver_id', driverId)
+      .eq('status', 'completed')
+      .order('scheduled_at', { ascending: false });
+
+    if (dateFrom) query = query.gte('scheduled_at', dateFrom);
+    if (dateTo)   query = query.lte('scheduled_at', dateTo);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('[Drivers] getRevenues error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération des revenus' };
+    }
+
+    const rows = data ?? [];
+
+    // Devise : EUR si tout est France, sinon on indique la pluralité
+    // Pour simplifier, on agrège en EUR (Sénégal reste en XOF séparé si besoin côté client)
+    let totalRevenue = 0;
+    const trips = rows.map((r: any) => {
+      const amount   = Number(r.price_final ?? 0);
+      const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
+      if (currency === 'EUR') totalRevenue += amount;
+      return {
+        reservation_id: r.id,
+        scheduled_at:   r.scheduled_at,
+        pickup_address: r.pickup_address,
+        dest_address:   r.dest_address,
+        price_final:    amount,
+        currency,
+      };
+    });
+
+    return {
+      period,
+      date_from:     dateFrom,
+      date_to:       dateTo,
+      total_trips:   trips.length,
+      total_revenue: Math.round(totalRevenue * 100) / 100,
+      currency:      'EUR',
+      trips,
+    };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // PRIVÉ — Calcul des bornes de date selon la période
+  // ────────────────────────────────────────────────────────────────────────────
+  private _computeDateRange(
+    period: PlanningPeriod,
+    date?:  string,
+  ): { dateFrom: string; dateTo: string } {
+    const ref = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
+
+    if (period === 'week') {
+      // Lundi–dimanche de la semaine contenant la date de référence
+      const day = ref.getUTCDay(); // 0 = dimanche
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(ref);
+      monday.setUTCDate(ref.getUTCDate() + diffToMonday);
+      monday.setUTCHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      sunday.setUTCHours(23, 59, 59, 999);
+
+      return {
+        dateFrom: monday.toISOString(),
+        dateTo:   sunday.toISOString(),
+      };
+    }
+
+    // Mois complet
+    const firstDay = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1));
+    const lastDay  = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+
+    return {
+      dateFrom: firstDay.toISOString(),
+      dateTo:   lastDay.toISOString(),
+    };
   }
 
   // ────────────────────────────────────────────────────────────────────────────

@@ -16,10 +16,10 @@ export const updateDriverSchema = z.object({
     .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
     .optional(),
   zone: z.enum(zoneTypes, {
-    errorMap: () => ({ message: 'Zone invalide. Valeurs acceptées: france, senegal' }),
+    error: 'Zone invalide. Valeurs acceptées: france, senegal',
   }).optional(),
   vehicle_type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
+    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
   }).optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
@@ -28,13 +28,13 @@ export const updateDriverSchema = z.object({
 
 // ── Toggle is_online ──────────────────────────────────────────────────────────
 export const toggleOnlineSchema = z.object({
-  is_online: z.boolean({ required_error: 'Le champ is_online (boolean) est requis' }),
+  is_online: z.boolean({ error: 'Le champ is_online (boolean) est requis' }),
 });
 
 // ── Changement de statut (admin) ──────────────────────────────────────────────
 export const changeDriverStatusSchema = z.object({
   status: z.enum(driverStatusTransitions, {
-    errorMap: () => ({ message: 'Statut invalide. Valeurs acceptées: active, rejected, suspended' }),
+    error: 'Statut invalide. Valeurs acceptées: active, rejected, suspended',
   }),
   reason: z
     .string()
@@ -54,10 +54,10 @@ export const adminUpdateDriverSchema = z.object({
     .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
     .optional(),
   zone: z.enum(zoneTypes, {
-    errorMap: () => ({ message: 'Zone invalide. Valeurs acceptées: france, senegal' }),
+    error: 'Zone invalide. Valeurs acceptées: france, senegal',
   }).optional(),
   vehicle_type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
+    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
   }).optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
@@ -76,21 +76,41 @@ export const driverListFiltersSchema = z.object({
   search: z.string().max(100).optional(),
   page: z
     .string()
+    .default('1')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1, 'Page doit être >= 1')
-    .optional()
-    .default('1'),
+    .refine((v) => v >= 1, 'Page doit être >= 1'),
   limit: z
     .string()
+    .default('20')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100')
-    .optional()
-    .default('20'),
+    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
 // ── Validation UUID param ─────────────────────────────────────────────────────
 export const driverIdParamSchema = z.object({
   id: z.string().uuid('ID chauffeur invalide'),
+});
+
+// ── Planning query ────────────────────────────────────────────────────────────
+export const planningQuerySchema = z.object({
+  period: z.enum(['week', 'month'] as const, {
+    error: 'Période invalide. Valeurs acceptées: week, month',
+  }).default('week'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date invalide (YYYY-MM-DD)')
+    .optional(),
+});
+
+// ── Revenus query ─────────────────────────────────────────────────────────────
+export const revenuesQuerySchema = z.object({
+  period: z.enum(['week', 'month', 'all'] as const, {
+    error: 'Période invalide. Valeurs acceptées: week, month, all',
+  }).default('month'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date invalide (YYYY-MM-DD)')
+    .optional(),
 });
 
 // ── Types exportés ────────────────────────────────────────────────────────────
@@ -99,3 +119,5 @@ export type ToggleOnlineInput        = z.infer<typeof toggleOnlineSchema>;
 export type ChangeDriverStatusInput  = z.infer<typeof changeDriverStatusSchema>;
 export type AdminUpdateDriverInput   = z.infer<typeof adminUpdateDriverSchema>;
 export type DriverListFiltersInput   = z.infer<typeof driverListFiltersSchema>;
+export type PlanningQueryInput       = z.infer<typeof planningQuerySchema>;
+export type RevenuesQueryInput       = z.infer<typeof revenuesQuerySchema>;

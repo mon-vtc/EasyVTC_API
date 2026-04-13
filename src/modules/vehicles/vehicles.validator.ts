@@ -33,7 +33,7 @@ export const createVehicleSchema = z.object({
     .max(30, 'Couleur trop longue')
     .optional(),
   type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
+    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
   }),
 });
 
@@ -65,7 +65,7 @@ export const updateVehicleSchema = z.object({
     .max(30, 'Couleur trop longue')
     .optional(),
   type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
+    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
   }).optional(),
   is_active: z.boolean().optional(),
 }).refine(
@@ -88,16 +88,14 @@ export const vehicleListFiltersSchema = z.object({
     .optional(),
   page: z
     .string()
+    .default('1')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1, 'Page doit être >= 1')
-    .optional()
-    .default('1'),
+    .refine((v) => v >= 1, 'Page doit être >= 1'),
   limit: z
     .string()
+    .default('20')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100')
-    .optional()
-    .default('20'),
+    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
 // ── Types exportés ────────────────────────────────────────────────────────────

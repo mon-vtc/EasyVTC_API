@@ -15,6 +15,8 @@ import { supabaseAdmin } from '../../database/supabase/client.js';
 import { pricingService } from '../pricing/pricing.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import { driversService } from '../drivers/drivers.service.js';
+import { ordersService } from '../orders/orders.service.js';
+import { invoicesService } from '../invoices/invoices.service.js';
 import type {
   Reservation,
   ReservationWithRelations,
@@ -276,6 +278,11 @@ export class ReservationsService {
       console.error('[Reservations] Erreur setOnTripStatus(true) pour driver', dto.driver_id, err);
     });
 
+    // Générer automatiquement le bon de commande (fire-and-forget)
+    ordersService.createFromReservation(reservationId).catch((err) => {
+      console.error('[Reservations] Erreur génération bon de commande pour réservation', reservationId, err);
+    });
+
     const updated = data as unknown as ReservationWithRelations;
     const driverUserData = (driver as any).users;
     const driverName = driverUserData
@@ -472,6 +479,23 @@ export class ReservationsService {
         driver_notes:        dto.driver_notes ?? null,
       })
       .eq('reservation_id', reservationId);
+
+    // Générer la facture automatiquement (fire-and-forget)
+    void (async () => {
+      try {
+        const { data: tripRow } = await supabaseAdmin
+          .from('trips')
+          .select('id')
+          .eq('reservation_id', reservationId)
+          .single();
+
+        if (tripRow?.id) {
+          await invoicesService.createFromTrip(tripRow.id as string);
+        }
+      } catch (err) {
+        console.error('[Reservations] Erreur génération facture pour reservation', reservationId, err);
+      }
+    })();
 
     // Notification au client — facture disponible
     notificationsService.sendToUser(

@@ -15,7 +15,7 @@ const documentStatuses = ['pending', 'validated', 'rejected', 'expired'] as cons
 // ── Upload document ──────────────────────────────────────────────────────────
 export const uploadDocumentSchema = z.object({
   doc_type: z.enum(documentTypes, {
-    errorMap: () => ({ message: 'Type de document invalide. Valeurs acceptées: license, vtc_card, medical_visit, rc_pro, kbis, vtc_register, rir, id_card, vehicle_insurance, grey_card' }),
+    error: 'Type de document invalide. Valeurs acceptées: license, vtc_card, medical_visit, rc_pro, kbis, vtc_register, rir, id_card, vehicle_insurance, grey_card',
   }),
   expiry_date: z
     .string()
@@ -46,16 +46,14 @@ export const documentListFiltersSchema = z.object({
     .optional(),
   page: z
     .string()
+    .default('1')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1, 'Page doit être >= 1')
-    .optional()
-    .default('1'),
+    .refine((v) => v >= 1, 'Page doit être >= 1'),
   limit: z
     .string()
+    .default('20')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100')
-    .optional()
-    .default('20'),
+    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
 // ── Validation UUID param ────────────────────────────────────────────────────

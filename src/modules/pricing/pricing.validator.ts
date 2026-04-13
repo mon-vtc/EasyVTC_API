@@ -15,7 +15,7 @@ const currencies = ['EUR', 'XOF'] as const;
  */
 const countryEnum = z.enum(countries, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Pays invalide. Valeurs acceptées : france, senegal';
     }
     return undefined;
@@ -27,7 +27,7 @@ const countryEnum = z.enum(countries, {
  */
 const currencyEnum = z.enum(currencies, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Devise invalide. Valeurs acceptées : EUR, XOF';
     }
     return undefined;

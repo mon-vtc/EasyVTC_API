@@ -11,6 +11,8 @@ import usersRoutes         from './modules/users/users.routes.js';
 import pricingRoutes       from './modules/pricing/pricing.routes.js';
 import reservationsRoutes  from './modules/reservations/reservations.routes.js';
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
+import ordersRoutes        from './modules/orders/orders.routes.js';
+import invoicesRoutes      from './modules/invoices/invoices.routes.js';
 import {
   driverDocumentsRoutes,
   adminDocumentsRoutes,
@@ -78,6 +80,8 @@ app.use('/admin/vehicles',  adminVehiclesRoutes);
 app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/orders',        ordersRoutes);
+app.use('/invoices',      invoicesRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

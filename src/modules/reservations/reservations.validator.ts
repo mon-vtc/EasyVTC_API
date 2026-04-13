@@ -13,7 +13,7 @@ const statuses     = ['pending', 'assigned', 'in_progress', 'completed', 'cancel
 
 const vehicleTypeEnum = z.enum(vehicleTypes, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Type de véhicule invalide. Valeurs : standard, berline, van';
     }
     return undefined;
@@ -22,7 +22,7 @@ const vehicleTypeEnum = z.enum(vehicleTypes, {
 
 const countryEnum = z.enum(countries, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Pays invalide. Valeurs : france, senegal';
     }
     return undefined;
