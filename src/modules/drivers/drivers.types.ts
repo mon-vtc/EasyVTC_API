@@ -17,6 +17,7 @@ export interface DriverWithUser {
   tva_rate: number;
   is_online: boolean;
   zone: ZoneType;
+  status_reason: string | null;
   created_at: string;
   updated_at: string;
   user: {

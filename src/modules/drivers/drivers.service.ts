@@ -19,7 +19,7 @@ import type {
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
 const DRIVER_WITH_USER_SELECT = `
-  id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at,
+  id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
   )
@@ -228,6 +228,9 @@ export class DriversService {
     if (existing.status === 'on_trip' && dto.status !== 'suspended') {
       throw { status: 400, message: 'Un chauffeur en mission ne peut être que suspendu (urgence)' };
     }
+    if (existing.status === 'suspended' && dto.status === 'rejected') {
+      throw { status: 400, message: 'Un chauffeur suspendu ne peut pas être directement rejeté. Réactivez-le d\'abord (active).' };
+    }
 
     // Si on suspend ou rejette un chauffeur, le passer hors ligne
     const extraFields = (dto.status === 'suspended' || dto.status === 'rejected')
@@ -237,7 +240,8 @@ export class DriversService {
     const { data, error } = await supabaseAdmin
       .from('drivers')
       .update({
-        status: dto.status,
+        status:        dto.status,
+        status_reason: dto.reason,
         ...extraFields,
         updated_at: new Date().toISOString(),
       })

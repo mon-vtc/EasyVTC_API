@@ -188,6 +188,21 @@ export class ReservationsController {
     }
   }
 
+  // ── GET /reservations/drivers/available — Admin/Manager : chauffeurs dispo ─
+  async getAvailableDrivers(req: Request, res: Response): Promise<void> {
+    const scheduledAt = typeof req.query['scheduled_at'] === 'string'
+      ? req.query['scheduled_at']
+      : undefined;
+
+    try {
+      const drivers = await reservationsService.getAvailableDrivers(scheduledAt);
+      res.status(200).json({ ok: true, data: drivers });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // ── PATCH /reservations/:id/cancel — Client ou Admin : annuler ────────────
   async cancel(req: Request, res: Response): Promise<void> {
     const paramParsed = reservationIdParamSchema.safeParse(req.params);

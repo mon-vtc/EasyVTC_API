@@ -25,6 +25,7 @@ import type {
   CompleteReservationDto,
   ReservationListFilters,
   ReservationListResult,
+  AvailableDriverDto,
 } from './reservations.types.js';
 import type { UserRole } from '../auth/auth.types.js';
 
@@ -587,6 +588,80 @@ export class ReservationsService {
     }
 
     return updated;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 11. CHAUFFEURS DISPONIBLES — Admin / Manager
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les chauffeurs actifs et en ligne, sans conflit horaire
+   * sur la plage demandée si `scheduledAt` est fourni.
+   * Utilisé par le DriverPickerModal pour l'assignation manuelle.
+   */
+  async getAvailableDrivers(scheduledAt?: string): Promise<AvailableDriverDto[]> {
+    const { data, error } = await supabaseAdmin
+      .from('drivers')
+      .select(`
+        id, is_online, status, vehicle_type, zone,
+        user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
+        vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
+      `)
+      .eq('status', 'active')
+      .eq('is_online', true);
+
+    if (error) {
+      console.error('[Reservations] getAvailableDrivers error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération des chauffeurs disponibles' };
+    }
+
+    const rows = (data ?? []) as any[];
+
+    // Si une date est fournie, exclure les chauffeurs avec un conflit horaire
+    let conflictingDriverIds = new Set<string>();
+    if (scheduledAt) {
+      const newTime    = new Date(scheduledAt).getTime();
+      const windowStart = new Date(newTime - TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
+      const windowEnd   = new Date(newTime + TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
+
+      const { data: conflicts } = await supabaseAdmin
+        .from('reservations')
+        .select('driver_id')
+        .in('status', ['assigned', 'in_progress'])
+        .gte('scheduled_at', windowStart)
+        .lte('scheduled_at', windowEnd);
+
+      conflictingDriverIds = new Set((conflicts ?? []).map((c: any) => c.driver_id));
+    }
+
+    return rows
+      .filter(d => !conflictingDriverIds.has(d.id))
+      .map(d => {
+        const activeVehicle = Array.isArray(d.vehicles)
+          ? (d.vehicles.find((v: any) => v.is_active) ?? null)
+          : null;
+
+        return {
+          id:           d.id,
+          rating:       null,
+          is_online:    d.is_online,
+          status:       d.status,
+          vehicle_type: d.vehicle_type,
+          zone:         d.zone,
+          user:         d.user,
+          vehicle:      activeVehicle
+            ? {
+                id:           activeVehicle.id,
+                model:        activeVehicle.model,
+                plate_number: activeVehicle.plate_number,
+                brand:        activeVehicle.brand,
+                color:        activeVehicle.color,
+                type:         activeVehicle.type,
+                photo_url:    activeVehicle.photo_url,
+              }
+            : null,
+        } satisfies AvailableDriverDto;
+      });
   }
 
   // ──────────────────────────────────────────────────────────────────────────

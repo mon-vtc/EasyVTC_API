@@ -61,6 +61,9 @@ router.get('/', requireStaff, (req, res) => reservationsController.listAll(req, 
 // Affecter un chauffeur à une réservation
 router.post('/:id/assign', requireStaff, (req, res) => reservationsController.assign(req, res));
 
+// Chauffeurs disponibles pour l'assignation (doit être avant /:id)
+router.get('/drivers/available', requireStaff, (req, res) => reservationsController.getAvailableDrivers(req, res));
+
 // ── Routes communes ───────────────────────────────────────────────────────────
 
 // Détail d'une réservation (accès contrôlé par rôle dans le service)

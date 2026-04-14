@@ -144,3 +144,31 @@ export interface ReservationListResult {
   limit: number;
   total_pages: number;
 }
+
+// ── Chauffeurs disponibles (pour l'assignation admin) ─────────────────────────
+
+export interface AvailableDriverDto {
+  id:           string;           // drivers.id — passé à assign()
+  rating:       number | null;    // null jusqu'au module ratings (Sprint 6)
+  is_online:    boolean;
+  status:       string;
+  vehicle_type: string | null;
+  zone:         string | null;
+  user: {
+    id:                string;
+    first_name:        string;
+    last_name:         string;
+    phone:             string | null;
+    email:             string;
+    profile_photo_url: string | null;
+  };
+  vehicle: {
+    id:           string;
+    model:        string;
+    plate_number: string;
+    brand:        string;
+    color:        string | null;
+    type:         string;
+    photo_url:    string | null;
+  } | null;
+}
