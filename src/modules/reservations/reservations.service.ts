@@ -29,10 +29,12 @@ import type {
 } from './reservations.types.js';
 import type { UserRole } from '../auth/auth.types.js';
 
-// Fenêtre de garde autour de chaque course pour la détection de conflits horaires.
-// Si deux courses sont espacées de moins de TRIP_CONFLICT_WINDOW_MIN minutes,
-// elles sont considérées comme en conflit.
-const TRIP_CONFLICT_WINDOW_MIN = 180; // 3 heures
+// Buffer ajouté de chaque côté autour d'une course pour la détection de conflits.
+// Exemple : une course estimée à 45 min bloque le chauffeur de T-30min à T+75min.
+const TRIP_BUFFER_MIN = 30;
+
+// Durée de fallback si la réservation n'a pas de duration_min (ex: forfait sans métriques).
+const TRIP_CONFLICT_FALLBACK_MIN = 180; // 3 heures
 
 // ── Sélect enrichi (jointures client + chauffeur) ────────────────────────────
 const RESERVATION_SELECT = `
@@ -84,6 +86,7 @@ export class ReservationsService {
         vehicle_type:    dto.vehicle_type,
         country:         dto.country,
         scheduled_at:    dto.scheduled_at,
+        nb_passengers:   dto.nb_passengers ?? 1,
         comment:         dto.comment ?? null,
         pricing_type,
         flat_rate_id:    dto.flat_rate_id ?? null,
@@ -168,7 +171,7 @@ export class ReservationsService {
       .from('reservations')
       .select(RESERVATION_SELECT)
       .eq('driver_id', driverId)
-      .in('status', ['assigned', 'in_progress'])
+      .in('status', ['assigned', 'driver_arrived', 'in_progress'])
       .order('scheduled_at', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -258,7 +261,7 @@ export class ReservationsService {
     }
 
     // Vérifier l'absence de conflit horaire avec les courses déjà assignées
-    await this._checkSchedulingConflict(dto.driver_id, reservation.scheduled_at);
+    await this._checkSchedulingConflict(dto.driver_id, reservation.scheduled_at, reservation.duration_min);
 
     // Mettre à jour la réservation
     const { data, error } = await supabaseAdmin
@@ -273,11 +276,6 @@ export class ReservationsService {
       .single();
 
     if (error || !data) throw { status: 500, message: "Erreur lors de l'assignation du chauffeur" };
-
-    // Passer le chauffeur en statut 'on_trip' (bloque toute nouvelle affectation conflictuelle)
-    driversService.setOnTripStatus(dto.driver_id, true).catch((err) => {
-      console.error('[Reservations] Erreur setOnTripStatus(true) pour driver', dto.driver_id, err);
-    });
 
     // Générer automatiquement le bon de commande (fire-and-forget)
     ordersService.createFromReservation(reservationId).catch((err) => {
@@ -322,7 +320,7 @@ export class ReservationsService {
 
   /**
    * Le chauffeur signale son arrivée au point de pickup.
-   * Ne change pas le statut — déclenche uniquement la notification "driver_arrived".
+   * Passe le statut à `driver_arrived` et enregistre l'horodatage.
    */
   async markDriverArrived(reservationId: string, driverUserId: string): Promise<void> {
     const reservation = await this._getReservationOrThrow(reservationId);
@@ -337,10 +335,10 @@ export class ReservationsService {
       };
     }
 
-    // Enregistrer l'horodatage d'arrivée
+    // Passer en driver_arrived et enregistrer l'horodatage
     await supabaseAdmin
       .from('reservations')
-      .update({ driver_arrived_at: new Date().toISOString() })
+      .update({ status: 'driver_arrived', driver_arrived_at: new Date().toISOString() })
       .eq('id', reservationId);
 
     // Notifier le client
@@ -365,7 +363,7 @@ export class ReservationsService {
     const reservation = await this._getReservationOrThrow(reservationId);
     await this._assertDriverOwnsReservation(reservation, driverUserId);
 
-    if (reservation.status !== 'assigned') {
+    if (reservation.status !== 'assigned' && reservation.status !== 'driver_arrived') {
       throw {
         status: 400,
         message: `Impossible de démarrer : la course est en statut "${reservation.status}"`,
@@ -383,6 +381,11 @@ export class ReservationsService {
       .single();
 
     if (error || !data) throw { status: 500, message: 'Erreur lors du démarrage de la course' };
+
+    // Passer le chauffeur en on_trip — il est maintenant physiquement en route
+    driversService.setOnTripStatus(reservation.driver_id!, true).catch((err) => {
+      console.error('[Reservations] Erreur setOnTripStatus(true) au démarrage pour driver', reservation.driver_id, err);
+    });
 
     // Créer le trip
     await supabaseAdmin
@@ -550,8 +553,9 @@ export class ReservationsService {
 
     const updated = data as unknown as ReservationWithRelations;
 
-    // Remettre le chauffeur en 'active' s'il était assigné ou en cours de mission
-    if (reservation.driver_id && ['assigned', 'in_progress'].includes(reservation.status)) {
+    // Remettre le chauffeur en 'active' seulement s'il était physiquement en route.
+    // Pour 'assigned' et 'driver_arrived', driver.status est encore 'active' — rien à faire.
+    if (reservation.driver_id && reservation.status === 'in_progress') {
       driversService.setOnTripStatus(reservation.driver_id, false).catch((err) => {
         console.error('[Reservations] Erreur setOnTripStatus(false) après annulation pour driver', reservation.driver_id, err);
       });
@@ -599,7 +603,7 @@ export class ReservationsService {
    * sur la plage demandée si `scheduledAt` est fourni.
    * Utilisé par le DriverPickerModal pour l'assignation manuelle.
    */
-  async getAvailableDrivers(scheduledAt?: string): Promise<AvailableDriverDto[]> {
+  async getAvailableDrivers(scheduledAt?: string, durationMin?: number): Promise<AvailableDriverDto[]> {
     const { data, error } = await supabaseAdmin
       .from('drivers')
       .select(`
@@ -620,14 +624,15 @@ export class ReservationsService {
     // Si une date est fournie, exclure les chauffeurs avec un conflit horaire
     let conflictingDriverIds = new Set<string>();
     if (scheduledAt) {
-      const newTime    = new Date(scheduledAt).getTime();
-      const windowStart = new Date(newTime - TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
-      const windowEnd   = new Date(newTime + TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
+      const newTime     = new Date(scheduledAt).getTime();
+      const effectiveDuration = durationMin ?? TRIP_CONFLICT_FALLBACK_MIN;
+      const windowStart = new Date(newTime - TRIP_BUFFER_MIN * 60 * 1000).toISOString();
+      const windowEnd   = new Date(newTime + (effectiveDuration + TRIP_BUFFER_MIN) * 60 * 1000).toISOString();
 
       const { data: conflicts } = await supabaseAdmin
         .from('reservations')
         .select('driver_id')
-        .in('status', ['assigned', 'in_progress'])
+        .in('status', ['assigned', 'driver_arrived', 'in_progress'])
         .gte('scheduled_at', windowStart)
         .lte('scheduled_at', windowEnd);
 
@@ -669,20 +674,30 @@ export class ReservationsService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Vérifie qu'un chauffeur n'a pas de course assignée dans la fenêtre horaire
-   * autour de `scheduledAt` (± TRIP_CONFLICT_WINDOW_MIN).
+   * Vérifie qu'un chauffeur n'a pas de course en conflit avec `scheduledAt`.
+   *
+   * Fenêtre de blocage :
+   *   - Début : scheduled_at - TRIP_BUFFER_MIN
+   *   - Fin   : scheduled_at + durationMin + TRIP_BUFFER_MIN
+   *   - Si durationMin est nul (ex. forfait sans métriques), fallback à TRIP_CONFLICT_FALLBACK_MIN.
+   *
    * Lève une erreur 409 si un conflit est détecté.
    */
-  private async _checkSchedulingConflict(driverId: string, scheduledAt: string): Promise<void> {
+  private async _checkSchedulingConflict(
+    driverId: string,
+    scheduledAt: string,
+    durationMin?: number | null,
+  ): Promise<void> {
     const newTime = new Date(scheduledAt).getTime();
-    const windowStart = new Date(newTime - TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
-    const windowEnd   = new Date(newTime + TRIP_CONFLICT_WINDOW_MIN * 60 * 1000).toISOString();
+    const effectiveDuration = durationMin ?? TRIP_CONFLICT_FALLBACK_MIN;
+    const windowStart = new Date(newTime - TRIP_BUFFER_MIN * 60 * 1000).toISOString();
+    const windowEnd   = new Date(newTime + (effectiveDuration + TRIP_BUFFER_MIN) * 60 * 1000).toISOString();
 
     const { data: conflicts } = await supabaseAdmin
       .from('reservations')
       .select('id, scheduled_at')
       .eq('driver_id', driverId)
-      .in('status', ['assigned', 'in_progress'])
+      .in('status', ['assigned', 'driver_arrived', 'in_progress'])
       .gte('scheduled_at', windowStart)
       .lte('scheduled_at', windowEnd)
       .limit(1);
@@ -691,7 +706,7 @@ export class ReservationsService {
       const conflicting = conflicts[0] as { id: string; scheduled_at: string };
       throw {
         status: 409,
-        message: `Ce chauffeur a déjà une course assignée le ${this._formatDate(conflicting.scheduled_at)}, trop proche de l'horaire demandé (fenêtre de ${TRIP_CONFLICT_WINDOW_MIN} min)`,
+        message: `Ce chauffeur a déjà une course assignée le ${this._formatDate(conflicting.scheduled_at)}, trop proche de l'horaire demandé`,
       };
     }
   }

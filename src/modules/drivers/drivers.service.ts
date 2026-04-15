@@ -279,6 +279,7 @@ export class DriversService {
         trip:trips!reservation_id(id, started_at, ended_at, actual_distance_km, actual_duration_min)
       `)
       .eq('driver_id', driverId)
+      .neq('status', 'cancelled')
       .gte('scheduled_at', dateFrom)
       .lte('scheduled_at', dateTo)
       .order('scheduled_at', { ascending: true });
@@ -332,7 +333,7 @@ export class DriversService {
 
     let query = supabaseAdmin
       .from('reservations')
-      .select('id, scheduled_at, pickup_address, dest_address, price_final, country')
+      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('scheduled_at', { ascending: false });
@@ -353,7 +354,8 @@ export class DriversService {
     // Pour simplifier, on agrège en EUR (Sénégal reste en XOF séparé si besoin côté client)
     let totalRevenue = 0;
     const trips = rows.map((r: any) => {
-      const amount   = Number(r.price_final ?? 0);
+      // Montant effectif : price_adjusted s'il existe, sinon price_final
+      const amount   = Number(r.price_adjusted ?? r.price_final ?? 0);
       const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
       if (currency === 'EUR') totalRevenue += amount;
       return {

@@ -283,6 +283,7 @@ describe('DriversService', () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
+        neq:     jest.fn().mockReturnThis(), // exclure les 'cancelled'
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockResolvedValue({ data: mockReservations, error: null } as never),
@@ -303,6 +304,7 @@ describe('DriversService', () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
+        neq:     jest.fn().mockReturnThis(), // exclure les 'cancelled'
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockResolvedValue({ data: [], error: null } as never),
@@ -321,6 +323,7 @@ describe('DriversService', () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
+        neq:     jest.fn().mockReturnThis(), // exclure les 'cancelled'
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockResolvedValue({ data: [], error: null } as never),
@@ -346,16 +349,17 @@ describe('DriversService', () => {
   // getRevenues
   // ────────────────────────────────────────────────────────────────────────────
   describe('getRevenues()', () => {
+    // price_adjusted null → fallback sur price_final
     const mockCompletedResas = [
       {
         id: 'resa-1', scheduled_at: '2026-04-10T09:00:00Z',
         pickup_address: '1 rue de la Paix', dest_address: 'CDG',
-        price_final: 48.50, country: 'france',
+        price_final: 48.50, price_adjusted: null, country: 'france',
       },
       {
         id: 'resa-2', scheduled_at: '2026-04-12T14:00:00Z',
         pickup_address: 'Gare du Nord', dest_address: 'Orly',
-        price_final: 55.00, country: 'france',
+        price_final: 55.00, price_adjusted: null, country: 'france',
       },
     ];
 
@@ -418,6 +422,37 @@ describe('DriversService', () => {
       const result = await service.getRevenues(DRIVER_USER_ID, 'month', '2026-04-01');
       expect(result.total_trips).toBe(0);
       expect(result.total_revenue).toBe(0);
+    });
+
+    it('✅ price_adjusted écrase price_final dans le calcul du total', async () => {
+      // resa-1 : price_adjusted=60 (geste commercial), price_final=48.50 ignoré
+      // resa-2 : pas de price_adjusted → price_final=55 utilisé
+      const resasWithAdjustment = [
+        { id: 'resa-1', scheduled_at: '2026-04-10T09:00:00Z',
+          pickup_address: '1 rue de la Paix', dest_address: 'CDG',
+          price_final: 48.50, price_adjusted: 60.00, country: 'france' },
+        { id: 'resa-2', scheduled_at: '2026-04-12T14:00:00Z',
+          pickup_address: 'Gare du Nord', dest_address: 'Orly',
+          price_final: 55.00, price_adjusted: null, country: 'france' },
+      ];
+
+      const resolved = { data: resasWithAdjustment, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        gte:    jest.fn().mockReturnThis(),
+        lte:    jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        then:   (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(revenuesChain);
+
+      const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
+      // 60.00 (ajusté) + 55.00 (final) = 115.00
+      expect(result.total_revenue).toBeCloseTo(115.00, 2);
     });
 
     it('❌ lève 404 si le profil chauffeur est introuvable', async () => {

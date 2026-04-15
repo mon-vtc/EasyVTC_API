@@ -8,11 +8,12 @@ import type { PricingCountry, PricingType, PriceBreakdown } from '../pricing/pri
 // ── Énumérations ──────────────────────────────────────────────────────────────
 
 export type ReservationStatus =
-  | 'pending'      // Créée par le client — en attente d'affectation
-  | 'assigned'     // Chauffeur assigné — en attente de départ
-  | 'in_progress'  // Course démarrée
-  | 'completed'    // Course terminée
-  | 'cancelled';   // Annulée (client, admin ou système)
+  | 'pending'          // Créée par le client — en attente d'affectation
+  | 'assigned'         // Chauffeur assigné — en attente de départ
+  | 'driver_arrived'   // Chauffeur arrivé au point de pickup — en attente de démarrage
+  | 'in_progress'      // Course démarrée
+  | 'completed'        // Course terminée
+  | 'cancelled';       // Annulée (client, admin ou système)
 
 export type VehicleType = 'standard' | 'berline' | 'van';
 
@@ -51,6 +52,7 @@ export interface Reservation {
 
   // Planification
   scheduled_at: string;
+  nb_passengers: number;
   driver_arrived_at: string | null;
   comment: string | null;
 
@@ -92,6 +94,7 @@ export interface CreateReservationDto {
   vehicle_type: VehicleType;
   country: PricingCountry;
   scheduled_at: string;           // ISO 8601
+  nb_passengers?: number;         // Nombre de passagers (défaut : 1)
   comment?: string;
 
   // Tarification — le serveur calcule le prix

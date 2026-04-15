@@ -194,8 +194,15 @@ export class ReservationsController {
       ? req.query['scheduled_at']
       : undefined;
 
+    const durationMinRaw = typeof req.query['duration_min'] === 'string'
+      ? parseInt(req.query['duration_min'], 10)
+      : undefined;
+    const durationMin = durationMinRaw !== undefined && !isNaN(durationMinRaw) && durationMinRaw > 0
+      ? durationMinRaw
+      : undefined;
+
     try {
-      const drivers = await reservationsService.getAvailableDrivers(scheduledAt);
+      const drivers = await reservationsService.getAvailableDrivers(scheduledAt, durationMin);
       res.status(200).json({ ok: true, data: drivers });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

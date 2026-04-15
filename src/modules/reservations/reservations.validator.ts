@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 const vehicleTypes = ['standard', 'berline', 'van'] as const;
 const countries    = ['france', 'senegal'] as const;
-const statuses     = ['pending', 'assigned', 'in_progress', 'completed', 'cancelled'] as const;
+const statuses     = ['pending', 'assigned', 'driver_arrived', 'in_progress', 'completed', 'cancelled'] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,6 +50,7 @@ export const createReservationSchema = z.object({
       { message: 'La date de réservation doit être dans le futur' },
     ),
 
+  nb_passengers:  z.number().int().min(1).max(20).default(1).optional(),
   comment:        z.string().max(500).optional(),
 
   // Tarification — l'un ou l'autre obligatoire
@@ -77,7 +78,7 @@ export const completeReservationSchema = z.object({
   actual_distance_km:  z.number().positive().optional(),
   actual_duration_min: z.number().int().positive().optional(),
   driver_notes:        z.string().max(1000).optional(),
-  price_adjusted:      z.number().positive().optional(),
+  price_adjusted:      z.number().positive().max(9999.99, 'Le montant ajusté ne peut pas dépasser 9 999,99').optional(),
 });
 
 // ── Annulation ────────────────────────────────────────────────────────────────
