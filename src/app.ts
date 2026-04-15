@@ -18,7 +18,7 @@ import {
   adminDocumentsRoutes,
   cronDocumentsRoutes
 } from './modules/driver-documents/driver-documents.routes.js';
-import { vehiclesRoutes, adminVehiclesRoutes } from './modules/vehicles/vehicles.routes.js';
+import { vehiclesRoutes, adminVehiclesRoutes, vehicleTypesRoutes } from './modules/vehicles/vehicles.routes.js';
 import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers.routes.js';
 
 const app = express();
@@ -74,6 +74,7 @@ app.use('/drivers/documents', driverDocumentsRoutes);
 app.use('/admin/documents', adminDocumentsRoutes);
 app.use('/cron/documents', cronDocumentsRoutes);
 app.use('/drivers',         driversSelfRoutes);
+app.use('/vehicle-types',    vehicleTypesRoutes);
 app.use('/drivers/vehicles', vehiclesRoutes);
 app.use('/admin/drivers',   adminDriversRoutes);
 app.use('/admin/vehicles',  adminVehiclesRoutes);

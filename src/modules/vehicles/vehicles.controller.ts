@@ -222,6 +222,33 @@ export async function deleteVehicle(req: Request, res: Response) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINT PUBLIC
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /vehicle-types?country=france|senegal
+ * Retourne les types de véhicule disponibles avec métadonnées et prix de base.
+ * Public — aucune authentification requise.
+ */
+export async function getVehicleTypes(req: Request, res: Response) {
+  try {
+    const country = typeof req.query.country === 'string' ? req.query.country : undefined;
+    const types = service.getVehicleTypeInfos(country);
+
+    return res.json({
+      ok:   true,
+      data: types,
+    });
+  } catch (err: any) {
+    console.error('[Vehicles] Get vehicle types error:', err);
+    return res.status(500).json({
+      ok:      false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // ENDPOINTS ADMIN
 // ══════════════════════════════════════════════════════════════════════════════
 

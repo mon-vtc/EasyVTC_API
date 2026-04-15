@@ -76,3 +76,13 @@ export interface VehicleListResult {
   limit: number;
   total_pages: number;
 }
+
+// ── Type de véhicule avec métadonnées (endpoint public /vehicle-types) ────────
+export interface VehicleTypeInfo {
+  type:        VehicleType;
+  label:       string;
+  description: string;
+  base_price:  number;
+  icon:        string;   // nom Ionicons (pour le client mobile)
+  capacity:    number;
+}
