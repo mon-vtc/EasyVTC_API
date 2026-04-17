@@ -188,6 +188,34 @@ export class ReservationsController {
     }
   }
 
+  // ── GET /reservations/driver — Chauffeur : toutes ses réservations ───────────
+  async listDriverReservations(req: Request, res: Response): Promise<void> {
+    const parsed = reservationListFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const { supabaseAdmin } = await import('../../database/supabase/client.js');
+      const { data: driverRecord } = await supabaseAdmin
+        .from('drivers')
+        .select('id')
+        .eq('user_id', req.user!.id)
+        .single();
+
+      if (!driverRecord) {
+        res.status(404).json({ ok: false, message: 'Profil chauffeur introuvable' });
+        return;
+      }
+
+      const result = await reservationsService.listDriverReservations(driverRecord.id as string, parsed.data);
+      res.status(200).json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // ── GET /reservations/drivers/available — Admin/Manager : chauffeurs dispo ─
   async getAvailableDrivers(req: Request, res: Response): Promise<void> {
     const scheduledAt = typeof req.query['scheduled_at'] === 'string'

@@ -44,6 +44,9 @@ router.get('/mine', requireRole('client'), (req, res) => reservationsController.
 // Course active du chauffeur connecté
 router.get('/driver/active', requireDriver, (req, res) => reservationsController.getDriverActive(req, res));
 
+// Toutes les réservations du chauffeur connecté
+router.get('/driver', requireDriver, (req, res) => reservationsController.listDriverReservations(req, res));
+
 // Signaler l'arrivée au point de pickup
 router.patch('/:id/arrive', requireDriver, (req, res) => reservationsController.arrive(req, res));
 

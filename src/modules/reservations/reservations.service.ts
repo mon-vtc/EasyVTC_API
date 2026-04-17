@@ -42,8 +42,12 @@ const RESERVATION_SELECT = `
   client:users!client_id(id, first_name, last_name, phone, profile_photo_url),
   driver:drivers!driver_id(
     id,
+    is_online,
+    status,
     vehicle_type,
-    user:users!user_id(first_name, last_name, phone, profile_photo_url)
+    zone,
+    user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
+    vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
   )
 ` as const;
 
@@ -103,7 +107,7 @@ export class ReservationsService {
       throw { status: 500, message: 'Erreur lors de la création de la réservation' };
     }
 
-    const reservation = data as unknown as ReservationWithRelations;
+    const reservation = this._mapReservation(data);
 
     // Notification de confirmation au client (fire-and-forget)
     notificationsService.sendToUser(
@@ -146,7 +150,7 @@ export class ReservationsService {
     const total = count ?? 0;
 
     return {
-      reservations: (data ?? []) as unknown as ReservationWithRelations[],
+      reservations: (data ?? []).map((r: any) => this._mapReservation(r)),
       total,
       page,
       limit,
@@ -160,6 +164,10 @@ export class ReservationsService {
 
   async listMyReservations(clientId: string, filters: ReservationListFilters): Promise<ReservationListResult> {
     return this.listReservations({ ...filters, client_id: clientId });
+  }
+
+  async listDriverReservations(driverId: string, filters: ReservationListFilters): Promise<ReservationListResult> {
+    return this.listReservations({ ...filters, driver_id: driverId });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -176,7 +184,7 @@ export class ReservationsService {
       .limit(1)
       .maybeSingle();
 
-    return data as unknown as ReservationWithRelations | null;
+    return data ? this._mapReservation(data) : null;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -196,7 +204,7 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 404, message: 'Réservation introuvable' };
 
-    const r = data as unknown as ReservationWithRelations;
+    const r = this._mapReservation(data);
 
     // Un client ne peut voir que ses propres réservations
     if (requesterRole === 'client' && r.client_id !== requesterId) {
@@ -282,7 +290,7 @@ export class ReservationsService {
       console.error('[Reservations] Erreur génération bon de commande pour réservation', reservationId, err);
     });
 
-    const updated = data as unknown as ReservationWithRelations;
+    const updated = this._mapReservation(data);
     const driverUserData = (driver as any).users;
     const driverName = driverUserData
       ? `${driverUserData.first_name} ${driverUserData.last_name}`
@@ -404,7 +412,7 @@ export class ReservationsService {
       { reservation_id: reservationId },
     );
 
-    return data as unknown as ReservationWithRelations;
+    return this._mapReservation(data);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -510,7 +518,7 @@ export class ReservationsService {
       { reservation_id: reservationId },
     );
 
-    return data as unknown as ReservationWithRelations;
+    return this._mapReservation(data);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -551,7 +559,7 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 500, message: "Erreur lors de l'annulation" };
 
-    const updated = data as unknown as ReservationWithRelations;
+    const updated = this._mapReservation(data);
 
     // Remettre le chauffeur en 'active' seulement s'il était physiquement en route.
     // Pour 'assigned' et 'driver_arrived', driver.status est encore 'active' — rien à faire.
@@ -672,6 +680,40 @@ export class ReservationsService {
   // ──────────────────────────────────────────────────────────────────────────
   // PRIVÉS — Helpers internes
   // ──────────────────────────────────────────────────────────────────────────
+
+  private _mapDriver(raw: any): AvailableDriverDto | null {
+    if (!raw) return null;
+    const activeVehicle = Array.isArray(raw.vehicles)
+      ? (raw.vehicles.find((v: any) => v.is_active) ?? null)
+      : null;
+    return {
+      id:           raw.id,
+      rating:       null,
+      is_online:    raw.is_online,
+      status:       raw.status,
+      vehicle_type: raw.vehicle_type,
+      zone:         raw.zone,
+      user:         raw.user,
+      vehicle:      activeVehicle
+        ? {
+            id:           activeVehicle.id,
+            model:        activeVehicle.model,
+            plate_number: activeVehicle.plate_number,
+            brand:        activeVehicle.brand,
+            color:        activeVehicle.color,
+            type:         activeVehicle.type,
+            photo_url:    activeVehicle.photo_url,
+          }
+        : null,
+    };
+  }
+
+  private _mapReservation(raw: any): ReservationWithRelations {
+    return {
+      ...raw,
+      driver: raw.driver !== undefined ? this._mapDriver(raw.driver) : undefined,
+    } as ReservationWithRelations;
+  }
 
   /**
    * Vérifie qu'un chauffeur n'a pas de course en conflit avec `scheduledAt`.

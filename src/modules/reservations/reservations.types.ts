@@ -70,16 +70,7 @@ export interface ReservationWithRelations extends Reservation {
     phone: string | null;
     profile_photo_url: string | null;
   };
-  driver?: {
-    id: string;
-    vehicle_type: VehicleType | null;
-    user: {
-      first_name: string;
-      last_name: string;
-      phone: string | null;
-      profile_photo_url: string | null;
-    };
-  } | null;
+  driver?: AvailableDriverDto | null;
 }
 
 // ── DTOs — Création ───────────────────────────────────────────────────────────
