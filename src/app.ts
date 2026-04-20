@@ -20,6 +20,7 @@ import {
 } from './modules/driver-documents/driver-documents.routes.js';
 import { vehiclesRoutes, adminVehiclesRoutes, vehicleTypesRoutes } from './modules/vehicles/vehicles.routes.js';
 import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 
 const app = express();
 
@@ -78,6 +79,7 @@ app.use('/vehicle-types',    vehicleTypesRoutes);
 app.use('/drivers/vehicles', vehiclesRoutes);
 app.use('/admin/drivers',   adminDriversRoutes);
 app.use('/admin/vehicles',  adminVehiclesRoutes);
+app.use('/admin/managers',  adminRoutes);
 app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);
