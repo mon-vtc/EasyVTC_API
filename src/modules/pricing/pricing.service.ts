@@ -313,17 +313,13 @@ export class PricingService {
         throw { status: 400, message: 'Ce forfait n\'est pas disponible pour ce pays' };
       }
 
-      const nb_passengers           = dto.nb_passengers ?? 1;
-      const nb_extra                = Math.max(0, nb_passengers - 1);
-      const pickup_surcharge_total  = roundPrice(nb_extra * (flatRate.pickup_surcharge ?? 0), flatRate.currency);
-      const final_price             = roundPrice(flatRate.price + pickup_surcharge_total, flatRate.currency);
+      const nb_passengers = dto.nb_passengers ?? 1;
+      const final_price   = roundPrice(flatRate.price, flatRate.currency);
 
       const breakdown: PriceBreakdown = {
-        flat_rate_id:              flatRate.id,
-        flat_rate_label:           flatRate.label,
+        flat_rate_id:    flatRate.id,
+        flat_rate_label: flatRate.label,
         nb_passengers,
-        pickup_surcharge_per_person: flatRate.pickup_surcharge ?? 0,
-        pickup_surcharge_total,
       };
 
       return {

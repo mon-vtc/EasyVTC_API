@@ -50,8 +50,7 @@ export interface PricingFlatRate {
   label: string;             // Ex: "Massy → Orly"
   origin_label: string;
   destination_label: string;
-  price: number;
-  pickup_surcharge: number;  // Surcharge par passager supplémentaire (0 = aucune)
+  price: number;             // Prix fixe — aucune surcharge passager
   currency: string;
   is_active: boolean;
   created_at: string;
@@ -86,7 +85,6 @@ export interface CreateFlatRateDto {
   origin_label: string;
   destination_label: string;
   price: number;
-  pickup_surcharge?: number; // Surcharge par passager supp. (défaut 0)
   currency: string;
 }
 
@@ -95,7 +93,6 @@ export interface UpdateFlatRateDto {
   origin_label?: string;
   destination_label?: string;
   price?: number;
-  pickup_surcharge?: number;
   is_active?: boolean;
 }
 
@@ -109,7 +106,7 @@ export interface PriceEstimateDto {
   distance_km?: number;   // Requis uniquement si pas de flat_rate_id
   duration_min?: number;  // Requis uniquement si pas de flat_rate_id
   flat_rate_id?: string;  // Si fourni → retourne le forfait, ignore distance/durée
-  nb_passengers?: number; // Nombre de passagers (pour calcul surcharge pick-up, défaut 1)
+  nb_passengers?: number; // Informatif — stocké dans breakdown, n'affecte pas le prix
 }
 
 // ── Résultat public (CDC p.26 : jamais de formule sur les PDFs) ───────────────
@@ -123,6 +120,7 @@ export interface PriceEstimateResult {
 
 // ── Détail interne (stockage BDD, JAMAIS affiché sur documents) ───────────────
 export interface PriceBreakdown {
+  // Mode formule
   base_price?: number;
   distance_km?: number;
   duration_min?: number;
@@ -132,11 +130,10 @@ export interface PriceBreakdown {
   min_cost?: number;
   subtotal?: number;
   minimum_applied?: boolean;
+  // Mode forfait
   flat_rate_id?: string;
   flat_rate_label?: string;
-  nb_passengers?: number;
-  pickup_surcharge_per_person?: number;
-  pickup_surcharge_total?: number;
+  nb_passengers?: number;  // Informatif uniquement
 }
 
 // ── Filtres liste forfaits ────────────────────────────────────────────────────

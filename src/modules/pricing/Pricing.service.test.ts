@@ -208,6 +208,18 @@ describe('PricingService', () => {
       expect(result.breakdown.flat_rate_label).toBe('Massy → Orly');
     });
 
+    it('le prix reste fixe quel que soit le nombre de passagers', async () => {
+      mockChain(mockFlatRateMassyOrly);
+      const result = await service.calculatePrice({
+        country:       'france',
+        flat_rate_id:  'fr-1',
+        nb_passengers: 6,
+      });
+
+      expect(result.final_price).toBe(37.00);
+      expect(result.breakdown.nb_passengers).toBe(6);
+    });
+
     it('lève une erreur si le forfait est inactif', async () => {
       mockSupabaseChain({ ...mockFlatRateMassyOrly, is_active: false });
       await expect(
