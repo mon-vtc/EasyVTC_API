@@ -16,8 +16,12 @@
 //   PATCH  /reservations/:id/start           Démarrer la course
 //   PATCH  /reservations/:id/complete        Terminer la course
 //
+// CHAUFFEUR UNIQUEMENT (suite)
+//   GET    /reservations/driver              Historique des courses du chauffeur
+//
 // ADMIN / MANAGER UNIQUEMENT
 //   GET    /reservations                     Toutes les réservations + filtres
+//   GET    /reservations/drivers/available   Chauffeurs disponibles pour assignation
 //   POST   /reservations/:id/assign          Affecter un chauffeur
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -41,6 +45,9 @@ router.get('/mine', requireRole('client'), (req, res) => reservationsController.
 
 // ── Routes chauffeur ──────────────────────────────────────────────────────────
 
+// Historique des courses du chauffeur connecté
+router.get('/driver', requireDriver, (req, res) => reservationsController.listDriverReservations(req, res));
+
 // Course active du chauffeur connecté
 router.get('/driver/active', requireDriver, (req, res) => reservationsController.getDriverActive(req, res));
 
@@ -57,6 +64,9 @@ router.patch('/:id/complete', requireDriver, (req, res) => reservationsControlle
 
 // Liste de toutes les réservations avec filtres
 router.get('/', requireStaff, (req, res) => reservationsController.listAll(req, res));
+
+// Chauffeurs disponibles pour assignation (doit être avant /:id)
+router.get('/drivers/available', requireStaff, (req, res) => reservationsController.getAvailableDrivers(req, res));
 
 // Affecter un chauffeur à une réservation
 router.post('/:id/assign', requireStaff, (req, res) => reservationsController.assign(req, res));

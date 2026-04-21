@@ -23,6 +23,7 @@ import type {
   CompleteReservationDto,
   ReservationListFilters,
   ReservationListResult,
+  AvailableDriverDto,
 } from './reservations.types.js';
 import type { UserRole } from '../auth/auth.types.js';
 
@@ -154,6 +155,22 @@ export class ReservationsService {
 
   async listMyReservations(clientId: string, filters: ReservationListFilters): Promise<ReservationListResult> {
     return this.listReservations({ ...filters, client_id: clientId });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3b. RÉSERVATIONS DU CHAUFFEUR — Historique
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async listDriverReservations(driverUserId: string, filters: ReservationListFilters): Promise<ReservationListResult> {
+    const { data: driverRecord } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('user_id', driverUserId)
+      .single();
+
+    if (!driverRecord) throw { status: 404, message: 'Profil chauffeur introuvable' };
+
+    return this.listReservations({ ...filters, driver_id: driverRecord.id });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -563,6 +580,38 @@ export class ReservationsService {
     }
 
     return updated;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 11. CHAUFFEURS DISPONIBLES — Admin / Manager
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Retourne les chauffeurs au statut 'active', triés online en premier.
+   * Utilisé par l'écran d'assignation admin.
+   */
+  async getAvailableDrivers(): Promise<AvailableDriverDto[]> {
+    const { data, error } = await supabaseAdmin
+      .from('drivers')
+      .select(`
+        id,
+        rating,
+        is_online,
+        status,
+        vehicle_type,
+        zone,
+        user:users!user_id(id, first_name, last_name, phone, email, profile_photo_url),
+        vehicle:vehicles(id, model, plate_number, brand, color, type, photo_url)
+      `)
+      .eq('status', 'active')
+      .order('is_online', { ascending: false });
+
+    if (error) {
+      console.error('[Reservations] getAvailableDrivers error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération des chauffeurs disponibles' };
+    }
+
+    return (data ?? []) as unknown as AvailableDriverDto[];
   }
 
   // ──────────────────────────────────────────────────────────────────────────
