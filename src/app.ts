@@ -79,7 +79,7 @@ app.use('/vehicle-types',    vehicleTypesRoutes);
 app.use('/drivers/vehicles', vehiclesRoutes);
 app.use('/admin/drivers',   adminDriversRoutes);
 app.use('/admin/vehicles',  adminVehiclesRoutes);
-app.use('/admin/managers',  adminRoutes);
+app.use('/admin',           adminRoutes);
 app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);

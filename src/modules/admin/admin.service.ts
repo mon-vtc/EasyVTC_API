@@ -1,43 +1,79 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// SERVICE — Module Admin (Gestion des gestionnaires)
+// SERVICE — Module Admin
 // Sprint 3 — EazyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-import { supabaseAdmin }         from '../../database/supabase/client.js';
-import { sendWelcomeEmail }      from '../../utils/email.service.js';
-import { usersService }          from '../users/users.service.js';
-import type { UserProfile }      from '../users/users.types.js';
+import { supabaseAdmin }                  from '../../database/supabase/client.js';
+import { sendManagerCredentialsEmail }    from '../../utils/email.service.js';
+import { usersService }                   from '../users/users.service.js';
+import { reservationsService }            from '../reservations/reservations.service.js';
+import type { UserProfile, UserListResult } from '../users/users.types.js';
+import type { ChangeUserStatusDto }        from '../users/users.types.js';
+import type {
+  ReservationListFilters,
+  ReservationListResult,
+  AssignDriverDto,
+  AvailableDriverDto,
+}                                          from '../reservations/reservations.types.js';
 import type {
   CreateManagerDto,
   ChangeManagerStatusDto,
   ManagerListFilters,
   ManagerListResult,
-} from './admin.types.js';
+  AdminUserListFilters,
+  AdminStatsResult,
+}                                          from './admin.types.js';
 
-// Colonnes sélectionnées — identiques à users.service
 const USER_PROFILE_COLUMNS = `
   id, email, role, first_name, last_name, phone,
   profile_photo_url, status, status_changed_by, status_changed_at, status_reason,
   rgpd_consent, rgpd_consent_at, deleted_at, created_at, updated_at
 `;
 
+// ── Générateur de mot de passe temporaire ─────────────────────────────────────
+function generateTempPassword(): string {
+  const lower  = 'abcdefghijklmnopqrstuvwxyz';
+  const upper  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const digits = '0123456789';
+  const all    = lower + upper + digits;
+  const pick   = (s: string) => s[Math.floor(Math.random() * s.length)];
+
+  const parts: string[] = [
+    pick(upper), pick(upper),
+    pick(lower), pick(lower), pick(lower),
+    pick(digits), pick(digits), pick(digits),
+    ...Array.from({ length: 4 }, () => pick(all)),
+  ];
+
+  // Fisher-Yates shuffle
+  for (let i = parts.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [parts[i], parts[j]] = [parts[j], parts[i]];
+  }
+  return parts.join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 export class AdminService {
 
   // ══════════════════════════════════════════════════════════════════════════
-  // CRÉER UN GESTIONNAIRE
+  // GESTIONNAIRES
   // ══════════════════════════════════════════════════════════════════════════
 
   /**
-   * Crée un compte gestionnaire via Supabase Auth puis attend le trigger
-   * handle_new_user. Si le trigger tarde, un insert manuel est effectué.
-   * L'email de bienvenue est envoyé de façon non bloquante.
+   * Crée un compte gestionnaire.
+   * Si aucun mot de passe n'est fourni, un mot de passe temporaire est généré
+   * et envoyé par email au gestionnaire avec ses identifiants de connexion.
    */
   async createManager(dto: CreateManagerDto, adminId: string): Promise<UserProfile> {
+    const tempPassword = dto.password ?? generateTempPassword();
+    const isTempPwd    = !dto.password;
+
     // 1. Création du compte auth
     const { data: authData, error: authError } =
       await supabaseAdmin.auth.admin.createUser({
         email:         dto.email,
-        password:      dto.password,
+        password:      tempPassword,
         phone:         dto.phone,
         email_confirm: true,
         user_metadata: {
@@ -84,22 +120,21 @@ export class AdminService {
       const { error: insertError } = await supabaseAdmin
         .from('users')
         .insert({
-          id:               userId,
-          email:            dto.email,
-          first_name:       dto.first_name,
-          last_name:        dto.last_name,
-          phone:            dto.phone ?? null,
-          role:             'manager',
-          status:           'active',
+          id:                userId,
+          email:             dto.email,
+          first_name:        dto.first_name,
+          last_name:         dto.last_name,
+          phone:             dto.phone ?? null,
+          role:              'manager',
+          status:            'active',
           status_changed_by: adminId,
           status_changed_at: new Date().toISOString(),
-          status_reason:    'Compte créé par un administrateur',
-          rgpd_consent:     false,
+          status_reason:     'Compte créé par un administrateur',
+          rgpd_consent:      false,
         });
 
       if (insertError) {
         console.error('[AdminService] Fallback insert échoué :', insertError.message);
-        // Nettoyer l'entrée auth pour éviter un compte orphelin
         await supabaseAdmin.auth.admin.deleteUser(userId);
         throw { status: 500, message: 'Erreur lors de la création du profil gestionnaire' };
       }
@@ -116,17 +151,21 @@ export class AdminService {
       throw { status: 500, message: 'Profil créé mais introuvable' };
     }
 
-    // 5. Email de bienvenue (non bloquant)
-    sendWelcomeEmail(dto.email, dto.first_name).catch((err) =>
-      console.warn('[AdminService] Welcome email failed:', err)
-    );
+    // 5. Email avec les identifiants (prioritaire sur le welcome email générique)
+    if (isTempPwd) {
+      sendManagerCredentialsEmail(dto.email, dto.first_name, dto.email, tempPassword).catch((err) =>
+        console.warn('[AdminService] Credentials email failed:', err),
+      );
+    } else {
+      sendManagerCredentialsEmail(dto.email, dto.first_name, dto.email, tempPassword).catch((err) =>
+        console.warn('[AdminService] Credentials email failed:', err),
+      );
+    }
 
     return profile as UserProfile;
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // LISTER LES GESTIONNAIRES
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── LISTER LES GESTIONNAIRES ──────────────────────────────────────────────
 
   async listManagers(filters: ManagerListFilters): Promise<ManagerListResult> {
     const page  = filters.page  ?? 1;
@@ -149,7 +188,7 @@ export class AdminService {
     if (filters.search) {
       const s = `%${filters.search}%`;
       query = query.or(
-        `email.ilike.${s},first_name.ilike.${s},last_name.ilike.${s}`
+        `email.ilike.${s},first_name.ilike.${s},last_name.ilike.${s}`,
       );
     }
 
@@ -171,9 +210,7 @@ export class AdminService {
     };
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // DÉTAIL D'UN GESTIONNAIRE
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── DÉTAIL D'UN GESTIONNAIRE ──────────────────────────────────────────────
 
   async getManagerById(managerId: string): Promise<UserProfile> {
     const { data, error } = await supabaseAdmin
@@ -191,24 +228,166 @@ export class AdminService {
     return data as UserProfile;
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // CHANGER LE STATUT D'UN GESTIONNAIRE
-  // ══════════════════════════════════════════════════════════════════════════
+  // ── CHANGER LE STATUT D'UN GESTIONNAIRE ──────────────────────────────────
 
-  /**
-   * Délègue à usersService.changeUserStatus — même logique métier,
-   * avec vérification supplémentaire que la cible est bien un gestionnaire.
-   */
   async changeManagerStatus(
     managerId: string,
     dto:       ChangeManagerStatusDto,
     adminId:   string,
   ): Promise<UserProfile> {
-    // Vérifier que la cible est bien un gestionnaire
     await this.getManagerById(managerId);
-
-    // Réutiliser la logique éprouvée du module users
     return usersService.changeUserStatus(managerId, dto, adminId);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // UTILISATEURS (vue globale admin)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async listUsers(filters: AdminUserListFilters): Promise<UserListResult> {
+    return usersService.listUsers(filters);
+  }
+
+  async changeUserStatus(
+    targetUserId: string,
+    dto:          ChangeUserStatusDto,
+    adminId:      string,
+  ): Promise<UserProfile> {
+    return usersService.changeUserStatus(targetUserId, dto, adminId);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RÉSERVATIONS (vue globale admin / manager)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async listReservations(filters: ReservationListFilters): Promise<ReservationListResult> {
+    return reservationsService.listReservations(filters);
+  }
+
+  async assignDriver(
+    reservationId: string,
+    dto:           AssignDriverDto,
+    adminId:       string,
+  ) {
+    return reservationsService.assignDriver(reservationId, dto, adminId);
+  }
+
+  async getAvailableDrivers(scheduledAt?: string, durationMin?: number): Promise<AvailableDriverDto[]> {
+    return reservationsService.getAvailableDrivers(scheduledAt, durationMin);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STATISTIQUES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  async getStats(): Promise<AdminStatsResult> {
+    // Toutes les requêtes en parallèle pour minimiser la latence
+    const [
+      reservationsRes,
+      driversRes,
+      onlineDriversRes,
+      clientsRes,
+      managersRes,
+      revenueCompletedRes,
+      revenueEstimatedRes,
+    ] = await Promise.all([
+      // Réservations par statut
+      supabaseAdmin
+        .from('reservations')
+        .select('status'),
+
+      // Total chauffeurs actifs
+      supabaseAdmin
+        .from('drivers')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active'),
+
+      // Chauffeurs en ligne
+      supabaseAdmin
+        .from('drivers')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'active')
+        .eq('is_online', true),
+
+      // Clients
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .is('deleted_at', null),
+
+      // Gestionnaires
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'manager')
+        .is('deleted_at', null),
+
+      // Revenu confirmé (courses terminées — prix final)
+      supabaseAdmin
+        .from('reservations')
+        .select('price_final')
+        .eq('status', 'completed')
+        .not('price_final', 'is', null),
+
+      // Revenu estimé (toutes courses non annulées)
+      supabaseAdmin
+        .from('reservations')
+        .select('price_estimated')
+        .neq('status', 'cancelled'),
+    ]);
+
+    // Agrégation des statuts de réservations
+    const rows: { status: string }[] = (reservationsRes.data ?? []) as { status: string }[];
+    const statusMap: Record<string, number> = {};
+    for (const row of rows) {
+      statusMap[row.status] = (statusMap[row.status] ?? 0) + 1;
+    }
+
+    // Répartition par type de véhicule (via le même dataset)
+    const vehicleRes = await supabaseAdmin
+      .from('reservations')
+      .select('vehicle_type');
+
+    const vehicleBreakdown: Record<string, number> = {};
+    for (const row of (vehicleRes.data ?? []) as { vehicle_type: string }[]) {
+      vehicleBreakdown[row.vehicle_type] = (vehicleBreakdown[row.vehicle_type] ?? 0) + 1;
+    }
+
+    const sumField = <T extends Record<string, unknown>>(rows: T[], field: keyof T): number =>
+      rows.reduce((acc, row) => {
+        const v = row[field];
+        return acc + (typeof v === 'number' ? v : 0);
+      }, 0);
+
+    return {
+      reservations: {
+        total:       rows.length,
+        pending:     statusMap['pending']       ?? 0,
+        assigned:    statusMap['assigned']      ?? 0,
+        in_progress: statusMap['in_progress']   ?? 0,
+        completed:   statusMap['completed']     ?? 0,
+        cancelled:   statusMap['cancelled']     ?? 0,
+      },
+      drivers: {
+        total:  driversRes.count       ?? 0,
+        online: onlineDriversRes.count ?? 0,
+      },
+      users: {
+        clients:  clientsRes.count   ?? 0,
+        managers: managersRes.count  ?? 0,
+      },
+      revenue: {
+        confirmed: sumField(
+          (revenueCompletedRes.data ?? []) as Record<string, unknown>[],
+          'price_final',
+        ),
+        estimated: sumField(
+          (revenueEstimatedRes.data ?? []) as Record<string, unknown>[],
+          'price_estimated',
+        ),
+      },
+      vehicle_breakdown: vehicleBreakdown,
+    };
   }
 }
 
