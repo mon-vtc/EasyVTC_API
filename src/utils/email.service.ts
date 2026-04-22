@@ -312,3 +312,74 @@ export async function sendPasswordChangedEmail(
 
   await sendMail(to, ' Mot de passe EasyVTC modifié avec succès', html);
 }
+
+// =============================================================================
+// 6. Email de bienvenue — Gestionnaire (compte créé par l'admin)
+// =============================================================================
+export async function sendManagerWelcomeEmail(
+  to: string,
+  firstName: string,
+  tempPassword: string,
+  loginUrl = 'easyvtc://login'
+): Promise<void> {
+  const html = layout(`
+    <h1 style="margin:0 0 6px;color:${C.bordeaux};font-size:26px;font-weight:bold;">
+      Bienvenue, ${firstName} !</h1>
+    <p style="margin:0 0 24px;color:${C.beige};font-size:13px;font-weight:600;
+              letter-spacing:1px;text-transform:uppercase;">Votre espace gestionnaire</p>
+    ${hr()}
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
+      Bonjour <strong>${firstName}</strong>,</p>
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 24px;">
+      Votre compte gestionnaire EazyVTC vient d'être créé par l'administrateur.
+      Vous pouvez dès maintenant vous connecter et gérer les courses et réservations
+      de la plateforme.</p>
+
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:${C.lightGray};border-radius:8px;border:1px solid ${C.border};margin:0 0 24px;">
+      <tr>
+        <td style="padding:20px 24px;">
+          <p style="margin:0 0 14px;color:${C.bordeaux};font-size:13px;font-weight:700;
+                    letter-spacing:0.5px;text-transform:uppercase;">Vos identifiants de connexion</p>
+          <table cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td style="padding:6px 0;color:${C.gray};font-size:14px;width:40%;vertical-align:top;">
+                Adresse email</td>
+              <td style="padding:6px 0;color:#222;font-size:14px;font-weight:600;">
+                ${to}</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0;color:${C.gray};font-size:14px;vertical-align:top;">
+                Mot de passe temporaire</td>
+              <td style="padding:6px 0;">
+                <code style="background:${C.bordeaux};color:${C.white};padding:4px 10px;
+                             border-radius:4px;font-size:14px;letter-spacing:1px;">
+                  ${tempPassword}</code>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:#FFF8E1;border-radius:8px;border-left:4px solid #F6AD55;margin:0 0 24px;">
+      <tr><td style="padding:14px 20px;">
+        <p style="margin:0;color:#744210;font-size:14px;line-height:1.5;">
+          ⚠️ <strong>Important :</strong> Ce mot de passe est temporaire. Veuillez le modifier
+          dès votre première connexion depuis les paramètres de votre compte.</p>
+      </td></tr>
+    </table>
+
+    ${btn('Accéder à mon espace gestionnaire', loginUrl)}
+
+    ${hr()}
+    <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
+      Pour toute question, contactez votre administrateur ou notre support :
+      <a href="mailto:support@easyvtc.com"
+         style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
+        support@easyvtc.com</a></p>
+  `, `${firstName}, vos identifiants gestionnaire EazyVTC sont prêts.`);
+
+  await sendMail(to, '🔑 Vos accès gestionnaire EazyVTC', html);
+}

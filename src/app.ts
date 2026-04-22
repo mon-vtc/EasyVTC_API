@@ -11,6 +11,7 @@ import usersRoutes         from './modules/users/users.routes.js';
 import pricingRoutes       from './modules/pricing/pricing.routes.js';
 import reservationsRoutes  from './modules/reservations/reservations.routes.js';
 import notificationsRoutes from './modules/notifications/notifications.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 import {
   driverDocumentsRoutes,
   adminDocumentsRoutes,
@@ -66,6 +67,9 @@ app.get('/health/supabase', async (_req: Request, res: Response) => {
 // ── API Routes ────────────────────────────────────────────────────────────────
 app.use('/auth',  authRoutes);
 app.use('/users', usersRoutes);
+
+// ── Admin Routes ─────────────────────────────────────────────────────────────
+app.use('/admin', adminRoutes);
 
 // ── Driver Documents Routes ───────────────────────────────────────────────────
 app.use('/drivers/documents', driverDocumentsRoutes);
