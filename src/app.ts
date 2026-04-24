@@ -16,7 +16,8 @@ import {
   adminDocumentsRoutes,
   cronDocumentsRoutes
 } from './modules/driver-documents/driver-documents.routes.js';
-import { vehiclesRoutes, adminVehiclesRoutes, vehicleTypesRoutes } from './modules/vehicles/vehicles.routes.js';
+import { vehiclesRoutes, adminVehiclesRoutes } from './modules/vehicles/vehicles.routes.js';
+import { vehicleTypesPublicRoutes, vehicleTypesAdminRoutes } from './modules/vehicle-types/vehicle-types.routes.js';
 import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers.routes.js';
 import adminRoutes    from './modules/admin/admin.routes.js';
 import ordersRoutes   from './modules/orders/orders.routes.js';
@@ -78,7 +79,8 @@ app.use('/drivers/documents', driverDocumentsRoutes);
 app.use('/admin/documents', adminDocumentsRoutes);
 app.use('/cron/documents', cronDocumentsRoutes);
 app.use('/drivers',         driversSelfRoutes);
-app.use('/vehicle-types',    vehicleTypesRoutes);
+app.use('/vehicle-types',       vehicleTypesPublicRoutes);
+app.use('/admin/vehicle-types', vehicleTypesAdminRoutes);
 app.use('/drivers/vehicles', vehiclesRoutes);
 app.use('/admin/drivers',   adminDriversRoutes);
 app.use('/admin/vehicles',  adminVehiclesRoutes);

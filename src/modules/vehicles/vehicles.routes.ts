@@ -26,17 +26,6 @@ const upload = multer({
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ROUTE PUBLIQUE — /vehicle-types
-// ══════════════════════════════════════════════════════════════════════════════
-
-export const vehicleTypesRoutes = Router();
-
-vehicleTypesRoutes.get(
-  '/',
-  (req, res) => controller.getVehicleTypes(req, res)
-);
-
-// ══════════════════════════════════════════════════════════════════════════════
 // ROUTES CHAUFFEUR — /drivers/vehicles
 // ══════════════════════════════════════════════════════════════════════════════
 

@@ -92,13 +92,13 @@ describe('VehiclesService', () => {
   // getDriverIdFromUserId
   // ────────────────────────────────────────────────────────────────────────────
   describe('getDriverIdFromUserId()', () => {
-    it('✅ retourne le driver_id', async () => {
+    it(' retourne le driver_id', async () => {
       mockFrom.mockReturnValueOnce(chain(mockDriver));
       const id = await service.getDriverIdFromUserId(DRIVER_USER_ID);
       expect(id).toBe(DRIVER_ID);
     });
 
-    it('❌ lève 404 si le profil chauffeur est introuvable', async () => {
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getDriverIdFromUserId(DRIVER_USER_ID))
         .rejects.toMatchObject({ status: 404 });
@@ -116,7 +116,7 @@ describe('VehiclesService', () => {
       type:         'berline' as const,
     };
 
-    it('✅ crée un véhicule et le retourne', async () => {
+    it(' crée un véhicule et le retourne', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))    // getDriverIdFromUserId
         .mockReturnValueOnce(chain(mockVehicle));  // insert
@@ -126,7 +126,7 @@ describe('VehiclesService', () => {
       expect(result.driver_id).toBe(DRIVER_ID);
     });
 
-    it('❌ lève 500 si l\'insertion échoue', async () => {
+    it(' lève 500 si l\'insertion échoue', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(null, { message: 'db error' }));
@@ -140,7 +140,7 @@ describe('VehiclesService', () => {
   // getMyVehicles
   // ────────────────────────────────────────────────────────────────────────────
   describe('getMyVehicles()', () => {
-    it('✅ retourne la liste des véhicules du chauffeur', async () => {
+    it(' retourne la liste des véhicules du chauffeur', async () => {
       const list = [mockVehicle, { ...mockVehicle, id: 'vehicle-uuid-444', plate_number: 'XY-456-ZT' }];
       const listChain = {
         select:  jest.fn().mockReturnThis(),
@@ -155,7 +155,7 @@ describe('VehiclesService', () => {
       expect(result).toHaveLength(2);
     });
 
-    it('✅ retourne tableau vide si aucun véhicule', async () => {
+    it(' retourne tableau vide si aucun véhicule', async () => {
       const emptyChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -174,7 +174,7 @@ describe('VehiclesService', () => {
   // getMyVehicle
   // ────────────────────────────────────────────────────────────────────────────
   describe('getMyVehicle()', () => {
-    it('✅ retourne un véhicule par ID (ownership vérifié)', async () => {
+    it(' retourne un véhicule par ID (ownership vérifié)', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(mockVehicle));
@@ -183,7 +183,7 @@ describe('VehiclesService', () => {
       expect(result.id).toBe(VEHICLE_ID);
     });
 
-    it('❌ lève 404 si le véhicule n\'appartient pas au chauffeur', async () => {
+    it(' lève 404 si le véhicule n\'appartient pas au chauffeur', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(null, { message: 'not found' }));
@@ -197,7 +197,7 @@ describe('VehiclesService', () => {
   // updateVehicle
   // ────────────────────────────────────────────────────────────────────────────
   describe('updateVehicle()', () => {
-    it('✅ met à jour et retourne le véhicule', async () => {
+    it(' met à jour et retourne le véhicule', async () => {
       const updated = { ...mockVehicle, color: 'Blanc' };
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))              // getDriverId
@@ -208,7 +208,7 @@ describe('VehiclesService', () => {
       expect(result.color).toBe('Blanc');
     });
 
-    it('❌ lève 404 si le véhicule n\'existe pas', async () => {
+    it(' lève 404 si le véhicule n\'existe pas', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(null, { message: 'not found' }));
@@ -222,7 +222,7 @@ describe('VehiclesService', () => {
   // deleteVehicle
   // ────────────────────────────────────────────────────────────────────────────
   describe('deleteVehicle()', () => {
-    it('✅ supprime un véhicule sans photo', async () => {
+    it(' supprime un véhicule sans photo', async () => {
       const vehicleNoPhoto = { ...mockVehicle, photo_url: null };
       const deleteChain = {
         select:  jest.fn().mockReturnThis(),
@@ -241,7 +241,7 @@ describe('VehiclesService', () => {
       await expect(service.deleteVehicle(DRIVER_USER_ID, VEHICLE_ID)).resolves.toBeUndefined();
     });
 
-    it('✅ supprime la photo du storage avant de supprimer le véhicule', async () => {
+    it(' supprime la photo du storage avant de supprimer le véhicule', async () => {
       const vehicleWithPhoto = {
         ...mockVehicle,
         photo_url: 'https://storage.example.com/object/sign/driver-vehicles/driver-222/vehicle_123.jpg',
@@ -260,7 +260,7 @@ describe('VehiclesService', () => {
       expect(storageBucket.remove).toHaveBeenCalled();
     });
 
-    it('❌ lève 404 si le véhicule est introuvable', async () => {
+    it(' lève 404 si le véhicule est introuvable', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(null, { message: 'not found' }));
@@ -276,7 +276,7 @@ describe('VehiclesService', () => {
   describe('uploadVehiclePhoto()', () => {
     const buffer = Buffer.from('fake-image-data');
 
-    it('✅ uploade une photo JPEG et retourne le véhicule mis à jour', async () => {
+    it(' uploade une photo JPEG et retourne le véhicule mis à jour', async () => {
       const vehicleNoPhoto = { ...mockVehicle, photo_url: null };
       const signedUrl = 'https://storage.example.com/vehicles/photo.jpg';
       const storageBucket = mockStorageOk();
@@ -292,18 +292,18 @@ describe('VehiclesService', () => {
       expect(result.photo_url).toBe(signedUrl);
     });
 
-    it('❌ rejette un format non supporté', async () => {
+    it(' rejette un format non supporté', async () => {
       await expect(service.uploadVehiclePhoto(DRIVER_USER_ID, VEHICLE_ID, buffer, 'image/gif'))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('Format non supporté') });
     });
 
-    it('❌ rejette un fichier trop volumineux (> 5 Mo)', async () => {
+    it(' rejette un fichier trop volumineux (> 5 Mo)', async () => {
       const bigBuffer = Buffer.alloc(6 * 1024 * 1024);
       await expect(service.uploadVehiclePhoto(DRIVER_USER_ID, VEHICLE_ID, bigBuffer, 'image/jpeg'))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('volumineux') });
     });
 
-    it('❌ lève 404 si le véhicule n\'appartient pas au chauffeur', async () => {
+    it(' lève 404 si le véhicule n\'appartient pas au chauffeur', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriver))
         .mockReturnValueOnce(chain(null, { message: 'not found' }));
@@ -317,7 +317,7 @@ describe('VehiclesService', () => {
   // getAllVehicles (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('getAllVehicles()', () => {
-    it('✅ retourne la liste paginée avec total', async () => {
+    it(' retourne la liste paginée avec total', async () => {
       const vehicles = [{ ...mockVehicle, driver: {} }];
       const adminChain = {
         select:  jest.fn().mockReturnThis(),
@@ -337,7 +337,7 @@ describe('VehiclesService', () => {
   // getVehicleById (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('getVehicleById()', () => {
-    it('✅ retourne le véhicule avec les infos du chauffeur', async () => {
+    it(' retourne le véhicule avec les infos du chauffeur', async () => {
       const vehicleWithDriver = { ...mockVehicle, driver: { id: DRIVER_ID, user: {} } };
       mockFrom.mockReturnValueOnce(chain(vehicleWithDriver));
 
@@ -346,7 +346,7 @@ describe('VehiclesService', () => {
       expect(result.driver).toBeDefined();
     });
 
-    it('❌ lève 404 si le véhicule n\'existe pas', async () => {
+    it(' lève 404 si le véhicule n\'existe pas', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getVehicleById('unknown-id'))
         .rejects.toMatchObject({ status: 404 });

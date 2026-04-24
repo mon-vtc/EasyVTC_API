@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import {
   Vehicle,
   VehicleWithDriver,
@@ -11,7 +12,6 @@ import {
   UpdateVehicleDto,
   VehicleListFilters,
   VehicleListResult,
-  VehicleTypeInfo,
 } from './vehicles.types.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -94,6 +94,8 @@ export class VehiclesService {
   // CHAUFFEUR : Créer un véhicule
   // ────────────────────────────────────────────────────────────────────────────
   async createVehicle(userId: string, dto: CreateVehicleDto): Promise<Vehicle> {
+    await vehicleTypesService.validateCode(dto.type);
+
     const driverId = await this.getDriverIdFromUserId(userId);
 
     const { data: vehicle, error } = await supabaseAdmin
@@ -236,6 +238,10 @@ export class VehiclesService {
   // CHAUFFEUR : Mettre à jour un véhicule
   // ────────────────────────────────────────────────────────────────────────────
   async updateVehicle(userId: string, vehicleId: string, dto: UpdateVehicleDto): Promise<Vehicle> {
+    if (dto.type) {
+      await vehicleTypesService.validateCode(dto.type);
+    }
+
     const driverId = await this.getDriverIdFromUserId(userId);
 
     // Vérifier l'ownership
@@ -299,41 +305,6 @@ export class VehiclesService {
       console.error('[Vehicles] Delete error:', deleteError);
       throw { status: 500, message: 'Erreur lors de la suppression du véhicule' };
     }
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // PUBLIC : Types de véhicule disponibles avec métadonnées
-  // ════════════════════════════════════════════════════════════════════════════
-
-  getVehicleTypeInfos(country?: string): VehicleTypeInfo[] {
-    const isSenegal = country === 'senegal';
-
-    return [
-      {
-        type:        'standard',
-        label:       'Économique',
-        description: '1-3 passagers • Compacte',
-        base_price:  isSenegal ? 3000 : 12.50,
-        icon:        'car-outline',
-        capacity:    3,
-      },
-      {
-        type:        'berline',
-        label:       'Confort',
-        description: '1-4 passagers • Berline',
-        base_price:  isSenegal ? 5000 : 18.00,
-        icon:        'car-sport-outline',
-        capacity:    4,
-      },
-      {
-        type:        'van',
-        label:       'Van',
-        description: '1-7 passagers • Familial',
-        base_price:  isSenegal ? 9000 : 35.00,
-        icon:        'bus-outline',
-        capacity:    7,
-      },
-    ];
   }
 
   // ════════════════════════════════════════════════════════════════════════════

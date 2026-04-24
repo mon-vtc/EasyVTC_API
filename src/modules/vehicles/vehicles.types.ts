@@ -3,8 +3,8 @@
 // Sprint 3 — EazyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Enums (correspondant à la BDD) ───────────────────────────────────────────
-export type VehicleType = 'standard' | 'berline' | 'van';
+import type { VehicleType } from '../auth/auth.types.js';
+export type { VehicleType };
 
 // ── Véhicule (entité BDD) ─────────────────────────────────────────────────────
 export interface Vehicle {
@@ -77,12 +77,3 @@ export interface VehicleListResult {
   total_pages: number;
 }
 
-// ── Type de véhicule avec métadonnées (endpoint public /vehicle-types) ────────
-export interface VehicleTypeInfo {
-  type:        VehicleType;
-  label:       string;
-  description: string;
-  base_price:  number;
-  icon:        string;   // nom Ionicons (pour le client mobile)
-  capacity:    number;
-}
