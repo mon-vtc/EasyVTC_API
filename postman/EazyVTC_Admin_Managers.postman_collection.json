@@ -37,7 +37,7 @@
             "  pm.expect(json.ok).to.be.true;",
             "  pm.expect(json.data.user.role).to.equal('admin');",
             "  pm.collectionVariables.set('admin_token', json.data.access_token);",
-            "  console.log('✅ admin_token sauvegardé');",
+            "  console.log(' admin_token sauvegardé');",
             "});"
           ]}}]
         },
@@ -62,7 +62,7 @@
       "description": "POST /admin/managers — Crée un compte manager, génère un mot de passe temporaire et envoie l'email.",
       "item": [
         {
-          "name": "[Admin] Créer un gestionnaire ✅",
+          "name": "[Admin] Créer un gestionnaire ",
           "request": {
             "method": "POST",
             "header": [
@@ -85,7 +85,7 @@
             "  pm.expect(json.data).to.not.have.property('temp_password');",
             "  pm.collectionVariables.set('manager_id', json.data.id);",
             "  pm.collectionVariables.set('target_user_id', json.data.id);",
-            "  console.log('✅ manager_id sauvegardé:', json.data.id);",
+            "  console.log(' manager_id sauvegardé:', json.data.id);",
             "});"
           ]}}]
         },
@@ -166,7 +166,7 @@
       "description": "GET /admin/users — Liste paginée de tous les utilisateurs, filtrable par rôle, statut, recherche.",
       "item": [
         {
-          "name": "[Admin] Liste tous les utilisateurs ✅",
+          "name": "[Admin] Liste tous les utilisateurs ",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
@@ -187,7 +187,7 @@
             "    const nonAdmin = json.data.users.find(u => u.role !== 'admin');",
             "    if (nonAdmin) {",
             "      pm.collectionVariables.set('target_user_id', nonAdmin.id);",
-            "      console.log('✅ target_user_id sauvegardé:', nonAdmin.id);",
+            "      console.log(' target_user_id sauvegardé:', nonAdmin.id);",
             "    }",
             "  }",
             "});"
@@ -302,7 +302,7 @@
       "description": "GET /admin/users/:id — Profil complet d'un utilisateur. Utilise target_user_id sauvegardé à l'étape 2.",
       "item": [
         {
-          "name": "[Admin] Profil d'un utilisateur ✅",
+          "name": "[Admin] Profil d'un utilisateur ",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
@@ -343,7 +343,7 @@
       "description": "PUT /admin/users/:id/status — Change le statut : active, inactive, locked. Invalide les sessions si désactivé.",
       "item": [
         {
-          "name": "[Admin] Suspendre un gestionnaire ✅",
+          "name": "[Admin] Suspendre un gestionnaire ",
           "request": {
             "method": "PUT",
             "header": [
@@ -366,7 +366,7 @@
           ]}}]
         },
         {
-          "name": "[Admin] Réactiver un gestionnaire ✅",
+          "name": "[Admin] Réactiver un gestionnaire ",
           "request": {
             "method": "PUT",
             "header": [
@@ -500,7 +500,7 @@
       "description": "GET /admin/reservations — Vue globale filtrée. Accessible par admin ET manager.\n\nNOTE : renseigner manuellement reservation_id avec un UUID valide (statut pending) avant d'exécuter les requêtes de détail et d'assignation.",
       "item": [
         {
-          "name": "[Admin] Liste toutes les réservations ✅",
+          "name": "[Admin] Liste toutes les réservations ",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
@@ -517,7 +517,7 @@
             "    const pending = json.data.reservations.find(r => r.status === 'pending');",
             "    if (pending) {",
             "      pm.collectionVariables.set('reservation_id', pending.id);",
-            "      console.log('✅ reservation_id (pending) sauvegardé:', pending.id);",
+            "      console.log(' reservation_id (pending) sauvegardé:', pending.id);",
             "    } else {",
             "      pm.collectionVariables.set('reservation_id', json.data.reservations[0].id);",
             "      console.log('ℹ️ reservation_id sauvegardé (non-pending):', json.data.reservations[0].id);",
@@ -617,7 +617,7 @@
       "description": "GET /admin/reservations/:id — Accessible admin + manager. Utilise reservation_id sauvegardé à l'étape 5.",
       "item": [
         {
-          "name": "[Admin] Détail d'une réservation ✅",
+          "name": "[Admin] Détail d'une réservation ",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
@@ -659,7 +659,7 @@
       "description": "PUT /admin/reservations/:id/assign — Assigne un chauffeur à une réservation pending.\n\nPRÉREQUIS : reservation_id (statut pending) + driver_record_id (public.drivers.id) doivent être renseignés.",
       "item": [
         {
-          "name": "[Admin] Assigner un chauffeur ✅",
+          "name": "[Admin] Assigner un chauffeur ",
           "request": {
             "method": "PUT",
             "header": [
@@ -774,7 +774,7 @@
       "description": "GET /admin/stats — Retourne le tableau de bord : réservations par statut, chauffeurs, utilisateurs, CA, véhicules.",
       "item": [
         {
-          "name": "[Admin] Statistiques dashboard ✅",
+          "name": "[Admin] Statistiques dashboard ",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],

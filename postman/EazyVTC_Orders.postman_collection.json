@@ -43,7 +43,7 @@
                 "  pm.expect(json.ok).to.be.true;",
                 "  pm.expect(json.data.access_token).to.be.a('string').and.not.empty;",
                 "  pm.collectionVariables.set('client_token', json.data.access_token);",
-                "  console.log('✅ client_token OK');",
+                "  console.log(' client_token OK');",
                 "});"
               ]
             }
@@ -72,9 +72,9 @@
                 "  pm.collectionVariables.set('driver_token', json.data.access_token);",
                 "  if (json.data.driver) {",
                 "    pm.collectionVariables.set('driver_record_id', json.data.driver.id);",
-                "    console.log('✅ driver_record_id sauvegardé:', json.data.driver.id);",
+                "    console.log(' driver_record_id sauvegardé:', json.data.driver.id);",
                 "  }",
-                "  console.log('✅ driver_token OK');",
+                "  console.log(' driver_token OK');",
                 "});"
               ]
             }
@@ -101,7 +101,7 @@
                 "  const json = pm.response.json();",
                 "  pm.expect(json.ok).to.be.true;",
                 "  pm.collectionVariables.set('admin_token', json.data.access_token);",
-                "  console.log('✅ admin_token OK');",
+                "  console.log(' admin_token OK');",
                 "});"
               ]
             }
@@ -143,7 +143,7 @@
                 "  pm.expect(ok).to.be.true;",
                 "  if (data.flat_rates.length > 0) {",
                 "    pm.collectionVariables.set('flat_rate_id', data.flat_rates[0].id);",
-                "    console.log('✅ flat_rate_id:', data.flat_rates[0].id, '— label:', data.flat_rates[0].label);",
+                "    console.log(' flat_rate_id:', data.flat_rates[0].id, '— label:', data.flat_rates[0].label);",
                 "  } else {",
                 "    console.warn('⚠️ Aucun forfait actif en France — les tests suivants utiliseront la formule distance/durée');",
                 "  }",
@@ -179,7 +179,7 @@
                 "  pm.expect(data.status).to.equal('pending');",
                 "  pm.expect(data.pricing_type).to.equal('flat_rate');",
                 "  pm.collectionVariables.set('reservation_id', data.id);",
-                "  console.log('✅ reservation_id:', data.id);",
+                "  console.log(' reservation_id:', data.id);",
                 "  console.log('   Prix estimé:', data.price_estimated, 'EUR');",
                 "});"
               ]
@@ -214,7 +214,7 @@
                 "const { ok, data } = pm.response.json();",
                 "if (ok) {",
                 "  pm.collectionVariables.set('reservation_id', data.id);",
-                "  console.log('✅ reservation_id (formule):', data.id);",
+                "  console.log(' reservation_id (formule):', data.id);",
                 "  console.log('   Prix estimé:', data.price_estimated, 'EUR');",
                 "}"
               ]
@@ -250,7 +250,7 @@
                 "  pm.expect(ok).to.be.true;",
                 "  pm.expect(data.status).to.equal('assigned');",
                 "  pm.expect(data.driver_id).to.be.a('string');",
-                "  console.log('✅ Chauffeur assigné — bon de commande en cours de génération (async)');",
+                "  console.log(' Chauffeur assigné — bon de commande en cours de génération (async)');",
                 "  console.log('   reservation_id:', data.id);",
                 "  console.log('   driver_id:', data.driver_id);",
                 "});"
@@ -296,7 +296,7 @@
                   "  pm.expect(data.passenger_snapshot).to.include.keys(['first_name','last_name','phone']);",
                   "  pm.expect(data.trip_snapshot).to.include.keys(['pickup_address','dest_address','vehicle_type','scheduled_at','via','pricing_type','currency']);",
                   "  pm.collectionVariables.set('order_id', data.id);",
-                  "  console.log('✅ order_id sauvegardé:', data.id);",
+                  "  console.log(' order_id sauvegardé:', data.id);",
                   "  console.log('   Numéro bon:', data.order_number);",
                   "  console.log('   pricing_type:', data.trip_snapshot.pricing_type);",
                   "  console.log('   final_price dans snapshot:', data.trip_snapshot.final_price, '(null si formule — CDC p.26)');",
@@ -306,10 +306,10 @@
                   "  const { data } = pm.response.json();",
                   "  if (data.trip_snapshot.pricing_type === 'formula') {",
                   "    pm.expect(data.trip_snapshot.final_price).to.be.null;",
-                  "    console.log('✅ Règle CDC respectée : pas de montant pour la formule');",
+                  "    console.log(' Règle CDC respectée : pas de montant pour la formule');",
                   "  } else {",
                   "    pm.expect(data.trip_snapshot.final_price).to.be.a('number').and.greaterThan(0);",
-                  "    console.log('✅ Forfait : montant affiché =', data.trip_snapshot.final_price, data.trip_snapshot.currency);",
+                  "    console.log(' Forfait : montant affiché =', data.trip_snapshot.final_price, data.trip_snapshot.currency);",
                   "  }",
                   "});"
                 ]
@@ -471,10 +471,10 @@
                     "  console.log('Status reçu:', status);",
                     "  if (status === 200) {",
                     "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
-                    "    console.log('✅ PDF reçu directement (redirect suivi par Postman)');",
+                    "    console.log(' PDF reçu directement (redirect suivi par Postman)');",
                     "  } else {",
                     "    pm.expect(pm.response.headers.get('Location')).to.be.a('string').and.include('supabase');",
-                    "    console.log('✅ Redirection vers URL signée Supabase Storage');",
+                    "    console.log(' Redirection vers URL signée Supabase Storage');",
                     "  }",
                     "});"
                   ]
@@ -599,7 +599,7 @@
                   "exec": [
                     "pm.test('PDF accessible pour le client (302 ou 200)', () => {",
                     "  pm.expect([200, 302]).to.include(pm.response.code);",
-                    "  console.log('✅ Client peut accéder à son bon PDF — status:', pm.response.code);",
+                    "  console.log(' Client peut accéder à son bon PDF — status:', pm.response.code);",
                     "});"
                   ]
                 }
@@ -693,7 +693,7 @@
                   "exec": [
                     "pm.test('PDF accessible pour le chauffeur (302 ou 200)', () => {",
                     "  pm.expect([200, 302]).to.include(pm.response.code);",
-                    "  console.log('✅ Chauffeur peut accéder à son bon PDF — status:', pm.response.code);",
+                    "  console.log(' Chauffeur peut accéder à son bon PDF — status:', pm.response.code);",
                     "});"
                   ]
                 }
@@ -960,7 +960,7 @@
                     "  const { data } = pm.response.json();",
                     "  const savedOrderId = pm.collectionVariables.get('order_id');",
                     "  pm.expect(data.id).to.equal(savedOrderId);",
-                    "  console.log('✅ Idempotence OK — pas de doublon, même bon retourné:', data.order_number);",
+                    "  console.log(' Idempotence OK — pas de doublon, même bon retourné:', data.order_number);",
                     "});"
                   ]
                 }

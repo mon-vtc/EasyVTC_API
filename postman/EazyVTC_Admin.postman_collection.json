@@ -21,7 +21,7 @@
       "item": [
 
         {
-          "name": "✅ POST /admin/managers — Créer (mot de passe auto-généré)",
+          "name": " POST /admin/managers — Créer (mot de passe auto-généré)",
           "event": [
             {
               "listen": "test",
@@ -60,7 +60,7 @@
         },
 
         {
-          "name": "✅ POST /admin/managers — Créer (mot de passe fourni)",
+          "name": " POST /admin/managers — Créer (mot de passe fourni)",
           "event": [
             {
               "listen": "test",
@@ -94,7 +94,7 @@
         },
 
         {
-          "name": "❌ POST /admin/managers — Email déjà utilisé (409)",
+          "name": " POST /admin/managers — Email déjà utilisé (409)",
           "event": [
             {
               "listen": "test",
@@ -126,7 +126,7 @@
         },
 
         {
-          "name": "❌ POST /admin/managers — Validation Zod (400)",
+          "name": " POST /admin/managers — Validation Zod (400)",
           "event": [
             {
               "listen": "test",
@@ -158,7 +158,7 @@
         },
 
         {
-          "name": "❌ POST /admin/managers — Sans token (401)",
+          "name": " POST /admin/managers — Sans token (401)",
           "event": [
             {
               "listen": "test",
@@ -188,7 +188,7 @@
         },
 
         {
-          "name": "❌ POST /admin/managers — Token manager (403)",
+          "name": " POST /admin/managers — Token manager (403)",
           "event": [
             {
               "listen": "test",
@@ -219,7 +219,7 @@
         },
 
         {
-          "name": "✅ GET /admin/managers — Liste (admin)",
+          "name": " GET /admin/managers — Liste (admin)",
           "event": [
             {
               "listen": "test",
@@ -256,7 +256,7 @@
         },
 
         {
-          "name": "✅ GET /admin/managers — Liste (manager)",
+          "name": " GET /admin/managers — Liste (manager)",
           "event": [
             {
               "listen": "test",
@@ -281,7 +281,7 @@
         },
 
         {
-          "name": "✅ GET /admin/managers — Filtrer par statut",
+          "name": " GET /admin/managers — Filtrer par statut",
           "event": [
             {
               "listen": "test",
@@ -313,7 +313,7 @@
         },
 
         {
-          "name": "✅ GET /admin/managers/:id — Détail",
+          "name": " GET /admin/managers/:id — Détail",
           "event": [
             {
               "listen": "test",
@@ -345,7 +345,7 @@
         },
 
         {
-          "name": "❌ GET /admin/managers/:id — Introuvable (404)",
+          "name": " GET /admin/managers/:id — Introuvable (404)",
           "event": [
             {
               "listen": "test",
@@ -370,7 +370,7 @@
         },
 
         {
-          "name": "✅ PATCH /admin/managers/:id/status — Désactiver",
+          "name": " PATCH /admin/managers/:id/status — Désactiver",
           "event": [
             {
               "listen": "test",
@@ -404,7 +404,7 @@
         },
 
         {
-          "name": "✅ PATCH /admin/managers/:id/status — Verrouiller",
+          "name": " PATCH /admin/managers/:id/status — Verrouiller",
           "event": [
             {
               "listen": "test",
@@ -438,7 +438,7 @@
         },
 
         {
-          "name": "✅ PATCH /admin/managers/:id/status — Réactiver",
+          "name": " PATCH /admin/managers/:id/status — Réactiver",
           "event": [
             {
               "listen": "test",
@@ -472,7 +472,7 @@
         },
 
         {
-          "name": "❌ PATCH /admin/managers/:id/status — Motif trop court (400)",
+          "name": " PATCH /admin/managers/:id/status — Motif trop court (400)",
           "event": [
             {
               "listen": "test",
@@ -506,7 +506,7 @@
         },
 
         {
-          "name": "❌ PATCH /admin/managers/:id/status — Statut invalide (400)",
+          "name": " PATCH /admin/managers/:id/status — Statut invalide (400)",
           "event": [
             {
               "listen": "test",
@@ -543,7 +543,7 @@
       "item": [
 
         {
-          "name": "✅ GET /admin/users — Liste complète",
+          "name": " GET /admin/users — Liste complète",
           "event": [
             {
               "listen": "test",
@@ -584,7 +584,7 @@
         },
 
         {
-          "name": "✅ GET /admin/users — Filtrer clients actifs",
+          "name": " GET /admin/users — Filtrer clients actifs",
           "event": [
             {
               "listen": "test",
@@ -620,7 +620,7 @@
         },
 
         {
-          "name": "✅ GET /admin/users — Recherche par nom",
+          "name": " GET /admin/users — Recherche par nom",
           "event": [
             {
               "listen": "test",
@@ -649,7 +649,7 @@
         },
 
         {
-          "name": "❌ GET /admin/users — Token manager (403)",
+          "name": " GET /admin/users — Token manager (403)",
           "event": [
             {
               "listen": "test",
@@ -674,7 +674,7 @@
         },
 
         {
-          "name": "✅ PATCH /admin/users/:id/status — Suspendre un client",
+          "name": " PATCH /admin/users/:id/status — Suspendre un client",
           "event": [
             {
               "listen": "test",
@@ -708,7 +708,7 @@
         },
 
         {
-          "name": "✅ PATCH /admin/users/:id/status — Réactiver",
+          "name": " PATCH /admin/users/:id/status — Réactiver",
           "event": [
             {
               "listen": "test",
@@ -742,7 +742,7 @@
         },
 
         {
-          "name": "❌ PATCH /admin/users/:id/status — Auto-désactivation (400)",
+          "name": " PATCH /admin/users/:id/status — Auto-désactivation (400)",
           "event": [
             {
               "listen": "test",
@@ -783,7 +783,7 @@
       "item": [
 
         {
-          "name": "✅ GET /admin/reservations — Liste complète",
+          "name": " GET /admin/reservations — Liste complète",
           "event": [
             {
               "listen": "test",
@@ -826,7 +826,7 @@
         },
 
         {
-          "name": "✅ GET /admin/reservations — Filtrer pending",
+          "name": " GET /admin/reservations — Filtrer pending",
           "event": [
             {
               "listen": "test",
@@ -859,7 +859,7 @@
         },
 
         {
-          "name": "✅ GET /admin/reservations — Vue manager",
+          "name": " GET /admin/reservations — Vue manager",
           "event": [
             {
               "listen": "test",
@@ -888,7 +888,7 @@
         },
 
         {
-          "name": "✅ GET /admin/reservations/drivers/available",
+          "name": " GET /admin/reservations/drivers/available",
           "event": [
             {
               "listen": "test",
@@ -926,7 +926,7 @@
         },
 
         {
-          "name": "✅ POST /admin/reservations/:id/assign — Affecter chauffeur",
+          "name": " POST /admin/reservations/:id/assign — Affecter chauffeur",
           "event": [
             {
               "listen": "test",
@@ -963,7 +963,7 @@
         },
 
         {
-          "name": "❌ POST /admin/reservations/:id/assign — Réservation introuvable (404)",
+          "name": " POST /admin/reservations/:id/assign — Réservation introuvable (404)",
           "event": [
             {
               "listen": "test",
@@ -994,7 +994,7 @@
         },
 
         {
-          "name": "❌ POST /admin/reservations/:id/assign — driver_id invalide (400)",
+          "name": " POST /admin/reservations/:id/assign — driver_id invalide (400)",
           "event": [
             {
               "listen": "test",
@@ -1034,7 +1034,7 @@
       "item": [
 
         {
-          "name": "✅ GET /admin/stats — Dashboard",
+          "name": " GET /admin/stats — Dashboard",
           "event": [
             {
               "listen": "test",
@@ -1071,7 +1071,7 @@
         },
 
         {
-          "name": "❌ GET /admin/stats — Token manager (403)",
+          "name": " GET /admin/stats — Token manager (403)",
           "event": [
             {
               "listen": "test",

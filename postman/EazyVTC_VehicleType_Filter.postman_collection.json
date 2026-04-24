@@ -1,0 +1,574 @@
+{
+  "info": {
+    "name": "EazyVTC — Filtre vehicle_type (Chauffeurs disponibles)",
+    "_postman_id": "eazyvtc-vehicletype-filter",
+    "description": "Tests du filtre vehicle_type sur GET /reservations/drivers/available.\n\n**Prérequis**\n- Seed en base : `npx tsx supabase/seeds/run_test_drivers.ts`\n- 8 chauffeurs de test insérés (6 éligibles, 2 exclus)\n\n**Ordre d'exécution**\n1. 🔐 Login admin → stocke `admin_token`\n2.  Cas nominaux (sans filtre, filtre standard/berline/van)\n3. ⚠️  Cas limites (type inexistant, sans auth)\n4. 🔍 Vérification des exclusions (offline + suspendu)\n\n**Données de test (seed)**\n- standard : Mamadou Diallo, Fatou Sow\n- berline  : Pierre Martin, Sophie Dubois\n- van      : Ahmed Traoré, Claire Bernard\n-  Luc Moreau   (standard, is_online=false)\n-  Nina Petit   (berline, status=suspended)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token", "value": "",                      "type": "string", "description": "Auto-rempli par le login admin" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Authentification",
+      "item": [
+        {
+          "name": "POST /auth/login — Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(pm.response.json().ok).to.be.true);",
+                  "pm.test('Token présent', () => {",
+                  "  const token = pm.response.json().data?.access_token;",
+                  "  pm.expect(token).to.be.a('string').and.not.empty;",
+                  "  pm.collectionVariables.set('admin_token', token);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Test1234!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Remplacer les credentials par ceux du compte admin réel. Le token est stocké dans `admin_token`."
+          }
+        }
+      ]
+    },
+
+    {
+      "name": " Cas nominaux",
+      "item": [
+
+        {
+          "name": "GET /drivers/available — sans filtre (6 résultats)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200',   () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',     () => pm.expect(json.ok).to.be.true);",
+                  "pm.test('data est un tableau', () => pm.expect(data).to.be.an('array'));",
+                  "",
+                  "pm.test('Au moins 6 chauffeurs éligibles (seed)', () => {",
+                  "  pm.expect(data.length).to.be.at.least(6);",
+                  "});",
+                  "",
+                  "pm.test('Luc Moreau (offline) absent', () => {",
+                  "  const emails = data.map(d => d.user?.email);",
+                  "  pm.expect(emails).to.not.include('driver.offline@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Nina Petit (suspendue) absente', () => {",
+                  "  const emails = data.map(d => d.user?.email);",
+                  "  pm.expect(emails).to.not.include('driver.suspended@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Tous les résultats sont active + is_online', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.status,    `driver ${d.id}`).to.equal('active');",
+                  "    pm.expect(d.is_online, `driver ${d.id}`).to.be.true;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available?vehicle_type=standard (2 résultats)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "",
+                  "pm.test('Exactement 2 chauffeurs standard (seed)', () => {",
+                  "  const seedEmails = [",
+                  "    'driver.standard1@test.eazyvtc.com',",
+                  "    'driver.standard2@test.eazyvtc.com'",
+                  "  ];",
+                  "  const returnedEmails = data.map(d => d.user?.email);",
+                  "  const seedCount = returnedEmails.filter(e => seedEmails.includes(e)).length;",
+                  "  pm.expect(seedCount).to.equal(2, 'Mamadou et Fatou doivent être présents');",
+                  "});",
+                  "",
+                  "pm.test('Tous les résultats ont vehicle_type=standard', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.vehicle_type).to.equal('standard', `driver ${d.id}`);",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Luc Moreau (offline) absent', () => {",
+                  "  pm.expect(data.map(d => d.user?.email)).to.not.include('driver.offline@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Aucun chauffeur berline ou van', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(['berline', 'van']).to.not.include(d.vehicle_type, `type inattendu pour ${d.id}`);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=standard",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "standard" }]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available?vehicle_type=berline (2 résultats)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "",
+                  "pm.test('Exactement 2 chauffeurs berline (seed)', () => {",
+                  "  const seedEmails = [",
+                  "    'driver.berline1@test.eazyvtc.com',",
+                  "    'driver.berline2@test.eazyvtc.com'",
+                  "  ];",
+                  "  const returnedEmails = data.map(d => d.user?.email);",
+                  "  const seedCount = returnedEmails.filter(e => seedEmails.includes(e)).length;",
+                  "  pm.expect(seedCount).to.equal(2, 'Pierre et Sophie doivent être présents');",
+                  "});",
+                  "",
+                  "pm.test('Tous les résultats ont vehicle_type=berline', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.vehicle_type).to.equal('berline', `driver ${d.id}`);",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Nina Petit (suspendue) absente', () => {",
+                  "  pm.expect(data.map(d => d.user?.email)).to.not.include('driver.suspended@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Aucun chauffeur standard ou van', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(['standard', 'van']).to.not.include(d.vehicle_type, `type inattendu pour ${d.id}`);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=berline",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "berline" }]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available?vehicle_type=van (2 résultats)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "",
+                  "pm.test('Exactement 2 chauffeurs van (seed)', () => {",
+                  "  const seedEmails = [",
+                  "    'driver.van1@test.eazyvtc.com',",
+                  "    'driver.van2@test.eazyvtc.com'",
+                  "  ];",
+                  "  const returnedEmails = data.map(d => d.user?.email);",
+                  "  const seedCount = returnedEmails.filter(e => seedEmails.includes(e)).length;",
+                  "  pm.expect(seedCount).to.equal(2, 'Ahmed et Claire doivent être présents');",
+                  "});",
+                  "",
+                  "pm.test('Tous les résultats ont vehicle_type=van', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.vehicle_type).to.equal('van', `driver ${d.id}`);",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Aucun chauffeur standard ou berline', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(['standard', 'berline']).to.not.include(d.vehicle_type, `type inattendu pour ${d.id}`);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=van",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "van" }]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available — filtre insensible à la casse (BERLINE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "",
+                  "pm.test('Même résultat que vehicle_type=berline (casse ignorée)', () => {",
+                  "  const seedEmails = [",
+                  "    'driver.berline1@test.eazyvtc.com',",
+                  "    'driver.berline2@test.eazyvtc.com'",
+                  "  ];",
+                  "  const returnedEmails = data.map(d => d.user?.email);",
+                  "  const seedCount = returnedEmails.filter(e => seedEmails.includes(e)).length;",
+                  "  pm.expect(seedCount).to.equal(2);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=BERLINE",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "BERLINE" }]
+            }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "⚠️  Cas limites",
+      "item": [
+
+        {
+          "name": "GET /drivers/available?vehicle_type=minibus — type inexistant (0 résultat du seed)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "pm.test('data est un tableau vide (aucun driver minibus dans le seed)', () => {",
+                  "  const seedEmails = [",
+                  "    'driver.standard1@test.eazyvtc.com', 'driver.standard2@test.eazyvtc.com',",
+                  "    'driver.berline1@test.eazyvtc.com',  'driver.berline2@test.eazyvtc.com',",
+                  "    'driver.van1@test.eazyvtc.com',      'driver.van2@test.eazyvtc.com'",
+                  "  ];",
+                  "  const returnedEmails = data.map(d => d.user?.email);",
+                  "  const seedCount = returnedEmails.filter(e => seedEmails.includes(e)).length;",
+                  "  pm.expect(seedCount).to.equal(0, 'Aucun chauffeur du seed ne doit apparaître');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=minibus",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "minibus" }]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available — sans token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('ok: false',  () => pm.expect(pm.response.json().ok).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"]
+            }
+          }
+        },
+
+        {
+          "name": "GET /drivers/available — token client (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('ok: false',  () => pm.expect(pm.response.json().ok).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"]
+            },
+            "description": "Renseigner `client_token` dans les variables de collection pour activer ce test."
+          }
+        },
+
+        {
+          "name": "GET /drivers/available?vehicle_type= — valeur vide (sans filtre)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(json.ok).to.be.true);",
+                  "pm.test('Retourne tous les chauffeurs (filtre vide ignoré)', () => {",
+                  "  pm.expect(data).to.be.an('array').with.length.at.least(6);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "" }]
+            }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔍 Vérification des exclusions",
+      "item": [
+
+        {
+          "name": "Confirmer : Luc Moreau absent de tous les filtres (is_online=false)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "const emails = data.map(d => d.user?.email);",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Luc Moreau (standard, offline) absent du résultat sans filtre', () => {",
+                  "  pm.expect(emails).to.not.include('driver.offline@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Aucun chauffeur is_online=false dans les résultats', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.is_online, `driver ${d.id} doit être online`).to.be.true;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"]
+            }
+          }
+        },
+
+        {
+          "name": "Confirmer : Nina Petit absente du filtre berline (status=suspended)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "const emails = data.map(d => d.user?.email);",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Nina Petit (berline, suspended) absente du filtre berline', () => {",
+                  "  pm.expect(emails).to.not.include('driver.suspended@test.eazyvtc.com');",
+                  "});",
+                  "",
+                  "pm.test('Aucun chauffeur suspendu dans les résultats', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.status, `driver ${d.id} doit être active`).to.equal('active');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=berline",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "berline" }]
+            }
+          }
+        },
+
+        {
+          "name": "Confirmer : structure complète d'un AvailableDriverDto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json().data;",
+                  "",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok: true',   () => pm.expect(pm.response.json().ok).to.be.true);",
+                  "",
+                  "pm.test('Chaque driver a les champs requis (AvailableDriverDto)', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d, `driver ${d.id}`).to.have.all.keys('id', 'rating', 'is_online', 'status', 'vehicle_type', 'zone', 'user', 'vehicle');",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Chaque user a les champs requis', () => {",
+                  "  data.forEach(d => {",
+                  "    pm.expect(d.user, `user du driver ${d.id}`).to.have.all.keys('id', 'first_name', 'last_name', 'email', 'phone', 'profile_photo_url');",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('Chaque véhicule actif a les champs requis', () => {",
+                  "  data.filter(d => d.vehicle !== null).forEach(d => {",
+                  "    pm.expect(d.vehicle, `vehicle du driver ${d.id}`).to.have.all.keys('id', 'model', 'plate_number', 'brand', 'color', 'type', 'photo_url');",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('vehicle.type cohérent avec driver.vehicle_type', () => {",
+                  "  data.filter(d => d.vehicle !== null).forEach(d => {",
+                  "    pm.expect(d.vehicle.type, `incohérence pour ${d.id}`).to.equal(d.vehicle_type);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/drivers/available?vehicle_type=standard",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "drivers", "available"],
+              "query": [{ "key": "vehicle_type", "value": "standard" }]
+            }
+          }
+        }
+
+      ]
+    }
+
+  ]
+}
