@@ -15,7 +15,7 @@ export type ReservationStatus =
   | 'completed'        // Course terminée
   | 'cancelled';       // Annulée (client, admin ou système)
 
-export type VehicleType = 'standard' | 'berline' | 'van';
+export type VehicleType = string;
 
 // ── Entités BDD ───────────────────────────────────────────────────────────────
 

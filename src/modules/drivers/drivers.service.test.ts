@@ -86,7 +86,7 @@ describe('DriversService', () => {
   // getMyProfile
   // ────────────────────────────────────────────────────────────────────────────
   describe('getMyProfile()', () => {
-    it('✅ retourne le profil complet du chauffeur connecté', async () => {
+    it(' retourne le profil complet du chauffeur connecté', async () => {
       mockFrom.mockReturnValueOnce(chain(mockDriverWithUser));
 
       const result = await service.getMyProfile(DRIVER_USER_ID);
@@ -94,7 +94,7 @@ describe('DriversService', () => {
       expect(result.user.email).toBe('driver@easyvtc.com');
     });
 
-    it('❌ lève 404 si le profil est introuvable', async () => {
+    it(' lève 404 si le profil est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getMyProfile(DRIVER_USER_ID))
         .rejects.toMatchObject({ status: 404 });
@@ -105,7 +105,7 @@ describe('DriversService', () => {
   // updateMyProfile
   // ────────────────────────────────────────────────────────────────────────────
   describe('updateMyProfile()', () => {
-    it('✅ met à jour siret et zone', async () => {
+    it(' met à jour siret et zone', async () => {
       const updated = { ...mockDriverWithUser, siret: '99999999900099', zone: 'senegal' };
       mockFrom.mockReturnValueOnce(chain(updated));
 
@@ -114,7 +114,7 @@ describe('DriversService', () => {
       expect(result.zone).toBe('senegal');
     });
 
-    it('❌ lève 500 si la mise à jour échoue', async () => {
+    it(' lève 500 si la mise à jour échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
       await expect(service.updateMyProfile(DRIVER_USER_ID, { zone: 'france' }))
         .rejects.toMatchObject({ status: 500 });
@@ -125,7 +125,7 @@ describe('DriversService', () => {
   // setOnlineStatus
   // ────────────────────────────────────────────────────────────────────────────
   describe('setOnlineStatus()', () => {
-    it('✅ passe en ligne un chauffeur actif', async () => {
+    it(' passe en ligne un chauffeur actif', async () => {
       const onlineDriver = { ...mockDriverWithUser, is_online: true };
       mockFrom
         .mockReturnValueOnce(chain({ status: 'active' }))  // fetch status
@@ -135,7 +135,7 @@ describe('DriversService', () => {
       expect(result.is_online).toBe(true);
     });
 
-    it('✅ passe hors ligne (pas de vérification de statut requise)', async () => {
+    it(' passe hors ligne (pas de vérification de statut requise)', async () => {
       const offlineDriver = { ...mockDriverWithUser, is_online: false };
       mockFrom
         .mockReturnValueOnce(chain({ status: 'active' }))
@@ -145,13 +145,13 @@ describe('DriversService', () => {
       expect(result.is_online).toBe(false);
     });
 
-    it('❌ lève 403 si le chauffeur est en mission (on_trip)', async () => {
+    it(' lève 403 si le chauffeur est en mission (on_trip)', async () => {
       mockFrom.mockReturnValueOnce(chain({ status: 'on_trip' }));
       await expect(service.setOnlineStatus(DRIVER_USER_ID, false))
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ lève 403 si le chauffeur n\'est pas actif et veut se mettre en ligne', async () => {
+    it(' lève 403 si le chauffeur n\'est pas actif et veut se mettre en ligne', async () => {
       mockFrom.mockReturnValueOnce(chain({ status: 'pending' }));
       await expect(service.setOnlineStatus(DRIVER_USER_ID, true))
         .rejects.toMatchObject({ status: 403 });
@@ -162,7 +162,7 @@ describe('DriversService', () => {
   // listDrivers (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('listDrivers()', () => {
-    it('✅ retourne la liste paginée des chauffeurs', async () => {
+    it(' retourne la liste paginée des chauffeurs', async () => {
       const listChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -178,7 +178,7 @@ describe('DriversService', () => {
       expect(result.total).toBe(1);
     });
 
-    it('✅ filtre par statut et zone', async () => {
+    it(' filtre par statut et zone', async () => {
       const listChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -196,7 +196,7 @@ describe('DriversService', () => {
   // changeDriverStatus (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('changeDriverStatus()', () => {
-    it('✅ valide (active) un chauffeur pending', async () => {
+    it(' valide (active) un chauffeur pending', async () => {
       const activeDriver = { ...mockDriverWithUser, status: 'active' };
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'pending' }))  // fetch existing
@@ -206,7 +206,7 @@ describe('DriversService', () => {
       expect(result.status).toBe('active');
     });
 
-    it('✅ suspend un chauffeur actif et le passe hors ligne', async () => {
+    it(' suspend un chauffeur actif et le passe hors ligne', async () => {
       const suspendedDriver = { ...mockDriverWithUser, status: 'suspended', is_online: false };
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'active' }))
@@ -217,19 +217,19 @@ describe('DriversService', () => {
       expect(result.is_online).toBe(false);
     });
 
-    it('❌ lève 400 si le statut est déjà le même', async () => {
+    it(' lève 400 si le statut est déjà le même', async () => {
       mockFrom.mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'active' }));
       await expect(service.changeDriverStatus(DRIVER_ID, { status: 'active', reason: 'Déjà actif' }))
         .rejects.toMatchObject({ status: 400 });
     });
 
-    it('❌ lève 400 si un chauffeur rejeté est mis sur un autre statut que active', async () => {
+    it(' lève 400 si un chauffeur rejeté est mis sur un autre statut que active', async () => {
       mockFrom.mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'rejected' }));
       await expect(service.changeDriverStatus(DRIVER_ID, { status: 'suspended', reason: 'test' }))
         .rejects.toMatchObject({ status: 400 });
     });
 
-    it('❌ lève 404 si le chauffeur est introuvable', async () => {
+    it(' lève 404 si le chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.changeDriverStatus('unknown-id', { status: 'active', reason: 'test' }))
         .rejects.toMatchObject({ status: 404 });
@@ -240,7 +240,7 @@ describe('DriversService', () => {
   // setOnTripStatus (interne)
   // ────────────────────────────────────────────────────────────────────────────
   describe('setOnTripStatus()', () => {
-    it('✅ passe un chauffeur actif en on_trip', async () => {
+    it(' passe un chauffeur actif en on_trip', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'active' }))  // fetch
         .mockReturnValueOnce({                                              // update
@@ -251,13 +251,13 @@ describe('DriversService', () => {
       await expect(service.setOnTripStatus(DRIVER_ID, true)).resolves.toBeUndefined();
     });
 
-    it('✅ idempotent — ne fait rien si already active et onTrip=false', async () => {
+    it(' idempotent — ne fait rien si already active et onTrip=false', async () => {
       mockFrom.mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'active' }));
       // Pas d'update attendu
       await expect(service.setOnTripStatus(DRIVER_ID, false)).resolves.toBeUndefined();
     });
 
-    it('❌ lève 400 si on essaie de mettre en mission un chauffeur suspended', async () => {
+    it(' lève 400 si on essaie de mettre en mission un chauffeur suspended', async () => {
       mockFrom.mockReturnValueOnce(chain({ id: DRIVER_ID, status: 'suspended' }));
       await expect(service.setOnTripStatus(DRIVER_ID, true))
         .rejects.toMatchObject({ status: 400 });
@@ -279,7 +279,7 @@ describe('DriversService', () => {
       },
     ];
 
-    it('✅ retourne le planning de la semaine courante', async () => {
+    it(' retourne le planning de la semaine courante', async () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -300,7 +300,7 @@ describe('DriversService', () => {
       expect(result.date_to).toBeTruthy();
     });
 
-    it('✅ retourne le planning mensuel', async () => {
+    it(' retourne le planning mensuel', async () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -319,7 +319,7 @@ describe('DriversService', () => {
       expect(result.date_from).toContain('2026-04-01');
     });
 
-    it('✅ date_from/date_to pour semaine (lundi→dimanche)', async () => {
+    it(' date_from/date_to pour semaine (lundi→dimanche)', async () => {
       const planningChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -338,7 +338,7 @@ describe('DriversService', () => {
       expect(result.date_to).toContain('2026-04-12');    // dimanche
     });
 
-    it('❌ lève 404 si le profil chauffeur est introuvable', async () => {
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getPlanning(DRIVER_USER_ID, 'week'))
         .rejects.toMatchObject({ status: 404 });
@@ -363,7 +363,7 @@ describe('DriversService', () => {
       },
     ];
 
-    it('✅ retourne le total des revenus sur la semaine', async () => {
+    it(' retourne le total des revenus sur la semaine', async () => {
       // La chaîne revenues : select→eq→eq→order→gte→lte→await
       // Toutes les méthodes retournent this, la résolution se fait via then()
       const resolved = { data: mockCompletedResas, error: null } as never;
@@ -387,7 +387,7 @@ describe('DriversService', () => {
       expect(result.trips).toHaveLength(2);
     });
 
-    it('✅ period = all — retourne toutes les courses sans filtre de date', async () => {
+    it(' period = all — retourne toutes les courses sans filtre de date', async () => {
       const revenuesChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -404,7 +404,7 @@ describe('DriversService', () => {
       expect(result.total_trips).toBe(2);
     });
 
-    it('✅ retourne total_revenue = 0 si aucune course complétée', async () => {
+    it(' retourne total_revenue = 0 si aucune course complétée', async () => {
       const resolvedEmpty = { data: [], error: null } as never;
       const emptyChain: Record<string, unknown> = {
         select:  jest.fn().mockReturnThis(),
@@ -424,7 +424,7 @@ describe('DriversService', () => {
       expect(result.total_revenue).toBe(0);
     });
 
-    it('✅ price_adjusted écrase price_final dans le calcul du total', async () => {
+    it(' price_adjusted écrase price_final dans le calcul du total', async () => {
       // resa-1 : price_adjusted=60 (geste commercial), price_final=48.50 ignoré
       // resa-2 : pas de price_adjusted → price_final=55 utilisé
       const resasWithAdjustment = [
@@ -455,7 +455,7 @@ describe('DriversService', () => {
       expect(result.total_revenue).toBeCloseTo(115.00, 2);
     });
 
-    it('❌ lève 404 si le profil chauffeur est introuvable', async () => {
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getRevenues(DRIVER_USER_ID, 'month'))
         .rejects.toMatchObject({ status: 404 });
@@ -466,7 +466,7 @@ describe('DriversService', () => {
   // adminUpdateDriver
   // ────────────────────────────────────────────────────────────────────────────
   describe('adminUpdateDriver()', () => {
-    it('✅ met à jour tva_rate et siret', async () => {
+    it(' met à jour tva_rate et siret', async () => {
       const updated = { ...mockDriverWithUser, tva_rate: 20, siret: '99999999900099' };
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // existence check
@@ -476,7 +476,7 @@ describe('DriversService', () => {
       expect(result.tva_rate).toBe(20);
     });
 
-    it('❌ lève 404 si le chauffeur est introuvable', async () => {
+    it(' lève 404 si le chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null));
       await expect(service.adminUpdateDriver('unknown-id', { tva_rate: 10 }))
         .rejects.toMatchObject({ status: 404 });

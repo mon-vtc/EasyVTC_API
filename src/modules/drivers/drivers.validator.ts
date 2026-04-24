@@ -5,8 +5,7 @@
 
 import { z } from 'zod';
 
-const vehicleTypes = ['standard', 'berline', 'van'] as const;
-const zoneTypes    = ['france', 'senegal'] as const;
+const zoneTypes = ['france', 'senegal'] as const;
 const driverStatusTransitions = ['active', 'rejected', 'suspended'] as const;
 
 // ── Mise à jour profil chauffeur (self) ───────────────────────────────────────
@@ -18,9 +17,7 @@ export const updateDriverSchema = z.object({
   zone: z.enum(zoneTypes, {
     error: 'Zone invalide. Valeurs acceptées: france, senegal',
   }).optional(),
-  vehicle_type: z.enum(vehicleTypes, {
-    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
-  }).optional(),
+  vehicle_type: z.string().min(1).max(50).optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'Au moins un champ doit être fourni pour la mise à jour' }
@@ -56,9 +53,7 @@ export const adminUpdateDriverSchema = z.object({
   zone: z.enum(zoneTypes, {
     error: 'Zone invalide. Valeurs acceptées: france, senegal',
   }).optional(),
-  vehicle_type: z.enum(vehicleTypes, {
-    error: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van',
-  }).optional(),
+  vehicle_type: z.string().min(1).max(50).optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'Au moins un champ doit être fourni pour la mise à jour' }
@@ -68,7 +63,7 @@ export const adminUpdateDriverSchema = z.object({
 export const driverListFiltersSchema = z.object({
   status: z.enum(['pending', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
   zone: z.enum(zoneTypes).optional(),
-  vehicle_type: z.enum(vehicleTypes).optional(),
+  vehicle_type: z.string().min(1).max(50).optional(),
   is_online: z
     .string()
     .transform((v) => v === 'true')

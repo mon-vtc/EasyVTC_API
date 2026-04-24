@@ -229,8 +229,12 @@ export class ReservationsController {
       ? durationMinRaw
       : undefined;
 
+    const vehicleType = typeof req.query['vehicle_type'] === 'string' && req.query['vehicle_type'].trim()
+      ? req.query['vehicle_type'].trim().toLowerCase()
+      : undefined;
+
     try {
-      const drivers = await reservationsService.getAvailableDrivers(scheduledAt, durationMin);
+      const drivers = await reservationsService.getAvailableDrivers(scheduledAt, durationMin, vehicleType);
       res.status(200).json({ ok: true, data: drivers });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import type {
   DriverWithUser,
   UpdateDriverDto,
@@ -73,6 +74,10 @@ export class DriversService {
   // PATCH /drivers/me — siret, zone, vehicle_type
   // ────────────────────────────────────────────────────────────────────────────
   async updateMyProfile(userId: string, dto: UpdateDriverDto): Promise<DriverWithUser> {
+    if (dto.vehicle_type) {
+      await vehicleTypesService.validateCode(dto.vehicle_type);
+    }
+
     const { data, error } = await supabaseAdmin
       .from('drivers')
       .update({ ...dto, updated_at: new Date().toISOString() })
@@ -461,6 +466,10 @@ export class DriversService {
   // PATCH /admin/drivers/:id — mise à jour admin (tva_rate, siret, zone, etc.)
   // ────────────────────────────────────────────────────────────────────────────
   async adminUpdateDriver(driverId: string, dto: AdminUpdateDriverDto): Promise<DriverWithUser> {
+    if (dto.vehicle_type) {
+      await vehicleTypesService.validateCode(dto.vehicle_type);
+    }
+
     const { data: existing } = await supabaseAdmin
       .from('drivers')
       .select('id')

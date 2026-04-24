@@ -12,6 +12,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import { pricingService } from '../pricing/pricing.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import { driversService } from '../drivers/drivers.service.js';
@@ -66,6 +67,8 @@ export class ReservationsService {
    * Calcule automatiquement le prix estimé via le moteur tarifaire.
    */
   async createReservation(clientId: string, dto: CreateReservationDto): Promise<ReservationWithRelations> {
+    await vehicleTypesService.validateCode(dto.vehicle_type);
+
     // Calculer le prix estimé
     const { final_price, currency, breakdown } = await pricingService.computePrice({
       country:      dto.country,
@@ -609,10 +612,11 @@ export class ReservationsService {
   /**
    * Retourne les chauffeurs actifs et en ligne, sans conflit horaire
    * sur la plage demandée si `scheduledAt` est fourni.
+   * Si `vehicleType` est fourni, seuls les chauffeurs dont le vehicle_type correspond sont retournés.
    * Utilisé par le DriverPickerModal pour l'assignation manuelle.
    */
-  async getAvailableDrivers(scheduledAt?: string, durationMin?: number): Promise<AvailableDriverDto[]> {
-    const { data, error } = await supabaseAdmin
+  async getAvailableDrivers(scheduledAt?: string, durationMin?: number, vehicleType?: string): Promise<AvailableDriverDto[]> {
+    let query = supabaseAdmin
       .from('drivers')
       .select(`
         id, is_online, status, vehicle_type, zone,
@@ -621,6 +625,12 @@ export class ReservationsService {
       `)
       .eq('status', 'active')
       .eq('is_online', true);
+
+    if (vehicleType) {
+      query = query.eq('vehicle_type', vehicleType);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('[Reservations] getAvailableDrivers error:', error);
