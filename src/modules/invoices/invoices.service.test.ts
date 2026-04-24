@@ -171,7 +171,7 @@ describe('InvoicesService', () => {
   // createFromTrip
   // ────────────────────────────────────────────────────────────────────────────
   describe('createFromTrip()', () => {
-    it('✅ crée une facture avec calcul HT/TVA/TTC correct (TVA 10%)', async () => {
+    it(' crée une facture avec calcul HT/TVA/TTC correct (TVA 10%)', async () => {
       mockStorageOk();
 
       mockFrom
@@ -190,7 +190,7 @@ describe('InvoicesService', () => {
       expect(result.pdf_url).toBeTruthy();
     });
 
-    it('✅ idempotent — retourne la facture existante sans en créer une autre', async () => {
+    it(' idempotent — retourne la facture existante sans en créer une autre', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: INVOICE_ID }))  // existing check → trouvé
         .mockReturnValueOnce(chain(mockInvoice));         // _getInvoiceOrThrow
@@ -200,7 +200,7 @@ describe('InvoicesService', () => {
       // insert ne doit pas avoir été appelé
     });
 
-    it('❌ lève 404 si le trip est introuvable', async () => {
+    it(' lève 404 si le trip est introuvable', async () => {
       mockFrom
         .mockReturnValueOnce(chain(null))                          // no existing invoice
         .mockReturnValueOnce(chain(null, { message: 'not found' })); // fetch trip
@@ -209,7 +209,7 @@ describe('InvoicesService', () => {
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 400 si la réservation est absente du trip', async () => {
+    it(' lève 400 si la réservation est absente du trip', async () => {
       const tripNoResa = { ...mockTripFull, reservation: null };
       mockFrom
         .mockReturnValueOnce(chain(null))
@@ -219,7 +219,7 @@ describe('InvoicesService', () => {
         .rejects.toMatchObject({ status: 400 });
     });
 
-    it('✅ TVA = 0 — montant HT = TTC (non assujetti)', async () => {
+    it(' TVA = 0 — montant HT = TTC (non assujetti)', async () => {
       const driverNoTva = {
         ...mockTripFull,
         reservation: {
@@ -250,13 +250,13 @@ describe('InvoicesService', () => {
       trip: { id: TRIP_ID, reservation_id: RESA_ID, started_at: null, ended_at: null },
     };
 
-    it('✅ admin peut accéder à n\'importe quelle facture', async () => {
+    it(' admin peut accéder à n\'importe quelle facture', async () => {
       mockFrom.mockReturnValueOnce(chain(invoiceWithTrip));
       const result = await service.getById(INVOICE_ID, ADMIN_ID, 'admin');
       expect(result.id).toBe(INVOICE_ID);
     });
 
-    it('✅ client peut accéder à sa propre facture', async () => {
+    it(' client peut accéder à sa propre facture', async () => {
       mockFrom
         .mockReturnValueOnce(chain(invoiceWithTrip))
         .mockReturnValueOnce(chain({ client_id: CLIENT_ID, driver_id: DRIVER_ID }));
@@ -265,7 +265,7 @@ describe('InvoicesService', () => {
       expect(result.id).toBe(INVOICE_ID);
     });
 
-    it('❌ client ne peut pas accéder à la facture d\'un autre', async () => {
+    it(' client ne peut pas accéder à la facture d\'un autre', async () => {
       const OTHER_CLIENT = 'other-client-uuid';
       mockFrom
         .mockReturnValueOnce(chain(invoiceWithTrip))
@@ -275,7 +275,7 @@ describe('InvoicesService', () => {
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ lève 404 si la facture est introuvable', async () => {
+    it(' lève 404 si la facture est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getById('unknown-id', ADMIN_ID, 'admin'))
         .rejects.toMatchObject({ status: 404 });
@@ -286,7 +286,7 @@ describe('InvoicesService', () => {
   // getPdfSignedUrl
   // ────────────────────────────────────────────────────────────────────────────
   describe('getPdfSignedUrl()', () => {
-    it('✅ retourne une URL signée valide', async () => {
+    it(' retourne une URL signée valide', async () => {
       const invoiceWithTrip = { ...mockInvoice, trip: { id: TRIP_ID, reservation_id: RESA_ID } };
       const storageBucket = mockStorageOk();
 
@@ -297,7 +297,7 @@ describe('InvoicesService', () => {
       expect(storageBucket.createSignedUrl).toHaveBeenCalled();
     });
 
-    it('❌ lève 404 si pdf_url est null', async () => {
+    it(' lève 404 si pdf_url est null', async () => {
       const invoiceNoPdf = { ...mockInvoice, pdf_url: null, trip: { id: TRIP_ID, reservation_id: RESA_ID } };
       mockFrom.mockReturnValueOnce(chain(invoiceNoPdf));
 
@@ -310,7 +310,7 @@ describe('InvoicesService', () => {
   // listAll (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('listAll()', () => {
-    it('✅ retourne la liste paginée', async () => {
+    it(' retourne la liste paginée', async () => {
       const adminChain = {
         select:  jest.fn().mockReturnThis(),
         order:   jest.fn().mockReturnThis(),
@@ -329,7 +329,7 @@ describe('InvoicesService', () => {
   // adjustPrice (admin)
   // ────────────────────────────────────────────────────────────────────────────
   describe('adjustPrice()', () => {
-    it('✅ ajuste le prix et enregistre la traçabilité', async () => {
+    it(' ajuste le prix et enregistre la traçabilité', async () => {
       const adjustedInvoice = {
         ...mockInvoice,
         amount_ttc:  55.00,
@@ -361,7 +361,7 @@ describe('InvoicesService', () => {
       expect(result.adjustments[0].reason).toContain('tarification');
     });
 
-    it('❌ lève 400 si le nouveau montant est identique', async () => {
+    it(' lève 400 si le nouveau montant est identique', async () => {
       mockFrom.mockReturnValueOnce(chain(mockInvoice));
 
       await expect(service.adjustPrice(INVOICE_ID, ADMIN_ID, {
@@ -370,7 +370,7 @@ describe('InvoicesService', () => {
       })).rejects.toMatchObject({ status: 400 });
     });
 
-    it('❌ lève 404 si la facture est introuvable', async () => {
+    it(' lève 404 si la facture est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
 
       await expect(service.adjustPrice('unknown-id', ADMIN_ID, {
@@ -379,7 +379,7 @@ describe('InvoicesService', () => {
       })).rejects.toMatchObject({ status: 404 });
     });
 
-    it('✅ re-génère le PDF après ajustement', async () => {
+    it(' re-génère le PDF après ajustement', async () => {
       const adjustedInvoice = { ...mockInvoice, amount_ttc: 55.00, adjustments: [{}] };
       const storageBucket = mockStorageOk();
 
@@ -401,7 +401,7 @@ describe('InvoicesService', () => {
   // Numérotation FA-YYYY-NNNNNN
   // ────────────────────────────────────────────────────────────────────────────
   describe('numérotation des factures', () => {
-    it('✅ génère FA-YYYY-000001 pour la première facture de l\'année', async () => {
+    it(' génère FA-YYYY-000001 pour la première facture de l\'année', async () => {
       mockStorageOk();
 
       mockFrom

@@ -132,7 +132,7 @@ describe('AdminService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('createManager()', () => {
-    it('✅ crée un gestionnaire et retourne son profil', async () => {
+    it(' crée un gestionnaire et retourne son profil', async () => {
       mockCreateUser.mockResolvedValue({
         data:  { user: { id: MANAGER_ID } },
         error: null,
@@ -155,7 +155,7 @@ describe('AdminService', () => {
       expect(result.email).toBe(mockCreateManagerDto.email);
     });
 
-    it('✅ effectue un insert manuel (fallback) si le trigger handle_new_user est lent', async () => {
+    it(' effectue un insert manuel (fallback) si le trigger handle_new_user est lent', async () => {
       mockCreateUser.mockResolvedValue({
         data:  { user: { id: MANAGER_ID } },
         error: null,
@@ -196,7 +196,7 @@ describe('AdminService', () => {
       expect(result.role).toBe('manager');
     });
 
-    it('❌ lève une erreur 409 si l\'email est déjà enregistré', async () => {
+    it(' lève une erreur 409 si l\'email est déjà enregistré', async () => {
       mockCreateUser.mockResolvedValue({
         data:  { user: null },
         error: { message: 'User already registered', code: 'email_exists' },
@@ -207,7 +207,7 @@ describe('AdminService', () => {
       ).rejects.toMatchObject({ status: 409, message: 'Un compte existe déjà avec cet email' });
     });
 
-    it('❌ lève une erreur 400 pour toute autre erreur Supabase Auth', async () => {
+    it(' lève une erreur 400 pour toute autre erreur Supabase Auth', async () => {
       mockCreateUser.mockResolvedValue({
         data:  { user: null },
         error: { message: 'Invalid email format' },
@@ -218,7 +218,7 @@ describe('AdminService', () => {
       ).rejects.toMatchObject({ status: 400, message: 'Invalid email format' });
     });
 
-    it('❌ lève 500 et nettoie le compte auth si le fallback insert échoue', async () => {
+    it(' lève 500 et nettoie le compte auth si le fallback insert échoue', async () => {
       mockCreateUser.mockResolvedValue({
         data:  { user: { id: MANAGER_ID } },
         error: null,
@@ -255,7 +255,7 @@ describe('AdminService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('listManagers()', () => {
-    it('✅ retourne une liste paginée de gestionnaires', async () => {
+    it(' retourne une liste paginée de gestionnaires', async () => {
       setupListMock([mockManagerProfile], 1);
 
       const result = await service.listManagers({ page: 1, limit: 20 });
@@ -267,7 +267,7 @@ describe('AdminService', () => {
       expect(result.total_pages).toBe(1);
     });
 
-    it('✅ applique le filtre statut', async () => {
+    it(' applique le filtre statut', async () => {
       const chain = setupListMock([mockManagerProfile], 1);
 
       await service.listManagers({ status: 'active', page: 1, limit: 20 });
@@ -275,7 +275,7 @@ describe('AdminService', () => {
       expect(chain.eq).toHaveBeenCalledWith('status', 'active');
     });
 
-    it('✅ applique le filtre recherche (search)', async () => {
+    it(' applique le filtre recherche (search)', async () => {
       const chain = setupListMock([mockManagerProfile], 1);
 
       await service.listManagers({ search: 'sophie', page: 1, limit: 20 });
@@ -285,7 +285,7 @@ describe('AdminService', () => {
       );
     });
 
-    it('✅ calcule correctement la pagination page 2', async () => {
+    it(' calcule correctement la pagination page 2', async () => {
       setupListMock([], 45);
 
       const result = await service.listManagers({ page: 2, limit: 20 });
@@ -295,7 +295,7 @@ describe('AdminService', () => {
       expect(result.total_pages).toBe(3);
     });
 
-    it('❌ lève une erreur 500 si la requête Supabase échoue', async () => {
+    it(' lève une erreur 500 si la requête Supabase échoue', async () => {
       setupListMock([], 0, { message: 'DB error' });
 
       await expect(
@@ -309,7 +309,7 @@ describe('AdminService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('getManagerById()', () => {
-    it('✅ retourne le profil du gestionnaire', async () => {
+    it(' retourne le profil du gestionnaire', async () => {
       setupFromMock(mockManagerProfile);
 
       const result = await service.getManagerById(MANAGER_ID);
@@ -318,7 +318,7 @@ describe('AdminService', () => {
       expect(result.role).toBe('manager');
     });
 
-    it('❌ lève une erreur 404 si le gestionnaire est introuvable', async () => {
+    it(' lève une erreur 404 si le gestionnaire est introuvable', async () => {
       setupFromMock(null, { message: 'No rows returned' });
 
       await expect(
@@ -326,7 +326,7 @@ describe('AdminService', () => {
       ).rejects.toMatchObject({ status: 404, message: 'Gestionnaire introuvable' });
     });
 
-    it('❌ lève une erreur 404 si l\'utilisateur existe mais n\'a pas le rôle manager', async () => {
+    it(' lève une erreur 404 si l\'utilisateur existe mais n\'a pas le rôle manager', async () => {
       // Supabase filtre role='manager' — aucune donnée retournée
       setupFromMock(null);
 
@@ -341,7 +341,7 @@ describe('AdminService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('changeManagerStatus()', () => {
-    it('✅ change le statut et délègue à usersService.changeUserStatus', async () => {
+    it(' change le statut et délègue à usersService.changeUserStatus', async () => {
       // getManagerById réussit
       setupFromMock(mockManagerProfile);
 
@@ -358,7 +358,7 @@ describe('AdminService', () => {
       expect(result.status).toBe('inactive');
     });
 
-    it('❌ lève une erreur 404 si le gestionnaire est introuvable', async () => {
+    it(' lève une erreur 404 si le gestionnaire est introuvable', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(

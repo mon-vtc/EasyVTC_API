@@ -62,7 +62,7 @@ describe('authMiddleware', () => {
     jest.clearAllMocks();
   });
 
-  it('❌ 401 — pas de header Authorization', async () => {
+  it(' 401 — pas de header Authorization', async () => {
     const req = makeReq(undefined);
     const res = makeRes();
     await authMiddleware(req, res, next);
@@ -70,7 +70,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 401 — header mal formé (sans "Bearer ")', async () => {
+  it(' 401 — header mal formé (sans "Bearer ")', async () => {
     const req = makeReq('Token abc123');
     const res = makeRes();
     await authMiddleware(req, res, next);
@@ -78,7 +78,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 401 — token invalide rejeté par Supabase', async () => {
+  it(' 401 — token invalide rejeté par Supabase', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: null },
       error: { message: 'Invalid token' },
@@ -92,7 +92,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 401 — profil introuvable en base', async () => {
+  it(' 401 — profil introuvable en base', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -108,7 +108,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 403 — compte soft-deleted (deleted_at non null)', async () => {
+  it(' 403 — compte soft-deleted (deleted_at non null)', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -123,7 +123,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 403 — compte suspendu (status !== active) — REGRESSION bug #1', async () => {
+  it(' 403 — compte suspendu (status !== active) — REGRESSION bug #1', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -138,7 +138,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 403 — compte inactif (status === inactive) — REGRESSION bug #1', async () => {
+  it(' 403 — compte inactif (status === inactive) — REGRESSION bug #1', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -153,7 +153,7 @@ describe('authMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('✅ next() appelé — token valide, compte actif', async () => {
+  it(' next() appelé — token valide, compte actif', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -168,7 +168,7 @@ describe('authMiddleware', () => {
     expect(req.user).toMatchObject({ id: 'uuid-123', role: 'client' });
   });
 
-  it('✅ req.user contient le champ status — REGRESSION bug #1', async () => {
+  it(' req.user contient le champ status — REGRESSION bug #1', async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'uuid-123' } },
       error: null,
@@ -192,7 +192,7 @@ describe('requireRole', () => {
 
   beforeEach(() => { jest.clearAllMocks(); });
 
-  it('❌ 401 — req.user absent (middleware auth non appliqué)', () => {
+  it(' 401 — req.user absent (middleware auth non appliqué)', () => {
     const req: any = {};
     const res = makeRes();
     requireRole('admin')(req, res, next);
@@ -200,7 +200,7 @@ describe('requireRole', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 403 — rôle insuffisant (client sur route admin)', () => {
+  it(' 403 — rôle insuffisant (client sur route admin)', () => {
     const req: any = { user: { ...mockProfile, role: 'client' } };
     const res = makeRes();
     requireRole('admin')(req, res, next);
@@ -208,34 +208,34 @@ describe('requireRole', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it('❌ 403 — rôle insuffisant (driver sur route admin+manager)', () => {
+  it(' 403 — rôle insuffisant (driver sur route admin+manager)', () => {
     const req: any = { user: { ...mockProfile, role: 'driver' } };
     const res = makeRes();
     requireRole('admin', 'manager')(req, res, next);
     expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  it('✅ next() — rôle exact (admin sur route admin)', () => {
+  it(' next() — rôle exact (admin sur route admin)', () => {
     const req: any = { user: { ...mockProfile, role: 'admin' } };
     const res = makeRes();
     requireRole('admin')(req, res, next);
     expect(next).toHaveBeenCalled();
   });
 
-  it('✅ next() — rôle dans la liste (manager sur route admin+manager)', () => {
+  it(' next() — rôle dans la liste (manager sur route admin+manager)', () => {
     const req: any = { user: { ...mockProfile, role: 'manager' } };
     const res = makeRes();
     requireRole('admin', 'manager')(req, res, next);
     expect(next).toHaveBeenCalled();
   });
 
-  it('✅ next() — client accepté dans liste multi-rôles', () => {
+  it(' next() — client accepté dans liste multi-rôles', () => {
     const req: any = { user: { ...mockProfile, role: 'client' } };
     requireRole('client', 'driver', 'admin', 'manager')(req, makeRes(), next);
     expect(next).toHaveBeenCalled();
   });
 
-  it('✅ next() — driver accepté dans liste multi-rôles', () => {
+  it(' next() — driver accepté dans liste multi-rôles', () => {
     const req: any = { user: { ...mockProfile, role: 'driver' } };
     requireRole('client', 'driver', 'admin', 'manager')(req, makeRes(), next);
     expect(next).toHaveBeenCalled();

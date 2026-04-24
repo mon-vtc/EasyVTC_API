@@ -106,14 +106,14 @@ describe('DriverDocumentsService', () => {
   // getDriverIdFromUserId
   // ══════════════════════════════════════════════════════════════════════════
   describe('getDriverIdFromUserId()', () => {
-    it('✅ retourne le driver_id si le chauffeur existe', async () => {
+    it(' retourne le driver_id si le chauffeur existe', async () => {
       setupFromMock(mockDriver);
 
       const result = await service.getDriverIdFromUserId('user-uuid-123');
       expect(result).toBe('driver-uuid-123');
     });
 
-    it('❌ lève une erreur 404 si le chauffeur n\'existe pas', async () => {
+    it(' lève une erreur 404 si le chauffeur n\'existe pas', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(service.getDriverIdFromUserId('ghost-user'))
@@ -125,7 +125,7 @@ describe('DriverDocumentsService', () => {
   // uploadDocument
   // ══════════════════════════════════════════════════════════════════════════
   describe('uploadDocument()', () => {
-    it('✅ upload un document avec succès', async () => {
+    it(' upload un document avec succès', async () => {
       // Mock pour getDriverIdFromUserId
       const driverChain = {
         select: jest.fn().mockReturnThis(),
@@ -168,7 +168,7 @@ describe('DriverDocumentsService', () => {
       expect(result.signed_url).toBeDefined();
     });
 
-    it('❌ rejette un format non supporté (400)', async () => {
+    it(' rejette un format non supporté (400)', async () => {
       const fileBuffer = Buffer.from('fake-data');
 
       await expect(
@@ -176,7 +176,7 @@ describe('DriverDocumentsService', () => {
       ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('Format') });
     });
 
-    it('❌ rejette un fichier trop volumineux (400)', async () => {
+    it(' rejette un fichier trop volumineux (400)', async () => {
       const largeBuffer = Buffer.alloc(11 * 1024 * 1024); // 11 Mo
 
       await expect(
@@ -189,7 +189,7 @@ describe('DriverDocumentsService', () => {
   // getMyDocuments
   // ══════════════════════════════════════════════════════════════════════════
   describe('getMyDocuments()', () => {
-    it('✅ retourne la liste des documents du chauffeur', async () => {
+    it(' retourne la liste des documents du chauffeur', async () => {
       // Mock getDriverIdFromUserId
       const driverChain = {
         select: jest.fn().mockReturnThis(),
@@ -221,7 +221,7 @@ describe('DriverDocumentsService', () => {
   // validateDocument (Admin)
   // ══════════════════════════════════════════════════════════════════════════
   describe('validateDocument()', () => {
-    it('✅ valide un document en attente', async () => {
+    it(' valide un document en attente', async () => {
       // Mock fetch document
       const fetchChain = {
         select: jest.fn().mockReturnThis(),
@@ -249,14 +249,14 @@ describe('DriverDocumentsService', () => {
       expect(result.status).toBe('validated');
     });
 
-    it('❌ rejette si document non trouvé (404)', async () => {
+    it(' rejette si document non trouvé (404)', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(service.validateDocument('ghost-doc', 'admin-uuid'))
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ rejette si document déjà validé (400)', async () => {
+    it(' rejette si document déjà validé (400)', async () => {
       setupFromMock(mockValidatedDocument);
 
       await expect(service.validateDocument('doc-uuid-456', 'admin-uuid'))
@@ -268,7 +268,7 @@ describe('DriverDocumentsService', () => {
   // rejectDocument (Admin)
   // ══════════════════════════════════════════════════════════════════════════
   describe('rejectDocument()', () => {
-    it('✅ rejette un document avec motif', async () => {
+    it(' rejette un document avec motif', async () => {
       // Mock fetch document
       const fetchChain = {
         select: jest.fn().mockReturnThis(),
@@ -304,7 +304,7 @@ describe('DriverDocumentsService', () => {
   // deleteMyDocument
   // ══════════════════════════════════════════════════════════════════════════
   describe('deleteMyDocument()', () => {
-    it('✅ supprime un document pending', async () => {
+    it(' supprime un document pending', async () => {
       // Mock getDriverIdFromUserId
       const driverChain = {
         select: jest.fn().mockReturnThis(),
@@ -336,7 +336,7 @@ describe('DriverDocumentsService', () => {
         .resolves.not.toThrow();
     });
 
-    it('❌ rejette la suppression d\'un document validé (400)', async () => {
+    it(' rejette la suppression d\'un document validé (400)', async () => {
       // Mock getDriverIdFromUserId
       const driverChain = {
         select: jest.fn().mockReturnThis(),
@@ -364,7 +364,7 @@ describe('DriverDocumentsService', () => {
   // markExpiredDocuments (Cron)
   // ══════════════════════════════════════════════════════════════════════════
   describe('markExpiredDocuments()', () => {
-    it('✅ marque les documents expirés', async () => {
+    it(' marque les documents expirés', async () => {
       const chain = {
         update: jest.fn().mockReturnThis(),
         eq: jest.fn().mockReturnThis(),

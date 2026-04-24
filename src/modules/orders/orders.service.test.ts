@@ -192,7 +192,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('createFromReservation()', () => {
 
-    it('✅ crée un bon de commande (formule) — montant NON affiché dans le snapshot', async () => {
+    it(' crée un bon de commande (formule) — montant NON affiché dans le snapshot', async () => {
       mockStorageUpload();
 
       mockFrom
@@ -210,7 +210,7 @@ describe('OrdersService', () => {
       expect((result.trip_snapshot as any).pricing_type).toBe('formula');
     });
 
-    it('✅ crée un bon de commande (forfait) — montant final inclus dans le snapshot', async () => {
+    it(' crée un bon de commande (forfait) — montant final inclus dans le snapshot', async () => {
       const orderFlatRate = {
         ...mockOrder,
         trip_snapshot: { ...(mockOrder['trip_snapshot'] as object), pricing_type: 'flat_rate', final_price: 97.00 },
@@ -230,7 +230,7 @@ describe('OrdersService', () => {
       expect((result.trip_snapshot as any).final_price).toBe(97.00);
     });
 
-    it('✅ retourne le bon existant si déjà généré (idempotent)', async () => {
+    it(' retourne le bon existant si déjà généré (idempotent)', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: ORDER_ID }))               // existing order found
         .mockReturnValueOnce(chain(mockOrder));                     // fetch by id
@@ -241,7 +241,7 @@ describe('OrdersService', () => {
       expect(mockStorage.from).not.toHaveBeenCalled();             // pas de re-génération PDF
     });
 
-    it('❌ lève 404 si la réservation est introuvable', async () => {
+    it(' lève 404 si la réservation est introuvable', async () => {
       mockFrom
         .mockReturnValueOnce(chain(null))                           // no existing order
         .mockReturnValueOnce(chain(null, { message: 'Not found' })); // réservation introuvable
@@ -250,7 +250,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 400 si aucun chauffeur n\'est assigné', async () => {
+    it(' lève 400 si aucun chauffeur n\'est assigné', async () => {
       const unassignedResa = { ...mockReservationFormule, driver_id: null };
 
       mockFrom
@@ -261,7 +261,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('chauffeur') });
     });
 
-    it('❌ lève 500 si l\'upload PDF échoue', async () => {
+    it(' lève 500 si l\'upload PDF échoue', async () => {
       mockStorageUpload({ message: 'Storage error' });
 
       mockFrom
@@ -273,7 +273,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 500, message: expect.stringContaining('upload') });
     });
 
-    it('❌ lève 500 si l\'insert en BDD échoue', async () => {
+    it(' lève 500 si l\'insert en BDD échoue', async () => {
       mockStorageUpload();
 
       mockFrom
@@ -286,7 +286,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 500 });
     });
 
-    it('✅ numérote BC-YYYY-000002 si un bon existe déjà cette année', async () => {
+    it(' numérote BC-YYYY-000002 si un bon existe déjà cette année', async () => {
       mockStorageUpload();
 
       const orderWithSeq2 = { ...mockOrder, order_number: 'BC-2026-000002' };
@@ -308,7 +308,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getById()', () => {
 
-    it('✅ un admin peut consulter n\'importe quel bon', async () => {
+    it(' un admin peut consulter n\'importe quel bon', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
 
       const result = await service.getById(ORDER_ID, ADMIN_ID, 'admin');
@@ -316,7 +316,7 @@ describe('OrdersService', () => {
       expect(result.id).toBe(ORDER_ID);
     });
 
-    it('✅ un client peut consulter son propre bon', async () => {
+    it(' un client peut consulter son propre bon', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
 
       const result = await service.getById(ORDER_ID, CLIENT_ID, 'client');
@@ -324,14 +324,14 @@ describe('OrdersService', () => {
       expect(result.id).toBe(ORDER_ID);
     });
 
-    it('❌ un client ne peut pas consulter le bon d\'un autre (403)', async () => {
+    it(' un client ne peut pas consulter le bon d\'un autre (403)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
 
       await expect(service.getById(ORDER_ID, 'autre-client', 'client'))
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('✅ un chauffeur peut consulter le bon de sa course', async () => {
+    it(' un chauffeur peut consulter le bon de sa course', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockOrderWithReservation))       // fetch order
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));             // resolveDriverId
@@ -341,7 +341,7 @@ describe('OrdersService', () => {
       expect(result.id).toBe(ORDER_ID);
     });
 
-    it('❌ un chauffeur ne peut pas consulter le bon d\'une autre course (403)', async () => {
+    it(' un chauffeur ne peut pas consulter le bon d\'une autre course (403)', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockOrderWithReservation))
         .mockReturnValueOnce(chain({ id: 'autre-driver-uuid' }));   // mauvais driver
@@ -350,7 +350,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ lève 404 si le bon est introuvable', async () => {
+    it(' lève 404 si le bon est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'Not found' }));
 
       await expect(service.getById('ghost-id', ADMIN_ID, 'admin'))
@@ -363,7 +363,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getByReservationId()', () => {
 
-    it('✅ retourne le bon lié à une réservation', async () => {
+    it(' retourne le bon lié à une réservation', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
 
       const result = await service.getByReservationId(RESA_ID, ADMIN_ID, 'admin');
@@ -371,7 +371,7 @@ describe('OrdersService', () => {
       expect(result.reservation_id).toBe(RESA_ID);
     });
 
-    it('❌ lève 404 si aucun bon n\'existe pour cette réservation', async () => {
+    it(' lève 404 si aucun bon n\'existe pour cette réservation', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'Not found' }));
 
       await expect(service.getByReservationId('ghost-resa', ADMIN_ID, 'admin'))
@@ -384,7 +384,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getPdfSignedUrl()', () => {
 
-    it('✅ retourne une URL signée valide', async () => {
+    it(' retourne une URL signée valide', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
       mockStorageUpload();
 
@@ -394,7 +394,7 @@ describe('OrdersService', () => {
       expect(mockStorage.from).toHaveBeenCalledWith('orders-pdfs');
     });
 
-    it('❌ lève 404 si le PDF n\'est pas encore généré', async () => {
+    it(' lève 404 si le PDF n\'est pas encore généré', async () => {
       const orderNoPdf = { ...mockOrderWithReservation, pdf_url: null };
       mockFrom.mockReturnValueOnce(chain(orderNoPdf));
 
@@ -402,7 +402,7 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 500 si Supabase Storage échoue', async () => {
+    it(' lève 500 si Supabase Storage échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(mockOrderWithReservation));
       const bucket = {
         createSignedUrl: jest.fn().mockResolvedValue({ data: null, error: { message: 'Storage error' } } as never),
@@ -419,7 +419,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('listOrders()', () => {
 
-    it('✅ retourne la liste paginée', async () => {
+    it(' retourne la liste paginée', async () => {
       mockFrom.mockReturnValueOnce(chain([mockOrder], null, 15));
 
       const result = await service.listOrders({ page: 1, limit: 10 });
@@ -429,7 +429,7 @@ describe('OrdersService', () => {
       expect(result.total_pages).toBe(2); // ceil(15/10)
     });
 
-    it('✅ retourne une page vide si aucun bon', async () => {
+    it(' retourne une page vide si aucun bon', async () => {
       mockFrom.mockReturnValueOnce(chain([], null, 0));
 
       const result = await service.listOrders({});
@@ -438,7 +438,7 @@ describe('OrdersService', () => {
       expect(result.total_pages).toBe(0);
     });
 
-    it('❌ lève 500 si la requête BDD échoue', async () => {
+    it(' lève 500 si la requête BDD échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'DB error' }));
 
       await expect(service.listOrders({}))
@@ -451,7 +451,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('listForClient()', () => {
 
-    it('✅ retourne les bons du client en retirant le champ jointure', async () => {
+    it(' retourne les bons du client en retirant le champ jointure', async () => {
       const orderWithJoin = { ...mockOrder, reservation: { client_id: CLIENT_ID } };
       mockFrom.mockReturnValueOnce(chain([orderWithJoin], null, 1));
 
@@ -462,7 +462,7 @@ describe('OrdersService', () => {
       expect((result.orders[0] as any).reservation).toBeUndefined();
     });
 
-    it('❌ lève 500 si la requête BDD échoue', async () => {
+    it(' lève 500 si la requête BDD échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'DB error' }));
 
       await expect(service.listForClient(CLIENT_ID, {}))
@@ -475,7 +475,7 @@ describe('OrdersService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('listForDriver()', () => {
 
-    it('✅ retourne les bons du chauffeur', async () => {
+    it(' retourne les bons du chauffeur', async () => {
       const orderWithJoin = { ...mockOrder, reservation: { driver_id: DRIVER_ID } };
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))              // resolveDriverId
@@ -487,14 +487,14 @@ describe('OrdersService', () => {
       expect((result.orders[0] as any).reservation).toBeUndefined();
     });
 
-    it('❌ lève 404 si le profil chauffeur est introuvable', async () => {
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null));                    // driver introuvable
 
       await expect(service.listForDriver('ghost-user', {}))
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 500 si la requête BDD échoue', async () => {
+    it(' lève 500 si la requête BDD échoue', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))
         .mockReturnValueOnce(chain(null, { message: 'DB error' }));

@@ -84,7 +84,7 @@ describe('NotificationsService', () => {
   // send()
   // ────────────────────────────────────────────────────────────────────────────
   describe('send()', () => {
-    it('✅ insère la notification en BDD et la retourne', async () => {
+    it(' insère la notification en BDD et la retourne', async () => {
       mockFrom.mockReturnValueOnce(chain(mockNotif));
 
       const result = await service.send({
@@ -99,7 +99,7 @@ describe('NotificationsService', () => {
       expect(result.status).toBe('pending');
     });
 
-    it('❌ lève 500 si l\'insertion BDD échoue', async () => {
+    it(' lève 500 si l\'insertion BDD échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
 
       await expect(service.send({
@@ -111,7 +111,7 @@ describe('NotificationsService', () => {
       })).rejects.toMatchObject({ status: 500 });
     });
 
-    it('✅ canal push sans FCM_SERVER_KEY — notification insérée, pas de dispatch', async () => {
+    it(' canal push sans FCM_SERVER_KEY — notification insérée, pas de dispatch', async () => {
       // Sans FCM_SERVER_KEY, le dispatch ne se fait pas mais pas d'erreur propagée
       mockFrom.mockReturnValueOnce(chain(mockNotif));
 
@@ -131,7 +131,7 @@ describe('NotificationsService', () => {
   // sendToUser()
   // ────────────────────────────────────────────────────────────────────────────
   describe('sendToUser()', () => {
-    it('✅ fire-and-forget — ne lève jamais d\'erreur', () => {
+    it(' fire-and-forget — ne lève jamais d\'erreur', () => {
       // Même si la BDD échoue, sendToUser ne propage pas
       mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
 
@@ -148,7 +148,7 @@ describe('NotificationsService', () => {
   // getForUser()
   // ────────────────────────────────────────────────────────────────────────────
   describe('getForUser()', () => {
-    it('✅ retourne les notifications paginées avec unread_count', async () => {
+    it(' retourne les notifications paginées avec unread_count', async () => {
       const listChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -173,7 +173,7 @@ describe('NotificationsService', () => {
       expect(result.page).toBe(1);
     });
 
-    it('✅ filtre les non-lues avec unread_only = true', async () => {
+    it(' filtre les non-lues avec unread_only = true', async () => {
       const listData = { data: [mockNotif], error: null, count: 1 };
       const listChain = {
         select:  jest.fn().mockReturnThis(),
@@ -203,7 +203,7 @@ describe('NotificationsService', () => {
   // markAsRead()
   // ────────────────────────────────────────────────────────────────────────────
   describe('markAsRead()', () => {
-    it('✅ marque la notification comme lue', async () => {
+    it(' marque la notification comme lue', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockNotif))   // fetch existing
         .mockReturnValueOnce({                    // update
@@ -214,7 +214,7 @@ describe('NotificationsService', () => {
       await expect(service.markAsRead(NOTIF_ID, USER_ID)).resolves.toBeUndefined();
     });
 
-    it('✅ idempotent — ne fait rien si déjà lue', async () => {
+    it(' idempotent — ne fait rien si déjà lue', async () => {
       const readNotif = { ...mockNotif, read_at: '2026-04-09T11:00:00Z' };
       mockFrom.mockReturnValueOnce(chain(readNotif));
 
@@ -222,13 +222,13 @@ describe('NotificationsService', () => {
       // update ne doit pas être appelé
     });
 
-    it('❌ lève 404 si la notification est introuvable', async () => {
+    it(' lève 404 si la notification est introuvable', async () => {
       mockFrom.mockReturnValueOnce(chain(null));
       await expect(service.markAsRead('unknown-id', USER_ID))
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 403 si la notification appartient à un autre utilisateur', async () => {
+    it(' lève 403 si la notification appartient à un autre utilisateur', async () => {
       const otherUserNotif = { ...mockNotif, user_id: 'other-user-uuid' };
       mockFrom.mockReturnValueOnce(chain(otherUserNotif));
 
@@ -241,7 +241,7 @@ describe('NotificationsService', () => {
   // markAllAsRead()
   // ────────────────────────────────────────────────────────────────────────────
   describe('markAllAsRead()', () => {
-    it('✅ marque toutes les notifications comme lues et retourne le count', async () => {
+    it(' marque toutes les notifications comme lues et retourne le count', async () => {
       mockFrom.mockReturnValueOnce({
         update: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -252,7 +252,7 @@ describe('NotificationsService', () => {
       expect(result.updated).toBe(3);
     });
 
-    it('❌ lève 500 si la mise à jour BDD échoue', async () => {
+    it(' lève 500 si la mise à jour BDD échoue', async () => {
       mockFrom.mockReturnValueOnce({
         update: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -268,7 +268,7 @@ describe('NotificationsService', () => {
   // registerToken()
   // ────────────────────────────────────────────────────────────────────────────
   describe('registerToken()', () => {
-    it('✅ enregistre le device_token FCM', async () => {
+    it(' enregistre le device_token FCM', async () => {
       mockFrom.mockReturnValueOnce({
         update: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockResolvedValue({ error: null } as never),
@@ -278,7 +278,7 @@ describe('NotificationsService', () => {
         .resolves.toBeUndefined();
     });
 
-    it('❌ lève 500 si la mise à jour échoue', async () => {
+    it(' lève 500 si la mise à jour échoue', async () => {
       mockFrom.mockReturnValueOnce({
         update: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockResolvedValue({ error: { message: 'db error' } } as never),
@@ -293,7 +293,7 @@ describe('NotificationsService', () => {
   // removeToken()
   // ────────────────────────────────────────────────────────────────────────────
   describe('removeToken()', () => {
-    it('✅ supprime le device_token', async () => {
+    it(' supprime le device_token', async () => {
       mockFrom.mockReturnValueOnce({
         update: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockResolvedValue({ error: null } as never),

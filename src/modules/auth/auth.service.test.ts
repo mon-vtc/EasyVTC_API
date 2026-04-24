@@ -102,7 +102,7 @@ describe('AuthService', () => {
   // ── REGISTER ─────────────────────────────────────────────────────────────────
   describe('register()', () => {
 
-    it('✅ crée un compte avec succès', async () => {
+    it(' crée un compte avec succès', async () => {
       mockCreateUser.mockResolvedValue({
         data: { user: { id: 'uuid-123' } },
         error: null,
@@ -130,7 +130,7 @@ describe('AuthService', () => {
       expect(result.token_type).toBe('Bearer');
     });
 
-    it('❌ rejette un email déjà utilisé (409)', async () => {
+    it(' rejette un email déjà utilisé (409)', async () => {
       mockCreateUser.mockResolvedValue({
         data: { user: null },
         error: { message: 'User already registered', code: 'email_exists' },
@@ -149,7 +149,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 409 });
     });
 
-    it('❌ rejette si createUser échoue (400)', async () => {
+    it(' rejette si createUser échoue (400)', async () => {
       mockCreateUser.mockResolvedValue({
         data: { user: null },
         error: { message: 'Invalid email format' },
@@ -172,7 +172,7 @@ describe('AuthService', () => {
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   describe('login()', () => {
 
-    it('✅ retourne user + tokens si credentials valides', async () => {
+    it(' retourne user + tokens si credentials valides', async () => {
       mockSignIn.mockResolvedValue({
         data: { user: { id: 'uuid-123' }, session: mockSession },
         error: null,
@@ -189,7 +189,7 @@ describe('AuthService', () => {
       expect(result.access_token).toBe('fake-access-token');
     });
 
-    it('❌ rejette un mauvais mot de passe (401)', async () => {
+    it(' rejette un mauvais mot de passe (401)', async () => {
       mockSignIn.mockResolvedValue({
         data: { user: null, session: null },
         error: { message: 'Invalid credentials' },
@@ -200,7 +200,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 401 });
     });
 
-    it('❌ rejette un compte supprimé (403)', async () => {
+    it(' rejette un compte supprimé (403)', async () => {
       mockSignIn.mockResolvedValue({
         data: { user: { id: 'uuid-123' }, session: mockSession },
         error: null,
@@ -213,7 +213,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ rejette si profil introuvable (404)', async () => {
+    it(' rejette si profil introuvable (404)', async () => {
       mockSignIn.mockResolvedValue({
         data: { user: { id: 'uuid-123' }, session: mockSession },
         error: null,
@@ -230,7 +230,7 @@ describe('AuthService', () => {
   // ── REFRESH TOKEN ────────────────────────────────────────────────────────────
   describe('refreshToken()', () => {
 
-    it('✅ retourne de nouveaux tokens si refresh valide', async () => {
+    it(' retourne de nouveaux tokens si refresh valide', async () => {
       mockRefreshSession.mockResolvedValue({
         data: { session: { access_token: 'new-access', refresh_token: 'new-refresh' } },
         error: null,
@@ -241,7 +241,7 @@ describe('AuthService', () => {
       expect(result.refresh_token).toBe('new-refresh');
     });
 
-    it('❌ rejette un refresh token expiré (401)', async () => {
+    it(' rejette un refresh token expiré (401)', async () => {
       mockRefreshSession.mockResolvedValue({
         data: { session: null },
         error: { message: 'Token expired' },
@@ -256,12 +256,12 @@ describe('AuthService', () => {
   // ── LOGOUT ───────────────────────────────────────────────────────────────────
   describe('logout()', () => {
 
-    it('✅ déconnecte sans erreur', async () => {
+    it(' déconnecte sans erreur', async () => {
       mockSignOut.mockResolvedValue({ error: null } as never);
       await expect(service.logout('valid-token')).resolves.not.toThrow();
     });
 
-    it('✅ gère silencieusement une erreur de logout', async () => {
+    it(' gère silencieusement une erreur de logout', async () => {
       mockSignOut.mockResolvedValue({ error: { message: 'Session not found' } } as never);
       // Ne doit pas lever d'exception
       await expect(service.logout('invalid-token')).resolves.not.toThrow();
@@ -271,7 +271,7 @@ describe('AuthService', () => {
   // ── FORGOT PASSWORD ──────────────────────────────────────────────────────────
   describe('forgotPassword()', () => {
 
-    it('✅ génère un lien de reset sans erreur', async () => {
+    it(' génère un lien de reset sans erreur', async () => {
       setupFromMock({ first_name: 'Jean' });
 
       mockGenerateLink.mockResolvedValue({
@@ -285,7 +285,7 @@ describe('AuthService', () => {
       );
     });
 
-    it('✅ ne lève pas d\'erreur si email inexistant (sécurité)', async () => {
+    it(' ne lève pas d\'erreur si email inexistant (sécurité)', async () => {
       setupFromMock(null);
 
       mockGenerateLink.mockResolvedValue({
@@ -301,7 +301,7 @@ describe('AuthService', () => {
   // ── RESET PASSWORD ───────────────────────────────────────────────────────────
   describe('resetPassword()', () => {
 
-    it('✅ réinitialise le mot de passe avec un JWT valide', async () => {
+    it(' réinitialise le mot de passe avec un JWT valide', async () => {
       const jwtToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test';
 
       mockGetUser.mockResolvedValue({
@@ -317,7 +317,7 @@ describe('AuthService', () => {
       expect(mockUpdateUserById).toHaveBeenCalledWith('uuid-123', { password: 'NewPass123!' });
     });
 
-    it('✅ réinitialise le mot de passe avec un token OTP', async () => {
+    it(' réinitialise le mot de passe avec un token OTP', async () => {
       const otpToken = 'abc123xyz';
 
       mockVerifyOtp.mockResolvedValue({
@@ -333,7 +333,7 @@ describe('AuthService', () => {
       expect(mockVerifyOtp).toHaveBeenCalledWith({ token_hash: otpToken, type: 'recovery' });
     });
 
-    it('❌ rejette un token JWT invalide (401)', async () => {
+    it(' rejette un token JWT invalide (401)', async () => {
       const invalidJwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.invalid';
 
       mockGetUser.mockResolvedValue({
@@ -346,7 +346,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 401 });
     });
 
-    it('❌ rejette un token OTP expiré (401)', async () => {
+    it(' rejette un token OTP expiré (401)', async () => {
       mockVerifyOtp.mockResolvedValue({
         data: { user: null },
         error: { message: 'Token expired' },
@@ -361,7 +361,7 @@ describe('AuthService', () => {
   // ── GET ME ───────────────────────────────────────────────────────────────────
   describe('getMe()', () => {
 
-    it('✅ retourne le profil du user connecté', async () => {
+    it(' retourne le profil du user connecté', async () => {
       setupFromMock(mockUser);
 
       const result = await service.getMe('uuid-123');
@@ -371,7 +371,7 @@ describe('AuthService', () => {
       expect(result.email).toBe('test@easyvtc.com');
     });
 
-    it('❌ lève une erreur 404 si user inexistant', async () => {
+    it(' lève une erreur 404 si user inexistant', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(service.getMe('ghost-id')).rejects.toMatchObject({ status: 404 });
@@ -381,7 +381,7 @@ describe('AuthService', () => {
   // ── CHANGE PASSWORD ──────────────────────────────────────────────────────────
   describe('changePassword()', () => {
 
-    it('✅ change le mot de passe si l\'ancien est correct', async () => {
+    it(' change le mot de passe si l\'ancien est correct', async () => {
       // Mock pour récupérer le profil (email + first_name)
       setupFromMock({ email: 'test@easyvtc.com', first_name: 'Jean' });
 
@@ -405,7 +405,7 @@ describe('AuthService', () => {
       expect(mockUpdateUserById).toHaveBeenCalledWith('uuid-123', { password: 'NewPass456!' });
     });
 
-    it('❌ rejette si l\'ancien mot de passe est incorrect (401)', async () => {
+    it(' rejette si l\'ancien mot de passe est incorrect (401)', async () => {
       setupFromMock({ email: 'test@easyvtc.com', first_name: 'Jean' });
 
       mockSignIn.mockResolvedValue({
@@ -418,7 +418,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 401, message: 'Mot de passe actuel incorrect' });
     });
 
-    it('❌ rejette si l\'utilisateur est introuvable (404)', async () => {
+    it(' rejette si l\'utilisateur est introuvable (404)', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(
@@ -426,7 +426,7 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ rejette si la mise à jour échoue (400)', async () => {
+    it(' rejette si la mise à jour échoue (400)', async () => {
       setupFromMock({ email: 'test@easyvtc.com', first_name: 'Jean' });
 
       mockSignIn.mockResolvedValue({
@@ -448,19 +448,19 @@ describe('AuthService', () => {
   describe('Google OAuth', () => {
 
     describe('getGoogleAuthUrl()', () => {
-      it('✅ génère une URL de redirection Google', async () => {
+      it(' génère une URL de redirection Google', async () => {
         const url = await service.getGoogleAuthUrl();
         expect(url).toContain('/auth/v1/authorize?provider=google');
       });
 
-      it('✅ accepte un redirectTo personnalisé', async () => {
+      it(' accepte un redirectTo personnalisé', async () => {
         const url = await service.getGoogleAuthUrl('https://myapp.com/callback');
         expect(url).toContain('redirect_to=');
       });
     });
 
     describe('handleGoogleCallback()', () => {
-      it('✅ échange le code et retourne user + tokens', async () => {
+      it(' échange le code et retourne user + tokens', async () => {
         mockExchangeCode.mockResolvedValue({
           data: {
             user: {
@@ -491,7 +491,7 @@ describe('AuthService', () => {
         expect(result.access_token).toBe('fake-access-token');
       });
 
-      it('❌ rejette un code invalide (401)', async () => {
+      it(' rejette un code invalide (401)', async () => {
         mockExchangeCode.mockResolvedValue({
           data: { user: null, session: null },
           error: { message: 'Invalid code' },
@@ -504,7 +504,7 @@ describe('AuthService', () => {
     });
 
     describe('handleGoogleToken()', () => {
-      it('✅ valide un access_token et retourne le profil', async () => {
+      it(' valide un access_token et retourne le profil', async () => {
         mockGetUser.mockResolvedValue({
           data: {
             user: {
@@ -534,7 +534,7 @@ describe('AuthService', () => {
         expect(result.access_token).toBe('valid-google-token');
       });
 
-      it('❌ rejette un token Google invalide (401)', async () => {
+      it(' rejette un token Google invalide (401)', async () => {
         mockGetUser.mockResolvedValue({
           data: { user: null },
           error: { message: 'Invalid token' },

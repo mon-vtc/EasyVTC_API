@@ -138,7 +138,7 @@ describe('UsersService', () => {
   // ── GET PROFILE ──────────────────────────────────────────────────────────────
   describe('getProfile()', () => {
 
-    it('✅ retourne le profil de l\'utilisateur connecté', async () => {
+    it(' retourne le profil de l\'utilisateur connecté', async () => {
       setupFromMock(mockUserProfile);
 
       const result = await service.getProfile('uuid-123');
@@ -149,21 +149,21 @@ describe('UsersService', () => {
       expect(result.status).toBe('active');
     });
 
-    it('❌ lève une erreur 404 si utilisateur introuvable', async () => {
+    it(' lève une erreur 404 si utilisateur introuvable', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(service.getProfile('ghost-id'))
         .rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève une erreur 403 si compte inactif', async () => {
+    it(' lève une erreur 403 si compte inactif', async () => {
       setupFromMock({ ...mockUserProfile, status: 'inactive' });
 
       await expect(service.getProfile('uuid-123'))
         .rejects.toMatchObject({ status: 403, message: expect.stringContaining('désactivé') });
     });
 
-    it('❌ lève une erreur 403 si compte verrouillé', async () => {
+    it(' lève une erreur 403 si compte verrouillé', async () => {
       setupFromMock({ ...mockUserProfile, status: 'locked' });
 
       await expect(service.getProfile('uuid-123'))
@@ -174,7 +174,7 @@ describe('UsersService', () => {
   // ── UPDATE PROFILE ───────────────────────────────────────────────────────────
   describe('updateProfile()', () => {
 
-    it('✅ met à jour le profil avec succès', async () => {
+    it(' met à jour le profil avec succès', async () => {
       const updatedProfile = { 
         ...mockUserProfile, 
         first_name: 'Jean-Pierre',
@@ -191,7 +191,7 @@ describe('UsersService', () => {
       expect(result.phone).toBe('+33698765432');
     });
 
-    it('❌ rejette si numéro de téléphone déjà utilisé (409)', async () => {
+    it(' rejette si numéro de téléphone déjà utilisé (409)', async () => {
       setupFromMock(null, { code: '23505', message: 'duplicate key' });
 
       await expect(
@@ -199,7 +199,7 @@ describe('UsersService', () => {
       ).rejects.toMatchObject({ status: 409, message: expect.stringContaining('téléphone') });
     });
 
-    it('❌ rejette en cas d\'erreur serveur (500)', async () => {
+    it(' rejette en cas d\'erreur serveur (500)', async () => {
       setupFromMock(null, { message: 'Database error' });
 
       await expect(
@@ -211,7 +211,7 @@ describe('UsersService', () => {
   // ── UPLOAD AVATAR ────────────────────────────────────────────────────────────
   describe('uploadAvatar()', () => {
 
-    it('✅ upload une photo de profil avec succès', async () => {
+    it(' upload une photo de profil avec succès', async () => {
       const signedUrl = 'https://storage.supabase.com/profile-photos/uuid-123/avatar.jpg?token=xyz';
       setupStorageMock(null, signedUrl);
       setupFromMock(mockUserProfile);
@@ -223,7 +223,7 @@ describe('UsersService', () => {
       expect(mockStorageFrom).toHaveBeenCalledWith('profile-photos');
     });
 
-    it('❌ rejette un format non supporté (400)', async () => {
+    it(' rejette un format non supporté (400)', async () => {
       const fileBuffer = Buffer.from('fake-pdf-data');
 
       await expect(
@@ -231,7 +231,7 @@ describe('UsersService', () => {
       ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('Format') });
     });
 
-    it('✅ accepte les formats JPG, PNG et WebP', async () => {
+    it(' accepte les formats JPG, PNG et WebP', async () => {
       const signedUrl = 'https://storage.example.com/signed-url';
       setupStorageMock(null, signedUrl);
       setupFromMock(mockUserProfile);
@@ -251,7 +251,7 @@ describe('UsersService', () => {
         .resolves.toMatchObject({ profile_photo_url: signedUrl });
     });
 
-    it('❌ rejette si l\'upload échoue (500)', async () => {
+    it(' rejette si l\'upload échoue (500)', async () => {
       setupStorageMock({ message: 'Storage error' });
 
       const fileBuffer = Buffer.from('fake-image-data');
@@ -269,7 +269,7 @@ describe('UsersService', () => {
   // ── LIST USERS ───────────────────────────────────────────────────────────────
   describe('listUsers()', () => {
 
-    it('✅ retourne une liste paginée d\'utilisateurs', async () => {
+    it(' retourne une liste paginée d\'utilisateurs', async () => {
       const users = [mockUserProfile, mockDriverUser, mockAdminUser];
       setupListMock(users, 3);
 
@@ -282,7 +282,7 @@ describe('UsersService', () => {
       expect(result.total_pages).toBe(1);
     });
 
-    it('✅ filtre par rôle', async () => {
+    it(' filtre par rôle', async () => {
       setupListMock([mockDriverUser], 1);
 
       const result = await service.listUsers({ role: 'driver', page: 1, limit: 20 });
@@ -291,7 +291,7 @@ describe('UsersService', () => {
       expect(result.users[0].role).toBe('driver');
     });
 
-    it('✅ filtre par statut', async () => {
+    it(' filtre par statut', async () => {
       const inactiveUser = { ...mockUserProfile, status: 'inactive' };
       setupListMock([inactiveUser], 1);
 
@@ -301,7 +301,7 @@ describe('UsersService', () => {
       expect(result.users[0].status).toBe('inactive');
     });
 
-    it('✅ recherche par email/nom', async () => {
+    it(' recherche par email/nom', async () => {
       setupListMock([mockUserProfile], 1);
 
       const result = await service.listUsers({ search: 'Jean', page: 1, limit: 20 });
@@ -309,7 +309,7 @@ describe('UsersService', () => {
       expect(result.users).toHaveLength(1);
     });
 
-    it('✅ calcule correctement le nombre de pages', async () => {
+    it(' calcule correctement le nombre de pages', async () => {
       setupListMock([mockUserProfile], 45);
 
       const result = await service.listUsers({ page: 1, limit: 20 });
@@ -318,7 +318,7 @@ describe('UsersService', () => {
       expect(result.total_pages).toBe(3); // 45 / 20 = 2.25 → 3 pages
     });
 
-    it('✅ utilise des valeurs par défaut pour page et limit', async () => {
+    it(' utilise des valeurs par défaut pour page et limit', async () => {
       setupListMock([], 0);
 
       const result = await service.listUsers({});
@@ -327,7 +327,7 @@ describe('UsersService', () => {
       expect(result.limit).toBe(20);
     });
 
-    it('❌ rejette en cas d\'erreur serveur (500)', async () => {
+    it(' rejette en cas d\'erreur serveur (500)', async () => {
       const chain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -345,7 +345,7 @@ describe('UsersService', () => {
   // ── GET USER BY ID ───────────────────────────────────────────────────────────
   describe('getUserById()', () => {
 
-    it('✅ retourne un utilisateur par son ID', async () => {
+    it(' retourne un utilisateur par son ID', async () => {
       setupFromMock(mockDriverUser);
 
       const result = await service.getUserById('driver-uuid');
@@ -355,7 +355,7 @@ describe('UsersService', () => {
       expect(result.role).toBe('driver');
     });
 
-    it('❌ lève une erreur 404 si utilisateur introuvable', async () => {
+    it(' lève une erreur 404 si utilisateur introuvable', async () => {
       setupFromMock(null, { message: 'Not found' });
 
       await expect(service.getUserById('ghost-id'))
@@ -366,7 +366,7 @@ describe('UsersService', () => {
   // ── CHANGE USER STATUS ───────────────────────────────────────────────────────
   describe('changeUserStatus()', () => {
 
-    it('✅ désactive un utilisateur avec succès', async () => {
+    it(' désactive un utilisateur avec succès', async () => {
       // Mock pour vérifier que l'utilisateur cible existe
       const checkChain = {
         select: jest.fn().mockReturnThis(),
@@ -402,7 +402,7 @@ describe('UsersService', () => {
       expect(mockSignOut).toHaveBeenCalled(); // Sessions invalidées
     });
 
-    it('✅ verrouille un utilisateur avec succès', async () => {
+    it(' verrouille un utilisateur avec succès', async () => {
       const checkChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -434,7 +434,7 @@ describe('UsersService', () => {
       expect(result.status).toBe('locked');
     });
 
-    it('✅ réactive un utilisateur sans invalider les sessions', async () => {
+    it(' réactive un utilisateur sans invalider les sessions', async () => {
       const checkChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -465,7 +465,7 @@ describe('UsersService', () => {
       expect(mockSignOut).not.toHaveBeenCalled(); // Pas d'invalidation pour réactivation
     });
 
-    it('❌ empêche un admin de se désactiver lui-même (400)', async () => {
+    it(' empêche un admin de se désactiver lui-même (400)', async () => {
       await expect(
         service.changeUserStatus(
           'admin-uuid',
@@ -475,7 +475,7 @@ describe('UsersService', () => {
       ).rejects.toMatchObject({ status: 400, message: expect.stringContaining('propre compte') });
     });
 
-    it('❌ empêche de modifier le statut d\'un autre admin (403)', async () => {
+    it(' empêche de modifier le statut d\'un autre admin (403)', async () => {
       const checkChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -493,7 +493,7 @@ describe('UsersService', () => {
       ).rejects.toMatchObject({ status: 403, message: expect.stringContaining('autre administrateur') });
     });
 
-    it('❌ rejette si l\'utilisateur cible n\'existe pas (404)', async () => {
+    it(' rejette si l\'utilisateur cible n\'existe pas (404)', async () => {
       const checkChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
@@ -511,7 +511,7 @@ describe('UsersService', () => {
       ).rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ rejette en cas d\'erreur lors de la mise à jour (500)', async () => {
+    it(' rejette en cas d\'erreur lors de la mise à jour (500)', async () => {
       const checkChain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
