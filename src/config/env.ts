@@ -6,6 +6,8 @@ const envSchema = z
     PORT:     z.coerce.number().default(4000),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     APP_URL:  z.string().url().default('http://localhost:4000'),
+    // Scheme Expo pour les deep links mobiles (ex: easyvtc)
+    MOBILE_DEEP_LINK_SCHEME: z.string().default('easyvtc'),
 
     // ── Supabase ────────────────────────────────────────────────────────────
     SUPABASE_URL:              z.string().url(),

@@ -3,6 +3,7 @@ import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } fr
 import { env } from '../../config/env.js';
 import type { Vehicle } from '../vehicles/vehicles.types.js'
 import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
+import type { ManagerPermission } from '../admin/admin.types.js';
 
 export class AuthService {
 
@@ -20,6 +21,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
 
   let driver: DriverProfile | null = null;
   let vehicle: Vehicle | null = null;
+  let permissions: ManagerPermission[] = [];
 
   if (user.role === 'driver') {
     const { data: driverData } = await supabaseAdmin
@@ -41,7 +43,16 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       vehicle = vehicleData ?? null;
     }
   }
-  return { ...user, driver, vehicle } as AuthUser;
+
+  if (user.role === 'manager') {
+    const { data: permsData } = await supabaseAdmin
+      .from('manager_permissions')
+      .select('permission')
+      .eq('manager_id', userId);
+    permissions = (permsData ?? []).map(r => r.permission as ManagerPermission);
+  }
+
+  return { ...user, driver, vehicle, permissions } as AuthUser;
 }
  
   // ── REGISTER ──────────────────────────────────────────────────────────────
@@ -205,7 +216,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       type: 'recovery',
       email,
       options: {
-        redirectTo: `${env.APP_URL}/auth/reset-password`,
+        redirectTo: `${env.MOBILE_DEEP_LINK_SCHEME}://reset-password`,
       },
     });
 

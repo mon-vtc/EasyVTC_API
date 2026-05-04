@@ -1,4 +1,5 @@
 import type { Vehicle } from '../vehicles/vehicles.types.js';
+import type { ManagerPermission } from '../admin/admin.types.js';
 
 export type UserRole = 'client' | 'driver' | 'admin' | 'manager';
 export type UserStatus = 'active' | 'inactive' | 'locked';
@@ -58,6 +59,8 @@ export interface AuthUser {
   driver: DriverProfile | null;
   // Véhicule actif — présent uniquement si role === 'driver'
   vehicle: Vehicle | null;
+  // Permissions RBAC — tableau vide pour tous les rôles sauf manager
+  permissions: ManagerPermission[];
 }
 
 export interface AuthResponse {

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../database/supabase/client.js';
 import type { AuthUser, UserRole } from '../modules/auth/auth.types.js';
+import type { ManagerPermission } from '../modules/admin/admin.types.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH MIDDLEWARE — Vérifie le JWT Supabase et injecte req.user
@@ -55,7 +56,16 @@ export async function authMiddleware(
     return;
   }
 
-  req.user = profile as AuthUser;
+  let permissions: ManagerPermission[] = [];
+  if (profile.role === 'manager') {
+    const { data: permsData } = await supabaseAdmin
+      .from('manager_permissions')
+      .select('permission')
+      .eq('manager_id', profile.id);
+    permissions = (permsData ?? []).map(r => r.permission as ManagerPermission);
+  }
+
+  req.user = { ...profile, permissions } as AuthUser;
   next();
 }
 

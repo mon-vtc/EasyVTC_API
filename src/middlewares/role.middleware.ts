@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import type { UserRole } from '../modules/auth/auth.types.js';
+import type { ManagerPermission } from '../modules/admin/admin.types.js';
 
 /**
  * Middleware pour vérifier que l'utilisateur a un des rôles autorisés.
@@ -49,3 +50,33 @@ export const requireStaff = requireRole('admin', 'manager');
  * Middleware pour vérifier que l'utilisateur est chauffeur
  */
 export const requireDriver = requireRole('driver');
+
+/**
+ * Middleware de permission fine pour les gestionnaires.
+ * Les admins passent toujours (bypass total).
+ * Les managers doivent avoir la permission explicitement accordée.
+ *
+ * @example
+ * router.get('/reservations', requireStaff, requirePermission('view_reservations'), handler);
+ */
+export function requirePermission(permission: ManagerPermission) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ ok: false, message: 'Authentification requise' });
+      return;
+    }
+    if (req.user.role === 'admin') {
+      next();
+      return;
+    }
+    if (!req.user.permissions.includes(permission)) {
+      res.status(403).json({
+        ok: false,
+        message: 'Accès refusé. Permission insuffisante.',
+        required_permission: permission,
+      });
+      return;
+    }
+    next();
+  };
+}
