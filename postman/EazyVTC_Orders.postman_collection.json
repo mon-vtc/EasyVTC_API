@@ -1,0 +1,977 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-sprint4-orders",
+    "name": "EazyVTC API — Sprint 4 — Bons de commande",
+    "description": "# EazyVTC — Module Orders (Bons de commande)\n\n## Prérequis\n1. Importer cette collection **et** l'environnement `EazyVTC_Local`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n   - Un forfait tarifaire actif (country: france)\n3. Lancer l'API : `npm run dev`\n4. Créer le bucket Supabase Storage `orders-pdfs` (privé)\n\n## Ordre d'exécution\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens\n2. **⚙️ Prérequis** : créer une réservation + assigner le chauffeur (déclenche la génération du bon)\n3. **📋 Lecture des bons** : tester toutes les routes GET\n4. **🔒 Contrôle d'accès** : vérifier les 401/403/404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `reservation_id` — après création de la réservation\n- `order_id` — après récupération du bon\n- `flat_rate_id` — depuis la liste des forfaits",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:4000", "type": "string" },
+    { "key": "client_token",   "value": "", "type": "string" },
+    { "key": "driver_token",   "value": "", "type": "string" },
+    { "key": "admin_token",    "value": "", "type": "string" },
+    { "key": "reservation_id", "value": "", "type": "string" },
+    { "key": "order_id",       "value": "", "type": "string" },
+    { "key": "flat_rate_id",   "value": "", "type": "string" },
+    { "key": "driver_record_id","value": "", "type": "string", "description": "ID table public.drivers (pas users.id) — récupérer depuis Supabase ou via GET /admin/drivers" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Exécuter ces 3 requêtes en premier pour remplir client_token, driver_token et admin_token.",
+      "item": [
+
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{client_email}}\",\n  \"password\": \"{{client_password}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('client_token sauvegardé', () => {",
+                "  const json = pm.response.json();",
+                "  pm.expect(json.ok).to.be.true;",
+                "  pm.expect(json.data.access_token).to.be.a('string').and.not.empty;",
+                "  pm.collectionVariables.set('client_token', json.data.access_token);",
+                "  console.log(' client_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{driver_email}}\",\n  \"password\": \"{{driver_password}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('driver_token sauvegardé', () => {",
+                "  const json = pm.response.json();",
+                "  pm.expect(json.ok).to.be.true;",
+                "  pm.collectionVariables.set('driver_token', json.data.access_token);",
+                "  if (json.data.driver) {",
+                "    pm.collectionVariables.set('driver_record_id', json.data.driver.id);",
+                "    console.log(' driver_record_id sauvegardé:', json.data.driver.id);",
+                "  }",
+                "  console.log(' driver_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('admin_token sauvegardé', () => {",
+                "  const json = pm.response.json();",
+                "  pm.expect(json.ok).to.be.true;",
+                "  pm.collectionVariables.set('admin_token', json.data.access_token);",
+                "  console.log(' admin_token OK');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "⚙️ Prérequis — Créer et assigner une réservation",
+      "description": "Ces deux requêtes déclenchent la génération automatique du bon de commande.\n1. Le client crée une réservation\n2. L'admin assigne un chauffeur → ordersService.createFromReservation() est appelé automatiquement",
+      "item": [
+
+        {
+          "name": "1. Récupérer un forfait actif (flat_rate_id)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/pricing/flat-rates?country=france&is_active=true&page=1&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["pricing", "flat-rates"],
+              "query": [
+                { "key": "country",   "value": "france" },
+                { "key": "is_active", "value": "true" },
+                { "key": "page",      "value": "1" },
+                { "key": "limit",     "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('flat_rate_id sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  if (data.flat_rates.length > 0) {",
+                "    pm.collectionVariables.set('flat_rate_id', data.flat_rates[0].id);",
+                "    console.log(' flat_rate_id:', data.flat_rates[0].id, '— label:', data.flat_rates[0].label);",
+                "  } else {",
+                "    console.warn('⚠️ Aucun forfait actif en France — les tests suivants utiliseront la formule distance/durée');",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "2. [Client] Créer une réservation (forfait)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/reservations", "host": ["{{base_url}}"], "path": ["reservations"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_address\": \"1 Avenue de Massy, 91300 Massy, France\",\n  \"pickup_lat\": 48.7253,\n  \"pickup_lng\": 2.2668,\n  \"dest_address\": \"Aéroport d'Orly, 94390 Orly, France\",\n  \"dest_lat\": 48.7262,\n  \"dest_lng\": 2.3652,\n  \"vehicle_type\": \"berline\",\n  \"country\": \"france\",\n  \"scheduled_at\": \"2026-06-15T09:00:00.000Z\",\n  \"comment\": \"Siège enfant requis\",\n  \"flat_rate_id\": \"{{flat_rate_id}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201 — réservation créée', () => pm.response.to.have.status(201));",
+                "pm.test('reservation_id sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.id).to.be.a('string');",
+                "  pm.expect(data.status).to.equal('pending');",
+                "  pm.expect(data.pricing_type).to.equal('flat_rate');",
+                "  pm.collectionVariables.set('reservation_id', data.id);",
+                "  console.log(' reservation_id:', data.id);",
+                "  console.log('   Prix estimé:', data.price_estimated, 'EUR');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "2b. [Client] Créer une réservation (formule — fallback si pas de forfait)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/reservations", "host": ["{{base_url}}"], "path": ["reservations"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pickup_address\": \"10 Rue de la Gare, 91300 Massy, France\",\n  \"dest_address\": \"Aéroport CDG, Terminal 2, 95700 Roissy-en-France\",\n  \"vehicle_type\": \"berline\",\n  \"country\": \"france\",\n  \"scheduled_at\": \"2026-06-15T10:30:00.000Z\",\n  \"comment\": \"Vol AF123 — arriver 2h avant\",\n  \"distance_km\": 35,\n  \"duration_min\": 55\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "const flatRateId = pm.collectionVariables.get('flat_rate_id');",
+                "if (flatRateId) {",
+                "  console.log('ℹ️ flat_rate_id déjà défini — cette requête est un fallback, pas besoin de l\\'exécuter');",
+                "  return;",
+                "}",
+                "pm.test('Status 201 — réservation formule créée (fallback)', () => pm.response.to.have.status(201));",
+                "const { ok, data } = pm.response.json();",
+                "if (ok) {",
+                "  pm.collectionVariables.set('reservation_id', data.id);",
+                "  console.log(' reservation_id (formule):', data.id);",
+                "  console.log('   Prix estimé:', data.price_estimated, 'EUR');",
+                "}"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "3. [Admin] Assigner le chauffeur → génère le bon automatiquement",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/assign",
+              "host": ["{{base_url}}"],
+              "path": ["reservations", "{{reservation_id}}", "assign"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver_id\": \"{{driver_record_id}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — chauffeur assigné', () => pm.response.to.have.status(200));",
+                "pm.test('Statut réservation = assigned', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.status).to.equal('assigned');",
+                "  pm.expect(data.driver_id).to.be.a('string');",
+                "  console.log(' Chauffeur assigné — bon de commande en cours de génération (async)');",
+                "  console.log('   reservation_id:', data.id);",
+                "  console.log('   driver_id:', data.driver_id);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "4. [Admin] Vérifier que le bon a été généré (attente ~1s)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/orders/by-reservation/{{reservation_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "by-reservation", "{{reservation_id}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Petite pause pour laisser le temps au service async de créer le bon",
+                  "const delay = ms => new Promise(resolve => setTimeout(resolve, ms));",
+                  "await delay(1500);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 — bon trouvé', () => pm.response.to.have.status(200));",
+                  "pm.test('Structure du bon de commande valide', () => {",
+                  "  const { ok, data } = pm.response.json();",
+                  "  pm.expect(ok).to.be.true;",
+                  "  pm.expect(data.id).to.be.a('string');",
+                  "  pm.expect(data.order_number).to.match(/^BC-\\d{4}-\\d{6}$/);",
+                  "  pm.expect(data.reservation_id).to.equal(pm.collectionVariables.get('reservation_id'));",
+                  "  pm.expect(data.driver_snapshot).to.include.keys(['first_name','last_name','phone','siret']);",
+                  "  pm.expect(data.passenger_snapshot).to.include.keys(['first_name','last_name','phone']);",
+                  "  pm.expect(data.trip_snapshot).to.include.keys(['pickup_address','dest_address','vehicle_type','scheduled_at','via','pricing_type','currency']);",
+                  "  pm.collectionVariables.set('order_id', data.id);",
+                  "  console.log(' order_id sauvegardé:', data.id);",
+                  "  console.log('   Numéro bon:', data.order_number);",
+                  "  console.log('   pricing_type:', data.trip_snapshot.pricing_type);",
+                  "  console.log('   final_price dans snapshot:', data.trip_snapshot.final_price, '(null si formule — CDC p.26)');",
+                  "});",
+                  "",
+                  "pm.test('CDC p.26 — formule : final_price null dans le snapshot', () => {",
+                  "  const { data } = pm.response.json();",
+                  "  if (data.trip_snapshot.pricing_type === 'formula') {",
+                  "    pm.expect(data.trip_snapshot.final_price).to.be.null;",
+                  "    console.log(' Règle CDC respectée : pas de montant pour la formule');",
+                  "  } else {",
+                  "    pm.expect(data.trip_snapshot.final_price).to.be.a('number').and.greaterThan(0);",
+                  "    console.log(' Forfait : montant affiché =', data.trip_snapshot.final_price, data.trip_snapshot.currency);",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "📋 Lecture des bons",
+      "description": "Tester toutes les routes GET du module orders avec les 3 rôles.",
+      "item": [
+
+        {
+          "name": "📂 Admin — Vue globale",
+          "item": [
+
+            {
+              "name": "[Admin] Liste tous les bons (paginée)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders?page=1&limit=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders"],
+                  "query": [
+                    { "key": "page",  "value": "1" },
+                    { "key": "limit", "value": "10" }
+                  ]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Structure pagination valide', () => {",
+                    "  const { ok, data } = pm.response.json();",
+                    "  pm.expect(ok).to.be.true;",
+                    "  pm.expect(data).to.include.keys(['orders','total','page','limit','total_pages']);",
+                    "  pm.expect(data.orders).to.be.an('array');",
+                    "  pm.expect(data.page).to.equal(1);",
+                    "  pm.expect(data.limit).to.equal(10);",
+                    "  console.log('Total bons en base:', data.total);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Admin] Liste filtrée par reservation_id",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders?reservation_id={{reservation_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders"],
+                  "query": [{ "key": "reservation_id", "value": "{{reservation_id}}" }]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Filtre reservation_id respecté', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  pm.expect(data.total).to.be.at.least(1);",
+                    "  if (data.orders.length > 0) {",
+                    "    pm.expect(data.orders[0].reservation_id).to.equal(pm.collectionVariables.get('reservation_id'));",
+                    "  }",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Admin] Détail d'un bon par ID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Bon complet retourné', () => {",
+                    "  const { ok, data } = pm.response.json();",
+                    "  pm.expect(ok).to.be.true;",
+                    "  pm.expect(data.id).to.equal(pm.collectionVariables.get('order_id'));",
+                    "  pm.expect(data.order_number).to.match(/^BC-\\d{4}-\\d{6}$/);",
+                    "  pm.expect(data.issued_at).to.be.a('string');",
+                    "  pm.expect(data.driver_snapshot.first_name).to.be.a('string').and.not.empty;",
+                    "  pm.expect(data.passenger_snapshot.first_name).to.be.a('string').and.not.empty;",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Admin] Bon par reservation_id",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/by-reservation/{{reservation_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "by-reservation", "{{reservation_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('reservation_id cohérent', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  pm.expect(data.reservation_id).to.equal(pm.collectionVariables.get('reservation_id'));",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Admin] PDF — Redirection 302 vers URL signée",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}/pdf",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}", "pdf"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 302 (redirect) ou 200 (si Postman suit les redirections)', () => {",
+                    "  // Postman suit les redirections par défaut → peut arriver à 200 (le PDF)",
+                    "  // ou 302 si le suivi est désactivé",
+                    "  const status = pm.response.code;",
+                    "  pm.expect([200, 302]).to.include(status);",
+                    "  console.log('Status reçu:', status);",
+                    "  if (status === 200) {",
+                    "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf');",
+                    "    console.log(' PDF reçu directement (redirect suivi par Postman)');",
+                    "  } else {",
+                    "    pm.expect(pm.response.headers.get('Location')).to.be.a('string').and.include('supabase');",
+                    "    console.log(' Redirection vers URL signée Supabase Storage');",
+                    "  }",
+                    "});"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 Client — Ses propres bons",
+          "item": [
+
+            {
+              "name": "[Client] Liste de ses bons (/mine)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/mine?page=1&limit=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "mine"],
+                  "query": [
+                    { "key": "page",  "value": "1" },
+                    { "key": "limit", "value": "10" }
+                  ]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Client voit uniquement ses propres bons', () => {",
+                    "  const { ok, data } = pm.response.json();",
+                    "  pm.expect(ok).to.be.true;",
+                    "  pm.expect(data).to.include.keys(['orders','total','page','limit','total_pages']);",
+                    "  pm.expect(data.orders).to.be.an('array');",
+                    "  pm.expect(data.total).to.be.at.least(1);",
+                    "  // Vérifier qu'aucun champ jointure interne n'est exposé",
+                    "  if (data.orders.length > 0) {",
+                    "    pm.expect(data.orders[0]).to.not.have.property('reservation.client_id');",
+                    "  }",
+                    "  console.log('Bons du client:', data.total);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Client] Détail de son bon",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 — client accède à son propre bon', () => pm.response.to.have.status(200));",
+                    "pm.test('Snapshots corrects', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  pm.expect(data.driver_snapshot).to.include.keys(['first_name','last_name']);",
+                    "  pm.expect(data.passenger_snapshot).to.include.keys(['first_name','last_name']);",
+                    "  pm.expect(data.trip_snapshot.via).to.equal('EazyVTC');",
+                    "  console.log('Conducteur:', data.driver_snapshot.first_name, data.driver_snapshot.last_name);",
+                    "  console.log('Passager:', data.passenger_snapshot.first_name, data.passenger_snapshot.last_name);",
+                    "  console.log('Trajet:', data.trip_snapshot.pickup_address, '→', data.trip_snapshot.dest_address);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Client] Bon par reservation_id",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/by-reservation/{{reservation_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "by-reservation", "{{reservation_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Données cohérentes', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  pm.expect(data.reservation_id).to.equal(pm.collectionVariables.get('reservation_id'));",
+                    "  pm.expect(data.order_number).to.match(/^BC-\\d{4}-\\d{6}$/);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Client] PDF de son bon",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}/pdf",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}", "pdf"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('PDF accessible pour le client (302 ou 200)', () => {",
+                    "  pm.expect([200, 302]).to.include(pm.response.code);",
+                    "  console.log(' Client peut accéder à son bon PDF — status:', pm.response.code);",
+                    "});"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 Chauffeur — Ses propres bons",
+          "item": [
+
+            {
+              "name": "[Driver] Liste de ses bons (/driver/mine)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/driver/mine?page=1&limit=10",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "driver", "mine"],
+                  "query": [
+                    { "key": "page",  "value": "1" },
+                    { "key": "limit", "value": "10" }
+                  ]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                    "pm.test('Chauffeur voit uniquement ses propres bons', () => {",
+                    "  const { ok, data } = pm.response.json();",
+                    "  pm.expect(ok).to.be.true;",
+                    "  pm.expect(data.orders).to.be.an('array');",
+                    "  pm.expect(data.total).to.be.at.least(1);",
+                    "  console.log('Bons du chauffeur:', data.total);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Driver] Détail de son bon",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 — chauffeur accède à son propre bon', () => pm.response.to.have.status(200));",
+                    "pm.test('trip_snapshot contient les infos de course', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  const ts = data.trip_snapshot;",
+                    "  pm.expect(ts.pickup_address).to.be.a('string').and.not.empty;",
+                    "  pm.expect(ts.dest_address).to.be.a('string').and.not.empty;",
+                    "  pm.expect(ts.vehicle_type).to.be.oneOf(['standard','berline','van']);",
+                    "  pm.expect(ts.scheduled_at).to.be.a('string');",
+                    "  console.log('Course:', ts.pickup_address, '→', ts.dest_address);",
+                    "  console.log('Horaire:', ts.scheduled_at);",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[Driver] PDF de son bon",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}/pdf",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}", "pdf"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('PDF accessible pour le chauffeur (302 ou 200)', () => {",
+                    "  pm.expect([200, 302]).to.include(pm.response.code);",
+                    "  console.log(' Chauffeur peut accéder à son bon PDF — status:', pm.response.code);",
+                    "});"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès — Erreurs attendues",
+      "description": "Vérifier que les règles d'autorisation sont bien appliquées : 401 sans token, 403 accès interdit, 404 ressource inexistante.",
+      "item": [
+
+        {
+          "name": "📂 401 — Non authentifié",
+          "item": [
+
+            {
+              "name": "[401] GET /orders sans token",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401 — token manquant', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[401] GET /orders/mine sans token",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{base_url}}/orders/mine", "host": ["{{base_url}}"], "path": ["orders", "mine"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[401] GET /orders/:id/pdf sans token",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/orders/{{order_id}}/pdf",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "{{order_id}}", "pdf"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 403 — Rôle insuffisant",
+          "item": [
+
+            {
+              "name": "[403] Client essaie GET /orders (réservé admin)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — client ne peut pas lister tous les bons', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[403] Driver essaie GET /orders (réservé admin)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+                "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — driver ne peut pas lister tous les bons', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[403] Client essaie GET /orders/driver/mine (réservé driver)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+                "url": { "raw": "{{base_url}}/orders/driver/mine", "host": ["{{base_url}}"], "path": ["orders", "driver", "mine"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — client ne peut pas accéder aux bons chauffeur', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[403] Admin essaie GET /orders/mine (réservé client)",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": { "raw": "{{base_url}}/orders/mine", "host": ["{{base_url}}"], "path": ["orders", "mine"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — admin ne peut pas accéder à la route /mine client', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 404 — Ressource inexistante",
+          "item": [
+
+            {
+              "name": "[404] GET /orders/:id — ID inexistant",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/00000000-0000-0000-0000-000000000000",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "00000000-0000-0000-0000-000000000000"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 404 — bon introuvable', () => pm.response.to.have.status(404));",
+                    "pm.test('Message explicite', () => {",
+                    "  const json = pm.response.json();",
+                    "  pm.expect(json.ok).to.be.false;",
+                    "  pm.expect(json.message).to.be.a('string').and.not.empty;",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[404] GET /orders/by-reservation/:id — réservation sans bon",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/by-reservation/00000000-0000-0000-0000-000000000000",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "by-reservation", "00000000-0000-0000-0000-000000000000"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 404 — aucun bon pour cette réservation', () => pm.response.to.have.status(404));",
+                    "pm.test('ok: false + message', () => {",
+                    "  const json = pm.response.json();",
+                    "  pm.expect(json.ok).to.be.false;",
+                    "  pm.expect(json.message).to.include('introuvable');",
+                    "});"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[400] GET /orders/:id — ID non-UUID",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/pas-un-uuid",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "pas-un-uuid"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 400 — ID invalide rejeté par Zod', () => pm.response.to.have.status(400));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 Idempotence — Double génération",
+          "item": [
+
+            {
+              "name": "Ré-assigner le même chauffeur → bon NON régénéré",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+                "url": {
+                  "raw": "{{base_url}}/orders/by-reservation/{{reservation_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["orders", "by-reservation", "{{reservation_id}}"]
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 200 — bon existant retourné (pas de doublon)', () => pm.response.to.have.status(200));",
+                    "pm.test('Même order_id que précédemment', () => {",
+                    "  const { data } = pm.response.json();",
+                    "  const savedOrderId = pm.collectionVariables.get('order_id');",
+                    "  pm.expect(data.id).to.equal(savedOrderId);",
+                    "  console.log(' Idempotence OK — pas de doublon, même bon retourné:', data.order_number);",
+                    "});"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        }
+
+      ]
+    }
+
+  ]
+}

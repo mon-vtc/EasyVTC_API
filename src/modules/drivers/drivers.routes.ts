@@ -34,6 +34,18 @@ driversSelfRoutes.patch(
   (req, res) => controller.setOnlineStatus(req, res)
 );
 
+// Planning (hebdo / mensuel)
+driversSelfRoutes.get(
+  '/me/planning',
+  (req, res) => controller.getMyPlanning(req, res)
+);
+
+// Revenus (hebdo / mensuel / total)
+driversSelfRoutes.get(
+  '/me/revenues',
+  (req, res) => controller.getMyRevenues(req, res)
+);
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES ADMIN — /admin/drivers
 // ══════════════════════════════════════════════════════════════════════════════

@@ -1,21 +1,20 @@
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+
 // ══════════════════════════════════════════════════════════════════════════════
-// TESTS — Module Tarification
-// Sprint 3 — EazyVTC
-// Runner : Jest (ts-jest/ESM) — NE PAS importer depuis 'vitest'
+// MOCKS — unstable_mockModule AVANT les imports (obligatoire ESM)
 // ══════════════════════════════════════════════════════════════════════════════
 
-import { PricingService } from './pricing.service.js';
+const mockFrom = jest.fn();
 
-// ── Mock Supabase ─────────────────────────────────────────────────────────────
-jest.mock('../../database/supabase/client.js', () => ({
-  supabaseAdmin: {
-    from: jest.fn(),
-  },
+jest.unstable_mockModule('../../database/supabase/client.js', () => ({
+  supabaseAdmin: { from: mockFrom },
 }));
 
-import { supabaseAdmin } from '../../database/supabase/client.js';
+const { PricingService } = await import('./pricing.service.js');
 
-// ── Fixtures ─────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// DONNÉES DE TEST
+// ══════════════════════════════════════════════════════════════════════════════
 
 const mockGridFrance = {
   id:            'grid-fr-1',
@@ -59,22 +58,28 @@ const mockFlatRateMassyOrly = {
   created_by:        'admin-1',
 };
 
-// ── Helper mock chaîne Supabase ───────────────────────────────────────────────
-function mockSupabaseChain(returnData: unknown, returnError: unknown = null) {
-  const chain = {
-    select:    jest.fn().mockReturnThis(),
-    insert:    jest.fn().mockReturnThis(),
-    update:    jest.fn().mockReturnThis(),
-    eq:        jest.fn().mockReturnThis(),
-    neq:       jest.fn().mockReturnThis(),
-    ilike:     jest.fn().mockReturnThis(),
-    order:     jest.fn().mockReturnThis(),
-    limit:     jest.fn().mockReturnThis(),
-    range:     jest.fn().mockReturnThis(),
-    single:    jest.fn().mockResolvedValue({ data: returnData, error: returnError, count: null }),
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function mockChain(returnData: unknown, returnError: unknown = null) {
+  const resolved = { data: returnData, error: returnError, count: null } as never;
+  const c: Record<string, unknown> = {
+    select:  jest.fn().mockReturnThis(),
+    insert:  jest.fn().mockReturnThis(),
+    update:  jest.fn().mockReturnThis(),
+    eq:      jest.fn().mockReturnThis(),
+    neq:     jest.fn().mockReturnThis(),
+    ilike:   jest.fn().mockReturnThis(),
+    order:   jest.fn().mockReturnThis(),
+    limit:   jest.fn().mockReturnThis(),
+    range:   jest.fn().mockReturnThis(),
+    single:  jest.fn().mockResolvedValue(resolved),
+    then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+      Promise.resolve(resolved).then(resolve, reject),
   };
-  (supabaseAdmin.from as jest.Mock).mockReturnValue(chain);
-  return chain;
+  mockFrom.mockReturnValue(c);
+  return c;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -82,20 +87,20 @@ function mockSupabaseChain(returnData: unknown, returnError: unknown = null) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 describe('PricingService', () => {
-  let service: PricingService;
+  let service: InstanceType<typeof PricingService>;
 
   beforeEach(() => {
     service = new PricingService();
     jest.clearAllMocks();
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Grilles tarifaires
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('getActiveGrid()', () => {
     it('retourne la grille active pour la France', async () => {
-      mockSupabaseChain(mockGridFrance);
+      mockChain(mockGridFrance);
       const grid = await service.getActiveGrid('france');
       expect(grid.country).toBe('france');
       expect(grid.currency).toBe('EUR');
@@ -103,18 +108,18 @@ describe('PricingService', () => {
     });
 
     it('lève une erreur 404 si aucune grille active', async () => {
-      mockSupabaseChain(null, { message: 'No rows found' });
+      mockChain(null, { message: 'No rows found' });
       await expect(service.getActiveGrid('france')).rejects.toMatchObject({ status: 404 });
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Calcul de prix — Formule France
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('calculatePrice() — mode formule', () => {
     beforeEach(() => {
-      mockSupabaseChain(mockGridFrance);
+      mockChain(mockGridFrance);
     });
 
     it('calcule correctement un trajet France standard', async () => {
@@ -158,13 +163,13 @@ describe('PricingService', () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Calcul de prix — Formule Sénégal (XOF)
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('calculatePrice() — Sénégal XOF', () => {
     beforeEach(() => {
-      mockSupabaseChain(mockGridSenegal);
+      mockChain(mockGridSenegal);
     });
 
     it('arrondit au XOF entier (pas de centimes)', async () => {
@@ -191,13 +196,13 @@ describe('PricingService', () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Calcul de prix — Mode forfait
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('calculatePrice() — mode forfait', () => {
     it('retourne le prix fixe du forfait', async () => {
-      mockSupabaseChain(mockFlatRateMassyOrly);
+      mockChain(mockFlatRateMassyOrly);
       const result = await service.calculatePrice({
         country:      'france',
         flat_rate_id: 'fr-1',
@@ -209,27 +214,27 @@ describe('PricingService', () => {
     });
 
     it('lève une erreur si le forfait est inactif', async () => {
-      mockSupabaseChain({ ...mockFlatRateMassyOrly, is_active: false });
+      mockChain({ ...mockFlatRateMassyOrly, is_active: false });
       await expect(
         service.calculatePrice({ country: 'france', flat_rate_id: 'fr-1' }),
       ).rejects.toMatchObject({ status: 400 });
     });
 
     it("lève une erreur si le forfait n'appartient pas au bon pays", async () => {
-      mockSupabaseChain({ ...mockFlatRateMassyOrly, country: 'france' });
+      mockChain({ ...mockFlatRateMassyOrly, country: 'france' });
       await expect(
         service.calculatePrice({ country: 'senegal', flat_rate_id: 'fr-1' }),
       ).rejects.toMatchObject({ status: 400 });
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Forfaits — CRUD
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('createFlatRate()', () => {
     it('lève 409 si un forfait avec le même libellé existe déjà', async () => {
-      mockSupabaseChain({ id: 'existing' }); // doublon trouvé
+      mockChain({ id: 'existing' }); // doublon trouvé
       await expect(
         service.createFlatRate('admin-1', {
           country:           'france',
@@ -243,19 +248,19 @@ describe('PricingService', () => {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
   // Grilles — logique d'unicité
-  // ──────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────────
 
   describe('createGrid()', () => {
     it("désactive l'ancienne grille avant d'en créer une nouvelle", async () => {
       const updateMock = jest.fn().mockReturnThis();
       const insertMock = jest.fn().mockReturnThis();
-      const singleMock = jest.fn().mockResolvedValue({ data: mockGridFrance, error: null });
+      const singleMock = jest.fn().mockResolvedValue({ data: mockGridFrance, error: null } as never);
       const eqMock     = jest.fn().mockReturnThis();
       const selectMock = jest.fn().mockReturnThis();
 
-      (supabaseAdmin.from as jest.Mock).mockReturnValue({
+      mockFrom.mockReturnValue({
         update: updateMock,
         insert: insertMock,
         select: selectMock,

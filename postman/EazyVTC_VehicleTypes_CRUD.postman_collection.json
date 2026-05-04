@@ -1,0 +1,763 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-vehicle-types-crud",
+    "name": "EazyVTC — Types de véhicule (CRUD)",
+    "description": "# EazyVTC — Module vehicle-types\n\n## Setup\n1. Importer cette collection **et** l'environnement `EazyVTC_Local`\n2. Vérifier que `admin_email` / `admin_password` sont renseignés dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Appliquer la migration : `20260422000001_vehicle_types_table.sql` (seed les 3 types standard/berline/van)\n5. Exécuter **🔐 Authentification** en premier, puis suivre l'ordre numéroté\n\n## Routes couvertes\n```\nGET    /vehicle-types                     (public)\nGET    /admin/vehicle-types               (admin)\nGET    /admin/vehicle-types/:id           (admin)\nPOST   /admin/vehicle-types              (admin)\nPATCH  /admin/vehicle-types/:id          (admin)\nDELETE /admin/vehicle-types/:id          (admin)\n```\n\n## Variables sauvegardées automatiquement\n- `admin_token` — après le login admin\n- `vehicle_type_id` — après `POST /admin/vehicle-types` (type de test `minibus-test`)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",         "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",      "value": "",                      "type": "string" },
+    { "key": "vehicle_type_id",  "value": "",                      "type": "string", "description": "UUID du type créé par POST (minibus-test) — sauvegardé automatiquement" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Authentification",
+      "description": "Exécuter en premier pour peupler admin_token.",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('admin_token sauvegardé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.user.role).to.equal('admin');",
+            "  pm.collectionVariables.set('admin_token', json.data.access_token);",
+            "  console.log('✅ admin_token sauvegardé');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "1️⃣ GET /vehicle-types — Endpoint public",
+      "description": "Endpoint public (sans authentification). Retourne uniquement les types actifs avec un base_price unique selon le pays.",
+      "item": [
+
+        {
+          "name": "GET /vehicle-types — sans filtre (France par défaut)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "const data = json.data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(json.ok).to.be.true);",
+            "pm.test('data est un tableau', () => pm.expect(data).to.be.an('array'));",
+            "pm.test('Au moins 3 types actifs (seed)', () => pm.expect(data.length).to.be.at.least(3));",
+            "",
+            "pm.test('Structure VehicleTypePublic valide', () => {",
+            "  data.forEach(t => {",
+            "    pm.expect(t, `type ${t.code}`).to.have.all.keys('code', 'label', 'description', 'capacity', 'icon', 'base_price');",
+            "  });",
+            "});",
+            "",
+            "pm.test('Les 3 types du seed sont présents', () => {",
+            "  const codes = data.map(t => t.code);",
+            "  pm.expect(codes).to.include('standard');",
+            "  pm.expect(codes).to.include('berline');",
+            "  pm.expect(codes).to.include('van');",
+            "});",
+            "",
+            "pm.test('base_price est un nombre positif (France)', () => {",
+            "  data.forEach(t => {",
+            "    pm.expect(t.base_price, `base_price de ${t.code}`).to.be.a('number').and.greaterThan(0);",
+            "  });",
+            "});",
+            "",
+            "pm.test('standard : 12.50 € (France)', () => {",
+            "  const standard = data.find(t => t.code === 'standard');",
+            "  if (standard) pm.expect(standard.base_price).to.equal(12.5);",
+            "});",
+            "",
+            "pm.test('Pas de champs admin (pas de is_active, base_price_france, etc.)', () => {",
+            "  data.forEach(t => {",
+            "    pm.expect(t).to.not.have.property('is_active');",
+            "    pm.expect(t).to.not.have.property('base_price_france');",
+            "    pm.expect(t).to.not.have.property('base_price_senegal');",
+            "  });",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /vehicle-types?country=france — prix France",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types?country=france",
+              "host": ["{{base_url}}"],
+              "path": ["vehicle-types"],
+              "query": [{ "key": "country", "value": "france" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const data = pm.response.json().data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "",
+            "pm.test('standard : 12.50 € (France)', () => {",
+            "  const s = data.find(t => t.code === 'standard');",
+            "  if (s) pm.expect(s.base_price).to.equal(12.5);",
+            "});",
+            "",
+            "pm.test('berline : 18.00 € (France)', () => {",
+            "  const b = data.find(t => t.code === 'berline');",
+            "  if (b) pm.expect(b.base_price).to.equal(18);",
+            "});",
+            "",
+            "pm.test('van : 35.00 € (France)', () => {",
+            "  const v = data.find(t => t.code === 'van');",
+            "  if (v) pm.expect(v.base_price).to.equal(35);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /vehicle-types?country=senegal — prix Sénégal (XOF)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types?country=senegal",
+              "host": ["{{base_url}}"],
+              "path": ["vehicle-types"],
+              "query": [{ "key": "country", "value": "senegal" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const data = pm.response.json().data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "",
+            "pm.test('standard : 3000 XOF (Sénégal)', () => {",
+            "  const s = data.find(t => t.code === 'standard');",
+            "  if (s) pm.expect(s.base_price).to.equal(3000);",
+            "});",
+            "",
+            "pm.test('berline : 5000 XOF (Sénégal)', () => {",
+            "  const b = data.find(t => t.code === 'berline');",
+            "  if (b) pm.expect(b.base_price).to.equal(5000);",
+            "});",
+            "",
+            "pm.test('van : 9000 XOF (Sénégal)', () => {",
+            "  const v = data.find(t => t.code === 'van');",
+            "  if (v) pm.expect(v.base_price).to.equal(9000);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /vehicle-types — résultats triés par sort_order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const data = pm.response.json().data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "",
+            "pm.test('Ordre : standard → berline → van (sort_order 1,2,3)', () => {",
+            "  const codes = data.filter(t => ['standard','berline','van'].includes(t.code)).map(t => t.code);",
+            "  const standardIdx = codes.indexOf('standard');",
+            "  const berlineIdx  = codes.indexOf('berline');",
+            "  const vanIdx      = codes.indexOf('van');",
+            "  if (standardIdx !== -1 && berlineIdx !== -1) pm.expect(standardIdx).to.be.lessThan(berlineIdx);",
+            "  if (berlineIdx !== -1 && vanIdx !== -1) pm.expect(berlineIdx).to.be.lessThan(vanIdx);",
+            "});"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "2️⃣ GET /admin/vehicle-types — Liste complète (admin)",
+      "description": "Liste tous les types (actifs + inactifs). Requiert un token admin.",
+      "item": [
+
+        {
+          "name": "[Admin] GET /admin/vehicle-types — liste complète",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "const data = json.data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(json.ok).to.be.true);",
+            "pm.test('data est un tableau', () => pm.expect(data).to.be.an('array'));",
+            "pm.test('Au moins 3 types (seed)', () => pm.expect(data.length).to.be.at.least(3));",
+            "",
+            "pm.test('Structure VehicleTypeRecord complète', () => {",
+            "  data.forEach(t => {",
+            "    pm.expect(t).to.have.all.keys('id','code','label','description','capacity','icon','base_price_france','base_price_senegal','is_active','sort_order','created_at','updated_at');",
+            "  });",
+            "});",
+            "",
+            "pm.test('is_active est un booléen', () => {",
+            "  data.forEach(t => pm.expect(t.is_active).to.be.a('boolean'));",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Non authentifié] GET /admin/vehicle-types — token absent (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "3️⃣ POST /admin/vehicle-types — Créer un type",
+      "description": "Créer un nouveau type de véhicule. Le code `minibus-test` est utilisé pour ce scénario de test (supprimé en fin de collection).",
+      "item": [
+
+        {
+          "name": "[Admin] Créer type minibus-test ✅",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus\",\n  \"description\": \"8-12 passagers • Groupe\",\n  \"capacity\": 12,\n  \"icon\": \"bus-outline\",\n  \"base_price_france\": 55.00,\n  \"base_price_senegal\": 14000,\n  \"is_active\": true,\n  \"sort_order\": 10\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('ok: true + données complètes + vehicle_type_id sauvegardé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.code).to.equal('minibus-test');",
+            "  pm.expect(json.data.label).to.equal('Minibus');",
+            "  pm.expect(json.data.capacity).to.equal(12);",
+            "  pm.expect(json.data.base_price_france).to.equal(55);",
+            "  pm.expect(json.data.base_price_senegal).to.equal(14000);",
+            "  pm.expect(json.data.is_active).to.be.true;",
+            "  pm.expect(json.data.id).to.be.a('string');",
+            "  pm.collectionVariables.set('vehicle_type_id', json.data.id);",
+            "  console.log('✅ vehicle_type_id sauvegardé:', json.data.id);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] Créer type — code déjà existant (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus Doublon\",\n  \"capacity\": 12,\n  \"base_price_france\": 55.00,\n  \"base_price_senegal\": 14000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 409 — code dupliqué', () => pm.response.to.have.status(409));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] Créer type — code invalide (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"Code INVALIDE!\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20,\n  \"base_price_senegal\": 5000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — code invalide (caractères spéciaux)', () => pm.response.to.have.status(400));",
+            "pm.test('erreur sur champ code', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('code');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] Créer type — label manquant (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"limousine\",\n  \"capacity\": 4,\n  \"base_price_france\": 80,\n  \"base_price_senegal\": 20000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — label manquant', () => pm.response.to.have.status(400));",
+            "pm.test('erreur sur champ label', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('label');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] Créer type — capacity hors limites (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"bus\",\n  \"label\": \"Bus\",\n  \"capacity\": 100,\n  \"base_price_france\": 120,\n  \"base_price_senegal\": 30000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — capacity > 50', () => pm.response.to.have.status(400));",
+            "pm.test('erreur sur champ capacity', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('capacity');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Non authentifié] Créer type — token absent (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"test\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20,\n  \"base_price_senegal\": 5000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401 — non authentifié', () => pm.response.to.have.status(401));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "4️⃣ GET /admin/vehicle-types/:id — Détail par ID",
+      "item": [
+
+        {
+          "name": "[Admin] GET /admin/vehicle-types/:id — type créé",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true + code minibus-test', () => {",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.code).to.equal('minibus-test');",
+            "  pm.expect(json.data.id).to.equal(pm.collectionVariables.get('vehicle_type_id'));",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] GET /admin/vehicle-types/:id — ID inexistant (404)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] GET /admin/vehicle-types/:id — ID non UUID (400)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/not-a-valid-uuid",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "not-a-valid-uuid"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "5️⃣ PATCH /admin/vehicle-types/:id — Mettre à jour",
+      "description": "Seuls les champs envoyés sont modifiés. Le code n'est pas modifiable.",
+      "item": [
+
+        {
+          "name": "[Admin] PATCH — modifier label + prix ✅",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Minibus Premium\",\n  \"base_price_france\": 60.00,\n  \"base_price_senegal\": 16000\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true + label et prix mis à jour', () => {",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.label).to.equal('Minibus Premium');",
+            "  pm.expect(json.data.base_price_france).to.equal(60);",
+            "  pm.expect(json.data.base_price_senegal).to.equal(16000);",
+            "  pm.expect(json.data.code).to.equal('minibus-test');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] PATCH — désactiver le type (is_active: false)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('is_active est false', () => {",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.is_active).to.be.false;",
+            "});",
+            "",
+            "pm.test('Vérifier : type inactif absent du endpoint public', async () => {",
+            "  pm.expect(json.data.is_active).to.be.false;",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] PATCH — réactiver le type (is_active: true)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('is_active est true', () => pm.expect(pm.response.json().data.is_active).to.be.true);"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] PATCH — corps vide (400 — au moins un champ requis)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            },
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — body vide interdit', () => pm.response.to.have.status(400));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] PATCH — ID inexistant (404)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "00000000-0000-0000-0000-000000000000"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Introuvable\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "6️⃣ Vérification — type inactif absent du endpoint public",
+      "description": "Confirmer que GET /vehicle-types (public) exclut les types is_active=false.",
+      "item": [
+
+        {
+          "name": "Désactiver minibus-test via PATCH",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": false\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — désactivation OK', () => pm.response.to.have.status(200));"
+          ]}}]
+        },
+
+        {
+          "name": "GET /vehicle-types — minibus-test absent (is_active=false)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const data = pm.response.json().data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('minibus-test absent du endpoint public (is_active=false)', () => {",
+            "  const codes = data.map(t => t.code);",
+            "  pm.expect(codes).to.not.include('minibus-test');",
+            "});",
+            "",
+            "pm.test('Les 3 types actifs du seed toujours présents', () => {",
+            "  const codes = data.map(t => t.code);",
+            "  pm.expect(codes).to.include('standard');",
+            "  pm.expect(codes).to.include('berline');",
+            "  pm.expect(codes).to.include('van');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/vehicle-types — minibus-test visible (admin voit tout)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const data = pm.response.json().data;",
+            "",
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('minibus-test visible côté admin même si inactif', () => {",
+            "  const minibus = data.find(t => t.code === 'minibus-test');",
+            "  pm.expect(minibus).to.exist;",
+            "  pm.expect(minibus.is_active).to.be.false;",
+            "});"
+          ]}}]
+        }
+
+      ]
+    },
+
+    {
+      "name": "7️⃣ DELETE /admin/vehicle-types/:id — Supprimer",
+      "description": "Suppression réelle uniquement si aucune réservation ou véhicule ne référence le code. minibus-test n'a pas de dépendances → suppression OK.",
+      "item": [
+
+        {
+          "name": "[Admin] DELETE /admin/vehicle-types/:id — minibus-test (200 si sans dépendances)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/{{vehicle_type_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "{{vehicle_type_id}}"],
+              "description": "Ne pas utiliser l'ID de standard/berline/van (réservations en cours). Tester avec un autre type si nécessaire."
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const json = pm.response.json();",
+            "",
+            "pm.test('Status 200 (minibus-test sans dépendances) ou 409 (si dépendances)', () => {",
+            "  pm.expect([200, 409]).to.include(pm.response.code);",
+            "});",
+            "",
+            "if (pm.response.code === 200) {",
+            "  pm.test('ok: true — supprimé avec succès', () => pm.expect(json.ok).to.be.true);",
+            "  pm.collectionVariables.set('vehicle_type_id', '');",
+            "  console.log('✅ minibus-test supprimé');",
+            "} else {",
+            "  pm.test('ok: false — dépendances détectées', () => pm.expect(json.ok).to.be.false);",
+            "  console.log('ℹ️ minibus-test a des dépendances — utiliser is_active: false à la place');",
+            "}"
+          ]}}]
+        },
+
+        {
+          "name": "[Admin] DELETE — ID inexistant (404)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[Non authentifié] DELETE — token absent (401)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/vehicle-types/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "vehicle-types", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+
+      ]
+    }
+
+  ]
+}

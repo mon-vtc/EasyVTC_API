@@ -110,6 +110,7 @@ export interface PriceEstimateDto {
   duration_min?: number;  // Requis uniquement si pas de flat_rate_id
   flat_rate_id?: string;  // Si fourni → retourne le forfait, ignore distance/durée
   nb_passengers?: number; // Nombre de passagers (pour calcul surcharge pick-up, défaut 1)
+  vehicle_type?: string;  // Code du type de véhicule — utilisé pour appliquer le base_price propre au véhicule
 }
 
 // ── Résultat public (CDC p.26 : jamais de formule sur les PDFs) ───────────────
@@ -124,6 +125,8 @@ export interface PriceEstimateResult {
 // ── Détail interne (stockage BDD, JAMAIS affiché sur documents) ───────────────
 export interface PriceBreakdown {
   base_price?: number;
+  vehicle_type?: string;
+  vehicle_base_price?: number;
   distance_km?: number;
   duration_min?: number;
   price_per_km?: number;

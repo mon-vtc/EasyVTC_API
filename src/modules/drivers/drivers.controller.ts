@@ -12,6 +12,8 @@ import {
   adminUpdateDriverSchema,
   driverListFiltersSchema,
   driverIdParamSchema,
+  planningQuerySchema,
+  revenuesQuerySchema,
 } from './drivers.validator.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -90,6 +92,60 @@ export async function setOnlineStatus(req: Request, res: Response) {
       message: validation.data.is_online ? 'Vous êtes maintenant en ligne' : 'Vous êtes maintenant hors ligne',
       data: profile,
     });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+/**
+ * GET /drivers/me/planning?period=week&date=2026-04-09
+ * Retourne le planning hebdomadaire ou mensuel du chauffeur connecté
+ */
+export async function getMyPlanning(req: Request, res: Response) {
+  try {
+    const validation = planningQuerySchema.safeParse(req.query);
+    if (!validation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = validation.data;
+    const planning = await driversService.getPlanning(req.user!.id, period, date);
+
+    return res.json({ ok: true, data: planning });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+/**
+ * GET /drivers/me/revenues?period=month&date=2026-04-09
+ * Retourne les revenus du chauffeur connecté pour la période demandée
+ */
+export async function getMyRevenues(req: Request, res: Response) {
+  try {
+    const validation = revenuesQuerySchema.safeParse(req.query);
+    if (!validation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = validation.data;
+    const revenues = await driversService.getRevenues(req.user!.id, period, date);
+
+    return res.json({ ok: true, data: revenues });
   } catch (err: any) {
     return res.status(err.status || 500).json({
       ok: false,

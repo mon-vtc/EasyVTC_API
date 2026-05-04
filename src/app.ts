@@ -17,7 +17,11 @@ import {
   cronDocumentsRoutes
 } from './modules/driver-documents/driver-documents.routes.js';
 import { vehiclesRoutes, adminVehiclesRoutes } from './modules/vehicles/vehicles.routes.js';
+import { vehicleTypesPublicRoutes, vehicleTypesAdminRoutes } from './modules/vehicle-types/vehicle-types.routes.js';
 import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers.routes.js';
+import adminRoutes    from './modules/admin/admin.routes.js';
+import ordersRoutes   from './modules/orders/orders.routes.js';
+import invoicesRoutes from './modules/invoices/invoices.routes.js';
 
 const app = express();
 
@@ -67,17 +71,24 @@ app.get('/health/supabase', async (_req: Request, res: Response) => {
 app.use('/auth',  authRoutes);
 app.use('/users', usersRoutes);
 
+// ── Admin Routes ─────────────────────────────────────────────────────────────
+app.use('/admin', adminRoutes);
+
 // ── Driver Documents Routes ───────────────────────────────────────────────────
 app.use('/drivers/documents', driverDocumentsRoutes);
 app.use('/admin/documents', adminDocumentsRoutes);
 app.use('/cron/documents', cronDocumentsRoutes);
 app.use('/drivers',         driversSelfRoutes);
+app.use('/vehicle-types',       vehicleTypesPublicRoutes);
+app.use('/admin/vehicle-types', vehicleTypesAdminRoutes);
 app.use('/drivers/vehicles', vehiclesRoutes);
 app.use('/admin/drivers',   adminDriversRoutes);
 app.use('/admin/vehicles',  adminVehiclesRoutes);
 app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/orders',        ordersRoutes);
+app.use('/invoices',      invoicesRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

@@ -20,6 +20,31 @@ jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
   notificationsService: { sendToUser: mockSendToUser },
 }));
 
+// Référence nommée pour pouvoir asserter les appels dans les tests
+const mockSetOnTripStatus = jest.fn().mockResolvedValue(undefined as never);
+
+// driversService et ordersService utilisent supabaseAdmin mocké — mock minimal pour éviter
+// les appels réels lors des tests de completeTrip / assignDriver
+jest.unstable_mockModule('../drivers/drivers.service.js', () => ({
+  driversService: {
+    setOnTripStatus: mockSetOnTripStatus,
+    resolveDriverId: jest.fn().mockResolvedValue('driver-uuid-333' as never),
+  },
+}));
+
+jest.unstable_mockModule('../orders/orders.service.js', () => ({
+  ordersService: {
+    createFromReservation: jest.fn().mockResolvedValue({} as never),
+  },
+}));
+
+// invoicesService — mock pour le fire-and-forget dans completeTrip
+jest.unstable_mockModule('../invoices/invoices.service.js', () => ({
+  invoicesService: {
+    createFromTrip: jest.fn().mockResolvedValue({} as never),
+  },
+}));
+
 const { ReservationsService } = await import('./reservations.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -54,6 +79,7 @@ const mockReservation = {
   price_breakdown: {},
   distance_km:     30,
   duration_min:    45,
+  nb_passengers:   1,
   scheduled_at:    '2026-04-15T09:00:00Z',
   driver_arrived_at: null,
   comment:         null,
@@ -67,6 +93,12 @@ const mockAssignedReservation = {
   driver_id:   DRIVER_ID,
   assigned_by: ADMIN_ID,
   status:      'assigned',
+};
+
+const mockDriverArrivedReservation = {
+  ...mockAssignedReservation,
+  status:            'driver_arrived',
+  driver_arrived_at: '2026-04-15T08:55:00Z',
 };
 
 const mockInProgressReservation = {
@@ -146,7 +178,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('createReservation()', () => {
 
-    it('✅ crée une réservation formule et retourne le prix estimé', async () => {
+    it(' crée une réservation formule et retourne le prix estimé', async () => {
       mockComputePrice.mockResolvedValue(mockPriceResult as never);
       mockFrom.mockReturnValueOnce(chain(mockReservation));
 
@@ -166,7 +198,7 @@ describe('ReservationsService', () => {
       expect(mockSendToUser).toHaveBeenCalledTimes(1);
     });
 
-    it('✅ crée une réservation avec flat_rate_id (pricing_type = flat_rate)', async () => {
+    it(' crée une réservation avec flat_rate_id (pricing_type = flat_rate)', async () => {
       mockComputePrice.mockResolvedValue({ ...mockPriceResult, pricing_type: 'flat_rate' } as never);
       const flatRateResa = { ...mockReservation, pricing_type: 'flat_rate', flat_rate_id: 'flat-uuid-999' };
       mockFrom.mockReturnValueOnce(chain(flatRateResa));
@@ -183,7 +215,7 @@ describe('ReservationsService', () => {
       expect(result.pricing_type).toBe('flat_rate');
     });
 
-    it('❌ lève 500 si le moteur de tarification échoue', async () => {
+    it(' lève 500 si le moteur de tarification échoue', async () => {
       mockComputePrice.mockRejectedValue({ status: 404, message: 'Aucune grille tarifaire active' } as never);
 
       await expect(
@@ -199,7 +231,7 @@ describe('ReservationsService', () => {
       ).rejects.toMatchObject({ status: 404 });
     });
 
-    it('❌ lève 500 si l\'insert en BDD échoue', async () => {
+    it(' lève 500 si l\'insert en BDD échoue', async () => {
       mockComputePrice.mockResolvedValue(mockPriceResult as never);
       mockFrom.mockReturnValueOnce(chain(null, { message: 'DB error' }));
 
@@ -222,7 +254,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('listReservations()', () => {
 
-    it('✅ retourne la liste paginée avec total_pages', async () => {
+    it(' retourne la liste paginée avec total_pages', async () => {
       mockFrom.mockReturnValueOnce(chain([mockReservation], null, 42));
 
       const result = await service.listReservations({ page: 2, limit: 10 });
@@ -234,7 +266,7 @@ describe('ReservationsService', () => {
       expect(result.total_pages).toBe(5); // ceil(42/10)
     });
 
-    it('✅ retourne une page vide si aucune réservation', async () => {
+    it(' retourne une page vide si aucune réservation', async () => {
       mockFrom.mockReturnValueOnce(chain([], null, 0));
 
       const result = await service.listReservations({});
@@ -244,7 +276,7 @@ describe('ReservationsService', () => {
       expect(result.total_pages).toBe(0);
     });
 
-    it('❌ lève 500 si la requête BDD échoue', async () => {
+    it(' lève 500 si la requête BDD échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'DB error' }));
 
       await expect(service.listReservations({}))
@@ -257,7 +289,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('listMyReservations()', () => {
 
-    it('✅ délègue à listReservations en injectant client_id', async () => {
+    it(' délègue à listReservations en injectant client_id', async () => {
       mockFrom.mockReturnValueOnce(chain([mockReservation], null, 1));
 
       const result = await service.listMyReservations(CLIENT_ID, {});
@@ -271,7 +303,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getDriverActiveReservation()', () => {
 
-    it('✅ retourne la course active du chauffeur', async () => {
+    it(' retourne la course active du chauffeur (assigned)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockAssignedReservation));
 
       const result = await service.getDriverActiveReservation(DRIVER_ID);
@@ -279,7 +311,15 @@ describe('ReservationsService', () => {
       expect(result?.status).toBe('assigned');
     });
 
-    it('✅ retourne null si aucune course active', async () => {
+    it(' retourne la course active du chauffeur (driver_arrived)', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockDriverArrivedReservation));
+
+      const result = await service.getDriverActiveReservation(DRIVER_ID);
+
+      expect(result?.status).toBe('driver_arrived');
+    });
+
+    it(' retourne null si aucune course active', async () => {
       mockFrom.mockReturnValueOnce(chain(null));
 
       const result = await service.getDriverActiveReservation(DRIVER_ID);
@@ -293,7 +333,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getById()', () => {
 
-    it('✅ un admin peut voir n\'importe quelle réservation', async () => {
+    it(' un admin peut voir n\'importe quelle réservation', async () => {
       mockFrom.mockReturnValueOnce(chain(mockReservation));
 
       const result = await service.getById(RESA_ID, ADMIN_ID, 'admin');
@@ -301,7 +341,7 @@ describe('ReservationsService', () => {
       expect(result.id).toBe(RESA_ID);
     });
 
-    it('✅ un client peut voir sa propre réservation', async () => {
+    it(' un client peut voir sa propre réservation', async () => {
       mockFrom.mockReturnValueOnce(chain(mockReservation));
 
       const result = await service.getById(RESA_ID, CLIENT_ID, 'client');
@@ -309,14 +349,14 @@ describe('ReservationsService', () => {
       expect(result.id).toBe(RESA_ID);
     });
 
-    it('❌ un client ne peut pas voir la réservation d\'un autre (403)', async () => {
+    it(' un client ne peut pas voir la réservation d\'un autre (403)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockReservation));
 
       await expect(service.getById(RESA_ID, 'autre-client-uuid', 'client'))
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('✅ un chauffeur peut voir sa course assignée', async () => {
+    it(' un chauffeur peut voir sa course assignée', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockAssignedReservation))   // getById fetch
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));         // resolveDriverId
@@ -326,7 +366,7 @@ describe('ReservationsService', () => {
       expect(result.driver_id).toBe(DRIVER_ID);
     });
 
-    it('❌ un chauffeur ne peut pas voir une course qui ne lui est pas assignée (403)', async () => {
+    it(' un chauffeur ne peut pas voir une course qui ne lui est pas assignée (403)', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))           // réservation sans driver_id
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));         // resolveDriverId
@@ -335,7 +375,7 @@ describe('ReservationsService', () => {
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ lève 404 si la réservation n\'existe pas', async () => {
+    it(' lève 404 si la réservation n\'existe pas', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'Not found' }));
 
       await expect(service.getById('ghost-id', ADMIN_ID, 'admin'))
@@ -348,11 +388,11 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('assignDriver()', () => {
 
-    it('✅ assigne un chauffeur actif et disponible', async () => {
+    it(' assigne un chauffeur actif et disponible', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))             // _getReservationOrThrow
         .mockReturnValueOnce(chain(mockDriver))                  // driver check
-        .mockReturnValueOnce(chain(null))                        // getDriverActiveReservation (libre)
+        .mockReturnValueOnce(chain(null))                        // _checkSchedulingConflict (aucun conflit)
         .mockReturnValueOnce(chain(mockAssignedReservation));    // update réservation
 
       const result = await service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID);
@@ -360,16 +400,18 @@ describe('ReservationsService', () => {
       expect(result.status).toBe('assigned');
       expect(result.driver_id).toBe(DRIVER_ID);
       expect(mockSendToUser).toHaveBeenCalledTimes(2); // chauffeur + client
+      // setOnTripStatus ne doit PAS être appelé à l'assignation — seulement au démarrage physique
+      expect(mockSetOnTripStatus).not.toHaveBeenCalled();
     });
 
-    it('❌ lève 400 si la réservation n\'est pas en pending', async () => {
+    it(' lève 400 si la réservation n\'est pas en pending', async () => {
       mockFrom.mockReturnValueOnce(chain(mockAssignedReservation)); // déjà assigned
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('assigned') });
     });
 
-    it('❌ lève 404 si le chauffeur n\'existe pas', async () => {
+    it(' lève 404 si le chauffeur n\'existe pas', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))
         .mockReturnValueOnce(chain(null));  // driver introuvable
@@ -378,20 +420,20 @@ describe('ReservationsService', () => {
         .rejects.toMatchObject({ status: 404, message: expect.stringContaining('introuvable') });
     });
 
-    it('❌ lève 400 si le chauffeur n\'est pas actif (pending)', async () => {
+    it(' lève 400 si le chauffeur n\'est pas actif (pending)', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))
         .mockReturnValueOnce(chain({ ...mockDriver, status: 'pending' }));
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
-        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('pending') });
+        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('attente') });
     });
 
-    it('❌ lève 409 si le chauffeur a déjà une course active', async () => {
+    it(' lève 409 si le chauffeur a déjà une course active', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockReservation))
         .mockReturnValueOnce(chain(mockDriver))
-        .mockReturnValueOnce(chain(mockAssignedReservation)); // déjà une course
+        .mockReturnValueOnce(chain([mockAssignedReservation])); // déjà une course
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
         .rejects.toMatchObject({ status: 409 });
@@ -403,11 +445,11 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('markDriverArrived()', () => {
 
-    it('✅ enregistre l\'arrivée et notifie le client', async () => {
+    it(' passe en driver_arrived, enregistre l\'horodatage et notifie le client', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockAssignedReservation))   // _getReservationOrThrow
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))          // _assertDriverOwnsReservation
-        .mockReturnValueOnce(chain(null));                      // update driver_arrived_at
+        .mockReturnValueOnce(chain(null));                      // update status + driver_arrived_at
 
       await expect(service.markDriverArrived(RESA_ID, DRIVER_USER_ID))
         .resolves.not.toThrow();
@@ -421,7 +463,7 @@ describe('ReservationsService', () => {
       );
     });
 
-    it('❌ lève 400 si le statut n\'est pas "assigned"', async () => {
+    it(' lève 400 si le statut n\'est pas "assigned"', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockInProgressReservation)) // en_cours, pas assigned
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));
@@ -430,7 +472,7 @@ describe('ReservationsService', () => {
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('in_progress') });
     });
 
-    it('❌ lève 403 si le chauffeur ne possède pas cette course', async () => {
+    it(' lève 403 si le chauffeur ne possède pas cette course', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockAssignedReservation))
         .mockReturnValueOnce(chain({ id: 'autre-driver-uuid' })); // mauvais driver
@@ -445,7 +487,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('startTrip()', () => {
 
-    it('✅ passe la course en in_progress et crée le trip', async () => {
+    it(' passe la course en in_progress depuis assigned et appelle setOnTripStatus', async () => {
       const inProgressResa = { ...mockAssignedReservation, status: 'in_progress' };
 
       mockFrom
@@ -458,9 +500,26 @@ describe('ReservationsService', () => {
 
       expect(result.status).toBe('in_progress');
       expect(mockSendToUser).toHaveBeenCalledTimes(1);
+      // Le chauffeur passe en on_trip seulement au démarrage physique
+      expect(mockSetOnTripStatus).toHaveBeenCalledWith(DRIVER_ID, true);
     });
 
-    it('❌ lève 400 si le statut n\'est pas "assigned"', async () => {
+    it(' passe la course en in_progress depuis driver_arrived', async () => {
+      const inProgressResa = { ...mockDriverArrivedReservation, status: 'in_progress' };
+
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverArrivedReservation)) // _getReservationOrThrow
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))             // _assertDriverOwnsReservation
+        .mockReturnValueOnce(chain(inProgressResa))                // update status
+        .mockReturnValueOnce(insertChain());                       // insert trips
+
+      const result = await service.startTrip(RESA_ID, DRIVER_USER_ID);
+
+      expect(result.status).toBe('in_progress');
+      expect(mockSetOnTripStatus).toHaveBeenCalledWith(DRIVER_ID, true);
+    });
+
+    it(' lève 400 si le statut n\'est ni "assigned" ni "driver_arrived"', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockInProgressReservation))
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));
@@ -469,7 +528,7 @@ describe('ReservationsService', () => {
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('in_progress') });
     });
 
-    it('❌ lève 403 si le chauffeur ne possède pas cette course', async () => {
+    it(' lève 403 si le chauffeur ne possède pas cette course', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockAssignedReservation))
         .mockReturnValueOnce(chain({ id: 'autre-driver-uuid' }));
@@ -484,7 +543,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('completeTrip()', () => {
 
-    it('✅ termine la course et recalcule le prix avec les métriques réelles', async () => {
+    it(' termine la course et recalcule le prix avec les métriques réelles', async () => {
       const completedResa = { ...mockInProgressReservation, status: 'completed', price_final: 48.00 };
       mockComputePrice.mockResolvedValue({ ...mockPriceResult, final_price: 48.00 } as never);
 
@@ -505,7 +564,7 @@ describe('ReservationsService', () => {
       expect(mockSendToUser).toHaveBeenCalledTimes(1);
     });
 
-    it('✅ conserve le prix estimé si pas de métriques réelles (flat_rate)', async () => {
+    it(' conserve le prix estimé si pas de métriques réelles (flat_rate)', async () => {
       const flatRateInProgress = { ...mockInProgressReservation, pricing_type: 'flat_rate' };
       const completedResa      = { ...flatRateInProgress, status: 'completed', price_final: 45.50 };
 
@@ -521,7 +580,7 @@ describe('ReservationsService', () => {
       expect(mockComputePrice).not.toHaveBeenCalled(); // pas de recalcul sur flat_rate
     });
 
-    it('❌ lève 400 si le statut n\'est pas "in_progress"', async () => {
+    it(' lève 400 si le statut n\'est pas "in_progress"', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockAssignedReservation))    // assigned, pas in_progress
         .mockReturnValueOnce(chain({ id: DRIVER_ID }));
@@ -530,7 +589,7 @@ describe('ReservationsService', () => {
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('assigned') });
     });
 
-    it('❌ lève 403 si le chauffeur ne possède pas cette course', async () => {
+    it(' lève 403 si le chauffeur ne possède pas cette course', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockInProgressReservation))
         .mockReturnValueOnce(chain({ id: 'autre-driver-uuid' }));
@@ -545,7 +604,7 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('cancelReservation()', () => {
 
-    it('✅ un client annule sa propre réservation (pending)', async () => {
+    it(' un client annule sa propre réservation (pending)', async () => {
       const cancelledResa = { ...mockReservation, status: 'cancelled' };
 
       mockFrom
@@ -557,7 +616,7 @@ describe('ReservationsService', () => {
       expect(result.status).toBe('cancelled');
     });
 
-    it('✅ un admin annule une course assignée et notifie le chauffeur', async () => {
+    it(' un admin annule une course assignée — setOnTripStatus NON appelé (driver pas encore en route)', async () => {
       const cancelledResa = { ...mockAssignedReservation, status: 'cancelled' };
 
       mockFrom
@@ -568,32 +627,47 @@ describe('ReservationsService', () => {
       const result = await service.cancelReservation(RESA_ID, ADMIN_ID, 'admin', 'Annulation test');
 
       expect(result.status).toBe('cancelled');
-      // Notif chauffeur + notif client
-      expect(mockSendToUser).toHaveBeenCalledTimes(2);
+      expect(mockSendToUser).toHaveBeenCalledTimes(2); // notif chauffeur + notif client
+      // Le driver était 'assigned' (pas physiquement en route) → son status reste 'active', rien à faire
+      expect(mockSetOnTripStatus).not.toHaveBeenCalled();
     });
 
-    it('❌ un client ne peut pas annuler la réservation d\'un autre (403)', async () => {
+    it(' un admin annule une course in_progress — setOnTripStatus(false) appelé pour remettre le driver actif', async () => {
+      const cancelledResa = { ...mockInProgressReservation, status: 'cancelled' };
+
+      mockFrom
+        .mockReturnValueOnce(chain(mockInProgressReservation))  // _getReservationOrThrow
+        .mockReturnValueOnce(chain(cancelledResa))               // update status
+        .mockReturnValueOnce(chain({ user_id: DRIVER_USER_ID })); // fetch driver.user_id
+
+      const result = await service.cancelReservation(RESA_ID, ADMIN_ID, 'admin', 'Incident en course');
+
+      expect(result.status).toBe('cancelled');
+      expect(mockSetOnTripStatus).toHaveBeenCalledWith(DRIVER_ID, false);
+    });
+
+    it(' un client ne peut pas annuler la réservation d\'un autre (403)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockReservation));
 
       await expect(service.cancelReservation(RESA_ID, 'autre-client', 'client'))
         .rejects.toMatchObject({ status: 403 });
     });
 
-    it('❌ impossible d\'annuler une course terminée (400)', async () => {
+    it(' impossible d\'annuler une course terminée (400)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockCompletedReservation));
 
       await expect(service.cancelReservation(RESA_ID, ADMIN_ID, 'admin'))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('terminée') });
     });
 
-    it('❌ impossible d\'annuler une course déjà annulée (400)', async () => {
+    it(' impossible d\'annuler une course déjà annulée (400)', async () => {
       mockFrom.mockReturnValueOnce(chain({ ...mockReservation, status: 'cancelled' }));
 
       await expect(service.cancelReservation(RESA_ID, ADMIN_ID, 'admin'))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('annulée') });
     });
 
-    it('❌ un client ne peut pas annuler une course en cours (400)', async () => {
+    it(' un client ne peut pas annuler une course en cours (400)', async () => {
       mockFrom.mockReturnValueOnce(chain(mockInProgressReservation));
 
       await expect(service.cancelReservation(RESA_ID, CLIENT_ID, 'client'))

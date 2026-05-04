@@ -5,9 +5,6 @@
 
 import { z } from 'zod';
 
-// ── Types de véhicules autorisés ──────────────────────────────────────────────
-const vehicleTypes = ['standard', 'berline', 'van'] as const;
-
 // ── Création véhicule ─────────────────────────────────────────────────────────
 export const createVehicleSchema = z.object({
   plate_number: z
@@ -32,9 +29,10 @@ export const createVehicleSchema = z.object({
     .string()
     .max(30, 'Couleur trop longue')
     .optional(),
-  type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
-  }),
+  type: z
+    .string()
+    .min(1, 'Le type de véhicule est requis')
+    .max(50, 'Type de véhicule invalide'),
 });
 
 // ── Mise à jour véhicule (tous les champs optionnels) ─────────────────────────
@@ -64,9 +62,11 @@ export const updateVehicleSchema = z.object({
     .string()
     .max(30, 'Couleur trop longue')
     .optional(),
-  type: z.enum(vehicleTypes, {
-    errorMap: () => ({ message: 'Type de véhicule invalide. Valeurs acceptées: standard, berline, van' }),
-  }).optional(),
+  type: z
+    .string()
+    .min(1, 'Le type de véhicule est requis')
+    .max(50, 'Type de véhicule invalide')
+    .optional(),
   is_active: z.boolean().optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
@@ -81,23 +81,21 @@ export const vehicleIdParamSchema = z.object({
 // ── Filtres liste véhicules (admin) ───────────────────────────────────────────
 export const vehicleListFiltersSchema = z.object({
   driver_id: z.string().uuid('ID chauffeur invalide').optional(),
-  type: z.enum(vehicleTypes).optional(),
+  type: z.string().min(1).max(50).optional(),
   is_active: z
     .string()
     .transform((v) => v === 'true')
     .optional(),
   page: z
     .string()
+    .default('1')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1, 'Page doit être >= 1')
-    .optional()
-    .default('1'),
+    .refine((v) => v >= 1, 'Page doit être >= 1'),
   limit: z
     .string()
+    .default('20')
     .transform((v) => parseInt(v, 10))
-    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100')
-    .optional()
-    .default('20'),
+    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
 // ── Types exportés ────────────────────────────────────────────────────────────

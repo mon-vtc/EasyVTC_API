@@ -121,7 +121,57 @@ export async function sendWelcomeEmail(
 }
 
 // =============================================================================
-// 2. Réinitialisation du mot de passe
+// 2. Accès gestionnaire (créé par admin)
+// =============================================================================
+export async function sendManagerAccessEmail(
+  to: string,
+  firstName: string,
+  password: string,
+  loginUrl = 'easyvtc://login'
+): Promise<void> {
+  const html = layout(`
+    <h1 style="margin:0 0 6px;color:${C.bordeaux};font-size:26px;font-weight:bold;">
+      Votre accès gestionnaire EazyVTC</h1>
+    <p style="margin:0 0 24px;color:${C.beige};font-size:13px;font-weight:600;
+              letter-spacing:1px;text-transform:uppercase;">Identifiants de connexion</p>
+    ${hr()}
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 20px;">
+      Bonjour <strong>${firstName}</strong>,<br/>
+      Un compte gestionnaire a été créé pour vous sur la plateforme EazyVTC.
+      Voici vos identifiants de connexion :</p>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:${C.lightGray};border-radius:8px;border-left:4px solid ${C.bordeaux};margin:0 0 24px;">
+      <tr><td style="padding:20px 24px;">
+        <p style="margin:0 0 12px;color:#555;font-size:14px;">
+          <span style="display:inline-block;width:100px;color:${C.gray};">Identifiant :</span>
+          <strong style="color:${C.bordeaux};">${to}</strong></p>
+        <p style="margin:0;color:#555;font-size:14px;">
+          <span style="display:inline-block;width:100px;color:${C.gray};">Mot de passe :</span>
+          <strong style="color:${C.bordeaux};font-family:monospace;font-size:15px;">${password}</strong></p>
+      </td></tr>
+    </table>
+    <table cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:#FFF8F0;border-radius:8px;border-left:4px solid ${C.beige};margin:0 0 24px;">
+      <tr><td style="padding:16px 20px;">
+        <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">
+          <strong style="color:${C.bordeaux};">Important :</strong>
+          Pour des raisons de sécurité, veuillez modifier votre mot de passe dès votre première connexion.</p>
+      </td></tr>
+    </table>
+    ${btn('Se connecter à EazyVTC', loginUrl)}
+    ${hr()}
+    <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
+      Vous n'êtes pas à l'origine de cette demande ? Contactez-nous immédiatement :
+      <a href="mailto:support@easyvtc.com"
+         style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
+        support@easyvtc.com</a></p>
+  `, `${firstName}, voici vos identifiants gestionnaire EazyVTC.`);
+
+  await sendMail(to, 'Votre accès gestionnaire EazyVTC', html);
+}
+
+// =============================================================================
+// 3. Réinitialisation du mot de passe
 // =============================================================================
 export async function sendResetPasswordEmail(
   to: string,

@@ -5,24 +5,19 @@
 
 import { z } from 'zod';
 
-const vehicleTypes = ['standard', 'berline', 'van'] as const;
-const countries    = ['france', 'senegal'] as const;
-const statuses     = ['pending', 'assigned', 'in_progress', 'completed', 'cancelled'] as const;
+const countries = ['france', 'senegal'] as const;
+const statuses  = ['pending', 'assigned', 'driver_arrived', 'in_progress', 'completed', 'cancelled'] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const vehicleTypeEnum = z.enum(vehicleTypes, {
-  error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
-      return 'Type de véhicule invalide. Valeurs : standard, berline, van';
-    }
-    return undefined;
-  },
-});
+const vehicleTypeField = z
+  .string()
+  .min(1, 'Le type de véhicule est requis')
+  .max(50, 'Type de véhicule invalide');
 
 const countryEnum = z.enum(countries, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Pays invalide. Valeurs : france, senegal';
     }
     return undefined;
@@ -40,7 +35,7 @@ export const createReservationSchema = z.object({
   dest_lat:       z.number().min(-90).max(90).optional(),
   dest_lng:       z.number().min(-180).max(180).optional(),
 
-  vehicle_type:   vehicleTypeEnum,
+  vehicle_type:   vehicleTypeField,
   country:        countryEnum,
 
   scheduled_at:   z.string()
@@ -50,6 +45,7 @@ export const createReservationSchema = z.object({
       { message: 'La date de réservation doit être dans le futur' },
     ),
 
+  nb_passengers:  z.number().int().min(1).max(20).default(1).optional(),
   comment:        z.string().max(500).optional(),
 
   // Tarification — l'un ou l'autre obligatoire
@@ -77,7 +73,7 @@ export const completeReservationSchema = z.object({
   actual_distance_km:  z.number().positive().optional(),
   actual_duration_min: z.number().int().positive().optional(),
   driver_notes:        z.string().max(1000).optional(),
-  price_adjusted:      z.number().positive().optional(),
+  price_adjusted:      z.number().positive().max(9999.99, 'Le montant ajusté ne peut pas dépasser 9 999,99').optional(),
 });
 
 // ── Annulation ────────────────────────────────────────────────────────────────
@@ -90,7 +86,8 @@ export const cancelReservationSchema = z.object({
 
 export const reservationListFiltersSchema = z.object({
   status:    z.enum(statuses).optional(),
-  country:   countryEnum.optional(),
+  country:      countryEnum.optional(),
+  vehicle_type: vehicleTypeField.optional(),
   driver_id: z.string().uuid().optional(),
   client_id: z.string().uuid().optional(),
   date_from: z.string().datetime().optional(),

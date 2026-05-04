@@ -30,7 +30,7 @@ export type ChangeUserStatusInput = z.infer<typeof changeUserStatusSchema>;
 
 // ── Filtres de liste des utilisateurs (admin) ────────────────────────────────
 export const userListFiltersSchema = z.object({
-  role: z.enum(['client', 'driver', 'manager', 'admin']).optional(),
+  role: z.enum(['client', 'driver', 'manager']).optional(),
   status: z.enum(['active', 'inactive', 'locked']).optional(),
   search: z.string().max(100).optional(),
   page: z.coerce.number().int().min(1).default(1),

@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import {
   Vehicle,
   VehicleWithDriver,
@@ -93,6 +94,8 @@ export class VehiclesService {
   // CHAUFFEUR : Créer un véhicule
   // ────────────────────────────────────────────────────────────────────────────
   async createVehicle(userId: string, dto: CreateVehicleDto): Promise<Vehicle> {
+    await vehicleTypesService.validateCode(dto.type);
+
     const driverId = await this.getDriverIdFromUserId(userId);
 
     const { data: vehicle, error } = await supabaseAdmin
@@ -235,6 +238,10 @@ export class VehiclesService {
   // CHAUFFEUR : Mettre à jour un véhicule
   // ────────────────────────────────────────────────────────────────────────────
   async updateVehicle(userId: string, vehicleId: string, dto: UpdateVehicleDto): Promise<Vehicle> {
+    if (dto.type) {
+      await vehicleTypesService.validateCode(dto.type);
+    }
+
     const driverId = await this.getDriverIdFromUserId(userId);
 
     // Vérifier l'ownership

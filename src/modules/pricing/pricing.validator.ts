@@ -15,7 +15,7 @@ const currencies = ['EUR', 'XOF'] as const;
  */
 const countryEnum = z.enum(countries, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Pays invalide. Valeurs acceptées : france, senegal';
     }
     return undefined;
@@ -27,7 +27,7 @@ const countryEnum = z.enum(countries, {
  */
 const currencyEnum = z.enum(currencies, {
   error: (issue) => {
-    if (issue.code === 'invalid_enum_value') {
+    if (issue.code === 'invalid_value') {
       return 'Devise invalide. Valeurs acceptées : EUR, XOF';
     }
     return undefined;
@@ -100,6 +100,7 @@ export const priceEstimateSchema = z.object({
   duration_min:  z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:  z.string().uuid('ID de forfait invalide').optional(),
   nb_passengers: z.number().int('Doit être un entier').min(1, 'Minimum 1 passager').optional(),
+  vehicle_type:  z.string().min(1).max(50).optional(),
 }).refine(
   (d) => d.flat_rate_id || (d.distance_km !== undefined && d.duration_min !== undefined),
   { message: 'Fournissez soit un flat_rate_id, soit distance_km ET duration_min' },
