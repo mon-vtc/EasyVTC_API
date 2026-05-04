@@ -99,7 +99,7 @@ const mockInvoice = {
   pdf_url:        `2026/${INVOICE_NUMBER}.pdf`,
   driver_billing: {
     first_name: 'Jean', last_name: 'Dupont',
-    phone: '+33600000001', siret: '12345678900011',
+    phone: '+33600000001', email: 'jean.dupont@email.fr', siret: '12345678900011',
     tva_rate: 10, zone: 'france',
   },
   client_snapshot: { first_name: 'Marie', last_name: 'Martin', phone: '+33600000002', email: 'marie@test.com' },

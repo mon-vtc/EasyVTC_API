@@ -101,8 +101,7 @@ export class OrdersController {
     }
     try {
       const signedUrl = await ordersService.getPdfSignedUrl(parsed.data.id, req.user!.id, req.user!.role);
-      // Redirection directe vers le PDF signé (1 heure)
-      res.redirect(302, signedUrl);
+      res.status(200).json({ ok: true, data: { url: signedUrl } });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

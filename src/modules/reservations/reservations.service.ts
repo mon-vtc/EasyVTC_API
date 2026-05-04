@@ -40,7 +40,7 @@ const TRIP_CONFLICT_FALLBACK_MIN = 180; // 3 heures
 // ── Sélect enrichi (jointures client + chauffeur) ────────────────────────────
 const RESERVATION_SELECT = `
   *,
-  client:users!client_id(id, first_name, last_name, phone, profile_photo_url),
+  client:users!client_id(id, email, first_name, last_name, phone, profile_photo_url),
   driver:drivers!driver_id(
     id,
     is_online,
@@ -69,12 +69,13 @@ export class ReservationsService {
   async createReservation(clientId: string, dto: CreateReservationDto): Promise<ReservationWithRelations> {
     await vehicleTypesService.validateCode(dto.vehicle_type);
 
-    // Calculer le prix estimé
+    // Calculer le prix estimé — vehicle_type transmis pour moduler le base_price
     const { final_price, currency, breakdown } = await pricingService.computePrice({
       country:      dto.country,
       distance_km:  dto.distance_km,
       duration_min: dto.duration_min,
       flat_rate_id: dto.flat_rate_id,
+      vehicle_type: dto.vehicle_type,
     });
 
     const pricing_type = dto.flat_rate_id ? 'flat_rate' : 'formula';

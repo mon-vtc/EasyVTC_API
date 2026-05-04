@@ -87,7 +87,7 @@ export class InvoicesService {
           client:users!client_id(first_name, last_name, phone, email),
           driver:drivers!driver_id(
             id, siret, tva_rate, zone,
-            user:users!user_id(first_name, last_name, phone)
+            user:users!user_id(first_name, last_name, phone, email)
           )
         )
       `)
@@ -111,6 +111,7 @@ export class InvoicesService {
       first_name: driverUser?.first_name ?? '',
       last_name:  driverUser?.last_name  ?? '',
       phone:      driverUser?.phone      ?? null,
+      email:      driverUser?.email      ?? null,
       siret:      driverData?.siret      ?? null,
       tva_rate:   Number(driverData?.tva_rate ?? 0),
       zone:       driverData?.zone ?? 'france',
@@ -188,7 +189,43 @@ export class InvoicesService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 2. RÉCUPÉRER UNE FACTURE PAR ID (avec contrôle d'accès)
+  // 2. RÉCUPÉRER LA FACTURE D'UNE RÉSERVATION
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async getByReservationId(
+    reservationId: string,
+    requesterId:   string,
+    requesterRole: UserRole,
+  ): Promise<InvoiceWithTrip> {
+    // Trouver le trip lié à cette réservation
+    const { data: tripRow } = await supabaseAdmin
+      .from('trips')
+      .select('id')
+      .eq('reservation_id', reservationId)
+      .maybeSingle();
+
+    if (!tripRow) {
+      throw { status: 404, message: 'Aucune facture disponible pour cette réservation (course non clôturée via l\'application)' };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('invoices')
+      .select(INVOICE_WITH_TRIP_SELECT)
+      .eq('trip_id', tripRow.id as string)
+      .maybeSingle();
+
+    if (error || !data) {
+      throw { status: 404, message: 'Facture introuvable pour cette réservation' };
+    }
+
+    const invoice = data as unknown as InvoiceWithTrip;
+    await this._assertAccess(invoice, requesterId, requesterRole);
+
+    return invoice;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. RÉCUPÉRER UNE FACTURE PAR ID (avec contrôle d'accès)
   // ──────────────────────────────────────────────────────────────────────────
 
   async getById(
@@ -219,15 +256,37 @@ export class InvoicesService {
     requesterId:   string,
     requesterRole: UserRole,
   ): Promise<string> {
-    const invoice = await this.getById(invoiceId, requesterId, requesterRole);
+    let invoice = await this.getById(invoiceId, requesterId, requesterRole);
 
     if (!invoice.pdf_url) {
-      throw { status: 404, message: 'Le PDF de cette facture n\'est pas encore disponible' };
+      const pdfBuffer = await this._buildPdf({
+        invoiceNumber:  invoice.invoice_number,
+        driverBilling:  invoice.driver_billing,
+        clientSnapshot: invoice.client_snapshot,
+        tripSnapshot:   invoice.trip_snapshot as TripInvoiceSnapshot,
+        amountHt:       invoice.amount_ht,
+        tvaRate:        invoice.tva_rate,
+        amountTtc:      invoice.amount_ttc,
+        issuedAt:       new Date(invoice.issued_at),
+        adjustments:    invoice.adjustments ?? [],
+      });
+
+      const pdfPath = await this._uploadPdf(pdfBuffer, invoice.invoice_number);
+
+      const { data: updated } = await supabaseAdmin
+        .from('invoices')
+        .update({ pdf_url: pdfPath })
+        .eq('id', invoiceId)
+        .select()
+        .single();
+
+      if (updated) invoice = updated as typeof invoice;
+      invoice.pdf_url = pdfPath;
     }
 
     const { data, error } = await supabaseAdmin.storage
       .from(BUCKET_NAME)
-      .createSignedUrl(invoice.pdf_url, SIGNED_URL_EXPIRY);
+      .createSignedUrl(invoice.pdf_url!, SIGNED_URL_EXPIRY);
 
     if (error || !data?.signedUrl) {
       console.error('[Invoices] Erreur génération URL signée:', error);
@@ -508,159 +567,224 @@ export class InvoicesService {
       doc.on('end',   () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      const W    = doc.page.width - 100;
-      const GRAY = '#555555';
-      const DARK = '#1a1a1a';
-      const BLUE = '#1e3a5f';
+      const PW        = doc.page.width;   // 595
+      const M         = 50;
+      const CW        = PW - M * 2;       // 495
+      const BORDEAUX  = '#3D1515';
+      const DARK      = '#1A1A1A';
+      const GRAY      = '#666666';
+      const LGRAY     = '#F2F2F2';
+      const WHITE     = '#FFFFFF';
+      const DIVIDER   = '#CCCCCC';
+      const currency  = tripSnapshot.country === 'senegal' ? 'XOF' : 'EUR';
 
-      // ── En-tête société ─────────────────────────────────────────────────
-      doc.fontSize(20).fillColor(BLUE).font('Helvetica-Bold').text(COMPANY.name, 50, 50);
-      doc.fontSize(9).fillColor(GRAY).font('Helvetica')
-        .text(COMPANY.address, 50, 75)
-        .text(COMPANY.phone,   50, 87);
+      // ── 1. EN-TÊTE (fond bordeaux) ─────────────────────────────────────
+      doc.rect(0, 0, PW, 118).fill(BORDEAUX);
 
-      // Date et numéro (coin droit)
-      doc.fontSize(9).fillColor(GRAY).font('Helvetica')
-        .text(`Facture n° ${invoiceNumber}`, 50, 50, { align: 'right', width: W })
-        .text(`Émise le ${this._fmtDate(issuedAt)}`, 50, 62, { align: 'right', width: W });
+      doc.fontSize(26).fillColor(WHITE).font('Helvetica-Bold')
+        .text('FACTURE', M, 28, { lineBreak: false });
+      doc.fontSize(10).fillColor('rgba(255,255,255,0.85)').font('Helvetica')
+        .text(`n°  ${invoiceNumber}`, M, 66, { lineBreak: false });
+      doc.fontSize(9).fillColor('rgba(255,255,255,0.70)')
+        .text(`Date :  ${this._fmtDate(issuedAt)}`, M, 82, { lineBreak: false });
 
-      // ── Séparateur ──────────────────────────────────────────────────────
-      doc.moveTo(50, 110).lineTo(545, 110).strokeColor('#cccccc').lineWidth(0.5).stroke();
+      // Cercle logo droit
+      doc.circle(PW - 72, 59, 33).fill(WHITE);
+      doc.fontSize(18).fillColor(BORDEAUX).font('Helvetica-Bold')
+        .text('V', PW - 90, 43, { width: 36, align: 'center', lineBreak: false });
+      doc.fontSize(6).fillColor(BORDEAUX).font('Helvetica')
+        .text('EazyVTC', PW - 97, 66, { width: 50, align: 'center', lineBreak: false });
 
-      // ── Titre ────────────────────────────────────────────────────────────
-      doc.fontSize(16).fillColor(DARK).font('Helvetica-Bold')
-        .text('FACTURE', 50, 125, { align: 'center', width: W });
+      // ── 2. IDENTITÉS (À l'attention de | Chauffeur) ────────────────────
+      let y  = 138;
+      const COL2 = M + CW / 2 + 8;
 
-      // ── Blocs identités (chauffeur | client) ─────────────────────────────
-      let y = 165;
-
-      // Chauffeur (gauche)
-      doc.fontSize(9).fillColor(BLUE).font('Helvetica-Bold').text('PRESTATAIRE', 50, y);
-      y += 14;
-      doc.fontSize(9).fillColor(DARK).font('Helvetica')
-        .text(`${driverBilling.first_name} ${driverBilling.last_name}`, 50, y);
-      y += 12;
-      if (driverBilling.siret) {
-        doc.text(`SIRET : ${driverBilling.siret}`, 50, y);
-        y += 12;
-      }
-      if (driverBilling.tva_rate > 0) {
-        doc.text(`TVA : ${driverBilling.tva_rate}%`, 50, y);
-        y += 12;
-      } else {
-        doc.text('TVA non applicable (art. 293 B CGI)', 50, y);
-        y += 12;
-      }
-      if (driverBilling.phone) {
-        doc.text(`Tél : ${driverBilling.phone}`, 50, y);
-      }
-
-      // Client (droite, même niveau)
-      const yClient = 165;
-      doc.fontSize(9).fillColor(BLUE).font('Helvetica-Bold')
-        .text('CLIENT', 300, yClient);
-      doc.fontSize(9).fillColor(DARK).font('Helvetica')
-        .text(`${clientSnapshot.first_name} ${clientSnapshot.last_name}`, 300, yClient + 14);
+      // Colonne gauche : CLIENT
+      doc.fontSize(8).fillColor(BORDEAUX).font('Helvetica-Bold')
+        .text('À l\'attention de', M, y, { lineBreak: false });
+      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
+        .text(`${clientSnapshot.first_name} ${clientSnapshot.last_name}`, M, y + 15, { lineBreak: false });
+      let yL = y + 32;
       if (clientSnapshot.phone) {
-        doc.text(`Tél : ${clientSnapshot.phone}`, 300, yClient + 26);
+        doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
+          .text(`Téléphone : ${clientSnapshot.phone}`, M, yL, { lineBreak: false });
+        yL += 13;
       }
       if (clientSnapshot.email) {
-        doc.text(clientSnapshot.email, 300, yClient + 38);
+        doc.fontSize(8.5).fillColor(GRAY)
+          .text(`Email : ${clientSnapshot.email}`, M, yL, { lineBreak: false });
+        yL += 13;
       }
 
-      // ── Section prestation ───────────────────────────────────────────────
-      y = Math.max(y, yClient + 62) + 20;
-
-      doc.moveTo(50, y).lineTo(545, y).strokeColor('#eeeeee').lineWidth(0.5).stroke();
-      y += 12;
-
-      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold').text('Détails de la prestation', 50, y);
-      y += 16;
-
-      const row = (label: string, value: string) => {
-        doc.fontSize(9).fillColor(GRAY).font('Helvetica-Bold').text(label, 50, y, { width: 150 });
-        doc.fontSize(9).fillColor(DARK).font('Helvetica').text(value || '—', 205, y, { width: W - 155 });
-        y += 17;
-      };
-
-      row('Date de la course',  this._fmtDateTime(new Date(tripSnapshot.scheduled_at)));
-      row('Type de véhicule',   this._vehicleLabel(tripSnapshot.vehicle_type));
-      row('Lieu de prise en charge', tripSnapshot.pickup_address);
-      row('Destination',        tripSnapshot.dest_address);
-      if (tripSnapshot.actual_distance_km) {
-        row('Distance réelle', `${tripSnapshot.actual_distance_km} km`);
+      // Colonne droite : CHAUFFEUR
+      doc.fontSize(8).fillColor(BORDEAUX).font('Helvetica-Bold')
+        .text('Chauffeur', COL2, y, { lineBreak: false });
+      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
+        .text(`${driverBilling.first_name} ${driverBilling.last_name}`, COL2, y + 15, { lineBreak: false });
+      let yR = y + 32;
+      if (driverBilling.phone) {
+        doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
+          .text(`Téléphone : ${driverBilling.phone}`, COL2, yR, { lineBreak: false });
+        yR += 13;
       }
-      if (tripSnapshot.actual_duration_min) {
-        row('Durée réelle', `${tripSnapshot.actual_duration_min} min`);
+      if (driverBilling.email) {
+        doc.fontSize(8.5).fillColor(GRAY)
+          .text(`Email : ${driverBilling.email}`, COL2, yR, { lineBreak: false });
+        yR += 13;
+      }
+      if (driverBilling.siret) {
+        doc.fontSize(8.5).fillColor(GRAY)
+          .text(`SIRET : ${driverBilling.siret}`, COL2, yR, { lineBreak: false });
+        yR += 13;
       }
 
-      // ── Tableau des montants ─────────────────────────────────────────────
-      y += 10;
-      doc.moveTo(50, y).lineTo(545, y).strokeColor('#cccccc').lineWidth(0.5).stroke();
-      y += 12;
+      y = Math.max(yL, yR) + 18;
 
-      const currency = tripSnapshot.country === 'senegal' ? 'XOF' : 'EUR';
+      // ── 3. SÉPARATEUR + OBJET ──────────────────────────────────────────
+      doc.moveTo(M, y).lineTo(PW - M, y).strokeColor(DIVIDER).lineWidth(0.5).stroke();
+      y += 15;
 
-      const amountRow = (label: string, value: string, bold = false) => {
+      doc.fontSize(10).fillColor(BORDEAUX).font('Helvetica-Bold')
+        .text('Objet : Transport avec chauffeur', M, y, { lineBreak: false });
+      y += 22;
+
+      // ── 4. TRAJET ──────────────────────────────────────────────────────
+      // Prise en charge
+      doc.circle(M + 5, y + 7, 5).fill(BORDEAUX);
+      doc.fontSize(8).fillColor(GRAY).font('Helvetica')
+        .text('Lieu de prise en charge', M + 16, y, { lineBreak: false });
+      y += 13;
+      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
+        .text(tripSnapshot.pickup_address, M + 16, y, { width: CW - 18 });
+      y = doc.y + 8;
+
+      // Destination
+      doc.circle(M + 5, y + 7, 5).fill(GRAY);
+      doc.fontSize(8).fillColor(GRAY).font('Helvetica')
+        .text('Destination', M + 16, y, { lineBreak: false });
+      y += 13;
+      doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
+        .text(tripSnapshot.dest_address, M + 16, y, { width: CW - 18 });
+      y = doc.y + 12;
+
+      // Date + Heure sur la même ligne
+      const tripDt  = new Date(tripSnapshot.scheduled_at);
+      const dateStr = this._fmtDate(tripDt);
+      const timeStr = tripDt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      doc.fontSize(9).fillColor(DARK).font('Helvetica')
+        .text(dateStr, M, y, { lineBreak: false });
+      doc.fontSize(9).fillColor(DARK)
+        .text(`  •  ${timeStr}`, M + 175, y, { lineBreak: false });
+      y += 15;
+
+      // Véhicule + Chauffeur
+      doc.fontSize(9).fillColor(DARK).font('Helvetica')
+        .text(
+          `Votre chauffeur était :  ${this._vehicleLabel(tripSnapshot.vehicle_type)} - ${driverBilling.first_name} ${driverBilling.last_name}`,
+          M, y, { lineBreak: false },
+        );
+      y += 22;
+
+      // ── 5. TABLEAU DES PRESTATIONS ─────────────────────────────────────
+      const DESIG_W  = 285;
+      const QTY_W    = 85;
+      const AMT_W    = CW - DESIG_W - QTY_W;
+      const ROW_H    = 28;
+
+      // En-tête tableau
+      doc.rect(M, y, CW, ROW_H).fill(BORDEAUX);
+      doc.fontSize(9).fillColor(WHITE).font('Helvetica-Bold')
+        .text('Désignation', M + 8, y + 10, { width: DESIG_W - 8, lineBreak: false });
+      doc.fontSize(9).fillColor(WHITE).font('Helvetica-Bold')
+        .text('Quantité', M + DESIG_W, y + 10, { width: QTY_W, align: 'center', lineBreak: false });
+      doc.fontSize(9).fillColor(WHITE).font('Helvetica-Bold')
+        .text('Montant HT', M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
+      y += ROW_H;
+
+      // Ligne transport
+      doc.rect(M, y, CW, ROW_H).fill(WHITE);
+      doc.rect(M, y, CW, ROW_H).stroke(DIVIDER);
+      doc.fontSize(8.5).fillColor(DARK).font('Helvetica')
+        .text('Transport de voyage (Course VTC)', M + 8, y + 10, { width: DESIG_W - 8, lineBreak: false });
+      doc.fontSize(8.5).fillColor(DARK)
+        .text('1', M + DESIG_W, y + 10, { width: QTY_W, align: 'center', lineBreak: false });
+      doc.fontSize(8.5).fillColor(DARK)
+        .text(`${this._fmtAmount(amountHt)} ${currency}`, M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
+      y += ROW_H + 10;
+
+      // ── 6. TOTAUX ──────────────────────────────────────────────────────
+      const totRow = (label: string, value: string, bold = false) => {
         const font = bold ? 'Helvetica-Bold' : 'Helvetica';
-        doc.fontSize(9).fillColor(GRAY).font(font).text(label, 50, y, { width: W - 100 });
-        doc.fontSize(9).fillColor(DARK).font(font).text(value, 50, y, { align: 'right', width: W });
-        y += 17;
+        doc.fontSize(9).fillColor(bold ? DARK : GRAY).font(font)
+          .text(label, M, y, { width: CW / 2, lineBreak: false });
+        doc.fontSize(9).fillColor(DARK).font(font)
+          .text(value, M, y, { align: 'right', width: CW, lineBreak: false });
+        y += 18;
       };
 
-      // CDC : JAMAIS les formules de calcul, uniquement les montants finaux
-      amountRow('Prestation de transport (HT)', `${this._fmtAmount(amountHt)} ${currency}`);
+      // CDC : jamais les formules, uniquement les montants finaux
+      totRow('Total HT', `${this._fmtAmount(amountHt)} ${currency}`, true);
 
       if (tvaRate > 0) {
-        const tvaAmount = Math.round((amountTtc - amountHt) * 100) / 100;
-        amountRow(`TVA ${tvaRate}%`, `${this._fmtAmount(tvaAmount)} ${currency}`);
+        const tvaAmt = Math.round((amountTtc - amountHt) * 100) / 100;
+        totRow(`TVA (${tvaRate} %)`, `${this._fmtAmount(tvaAmt)} ${currency}`);
       }
 
-      y += 2;
-      doc.moveTo(350, y).lineTo(545, y).strokeColor('#cccccc').lineWidth(0.5).stroke();
-      y += 8;
-      amountRow('TOTAL TTC', `${this._fmtAmount(amountTtc)} ${currency}`, true);
+      y += 3;
 
-      // ── Modalité de paiement ─────────────────────────────────────────────
-      y += 12;
-      doc.fontSize(9).fillColor(GRAY).font('Helvetica-Bold').text('Modalité de paiement :', 50, y);
-      y += 13;
-      doc.fontSize(9).fillColor(DARK).font('Helvetica').text(PAYMENT_MENTION, 50, y);
+      // Box Total TTC (fond bordeaux)
+      doc.rect(M, y, CW, 36).fill(BORDEAUX);
+      doc.fontSize(11).fillColor(WHITE).font('Helvetica-Bold')
+        .text('Total TTC', M + 12, y + 12, { width: CW / 2, lineBreak: false });
+      doc.fontSize(13).fillColor(WHITE).font('Helvetica-Bold')
+        .text(`${this._fmtAmount(amountTtc)} ${currency}`, M + 12, y + 11, { align: 'right', width: CW - 12, lineBreak: false });
+      y += 48;
 
-      // ── Traçabilité des ajustements ──────────────────────────────────────
+      // ── 7. SECTION PAIEMENT (fond gris) ───────────────────────────────
+      doc.rect(M, y, CW, 48).fill(LGRAY);
+      doc.fontSize(8.5).fillColor(GRAY).font('Helvetica-Oblique')
+        .text('Réglé hors application', M + 12, y + 10, { lineBreak: false });
+      doc.fontSize(8.5).fillColor(DARK).font('Helvetica')
+        .text('Mode de paiement : Espèces / CB fin de course', M + 12, y + 27, { lineBreak: false });
+      y += 60;
+
+      // ── 8. TRAÇABILITÉ AJUSTEMENTS (si applicable) ────────────────────
       if (adjustments.length > 0) {
-        y += 24;
-        doc.moveTo(50, y).lineTo(545, y).strokeColor('#eeeeee').lineWidth(0.5).stroke();
+        doc.moveTo(M, y).lineTo(PW - M, y).strokeColor(DIVIDER).lineWidth(0.3).stroke();
         y += 12;
-
-        doc.fontSize(9).fillColor(BLUE).font('Helvetica-Bold')
-          .text('Historique des modifications de prix', 50, y);
+        doc.fontSize(9).fillColor(BORDEAUX).font('Helvetica-Bold')
+          .text('Historique des modifications de prix', M, y, { lineBreak: false });
         y += 14;
-
         for (const adj of adjustments) {
           doc.fontSize(8).fillColor(GRAY).font('Helvetica')
             .text(
               `${this._fmtDate(new Date(adj.adjusted_at))} — ${adj.adjusted_by_name} : ` +
               `${this._fmtAmount(adj.old_amount_ttc)} ${currency} → ` +
               `${this._fmtAmount(adj.new_amount_ttc)} ${currency} — Motif : ${adj.reason}`,
-              50, y, { width: W },
+              M, y, { width: CW },
             );
-          y += 13;
+          y = doc.y + 4;
         }
+        y += 8;
       }
 
-      // ── Pied de page ─────────────────────────────────────────────────────
-      const footerY = doc.page.height - 55;
+      // ── 9. PIED DE PAGE LÉGAL ─────────────────────────────────────────
+      const footerY = doc.page.height - 65;
 
-      doc.moveTo(50, footerY - 10).lineTo(545, footerY - 10)
-        .strokeColor('#cccccc').lineWidth(0.5).stroke();
+      doc.moveTo(M, footerY - 8).lineTo(PW - M, footerY - 8)
+        .strokeColor(DIVIDER).lineWidth(0.3).stroke();
 
-      doc.fontSize(8).fillColor(GRAY).font('Helvetica')
-        .text(`Réf. : ${invoiceNumber}`, 50, footerY, { width: W / 2 })
-        .text(`Date d'émission : ${this._fmtDate(issuedAt)}`, 50, footerY, {
-          align: 'right',
-          width: W,
-        });
+      if (driverBilling.siret) {
+        let legalLine = `SIRET : ${driverBilling.siret}`;
+        if (driverBilling.tva_rate === 0) {
+          legalLine += ' — Auto-entrepreneur/Micro-entrepreneur, exonéré d\'immatriculation au RCS et au RM';
+        }
+        doc.fontSize(7).fillColor(GRAY).font('Helvetica')
+          .text(legalLine, M, footerY, { width: CW });
+      } else {
+        doc.fontSize(7).fillColor(GRAY).font('Helvetica')
+          .text(`Réf. : ${invoiceNumber}  —  Date d'émission : ${this._fmtDate(issuedAt)}`, M, footerY, { align: 'center', width: CW });
+      }
 
       doc.end();
     });

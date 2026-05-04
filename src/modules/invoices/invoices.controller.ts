@@ -52,6 +52,26 @@ export async function listInvoices(req: Request, res: Response): Promise<void> {
 }
 
 /**
+ * GET /invoices/by-reservation/:reservationId
+ * Récupère la facture liée à une réservation (accès restreint par rôle)
+ */
+export async function getInvoiceByReservation(req: Request, res: Response): Promise<void> {
+  const reservationId = req.params['reservationId'] as string;
+  if (!reservationId) {
+    res.status(400).json({ ok: false, message: 'ID de réservation manquant' });
+    return;
+  }
+
+  try {
+    const invoice = await invoicesService.getByReservationId(reservationId, req.user!.id, req.user!.role);
+    res.status(200).json({ ok: true, data: invoice });
+  } catch (err: unknown) {
+    const e = err as { status?: number; message?: string };
+    res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+  }
+}
+
+/**
  * GET /invoices/:id
  * Détail d'une facture (accès restreint par rôle)
  */

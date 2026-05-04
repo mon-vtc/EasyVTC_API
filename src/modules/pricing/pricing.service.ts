@@ -341,9 +341,33 @@ export class PricingService {
 
     const grid = await this.getActiveGrid(dto.country);
 
+    // Récupère le base_price propre au type de véhicule si fourni.
+    // Remplace grid.base_price dans la formule (le VTC à la demande facture
+    // un montant de prise en charge différent selon le standing du véhicule).
+    let vehicle_base_price = grid.base_price;
+    let vehicle_type_code: string | undefined;
+
+    if (dto.vehicle_type) {
+      const { data: vt } = await supabaseAdmin
+        .from('vehicle_types')
+        .select('base_price_france, base_price_senegal')
+        .eq('code', dto.vehicle_type)
+        .eq('is_active', true)
+        .single();
+
+      if (vt) {
+        const raw    = dto.country === 'senegal' ? vt.base_price_senegal : vt.base_price_france;
+        const parsed = Number(raw);
+        if (!isNaN(parsed) && parsed > 0) {
+          vehicle_base_price = parsed;
+          vehicle_type_code  = dto.vehicle_type;
+        }
+      }
+    }
+
     const km_cost  = roundPrice(grid.price_per_km  * distance_km,  grid.currency);
     const min_cost = roundPrice(grid.price_per_min * duration_min, grid.currency);
-    const subtotal = roundPrice(grid.base_price + km_cost + min_cost, grid.currency);
+    const subtotal = roundPrice(vehicle_base_price + km_cost + min_cost, grid.currency);
 
     const minimum_applied = subtotal < grid.minimum_price;
     const final_price = minimum_applied
@@ -351,11 +375,15 @@ export class PricingService {
       : subtotal;
 
     const breakdown: PriceBreakdown = {
-      base_price:       grid.base_price,
+      base_price:          grid.base_price,
+      ...(vehicle_type_code && {
+        vehicle_type:       vehicle_type_code,
+        vehicle_base_price: vehicle_base_price,
+      }),
       distance_km,
       duration_min,
-      price_per_km:     grid.price_per_km,
-      price_per_min:    grid.price_per_min,
+      price_per_km:        grid.price_per_km,
+      price_per_min:       grid.price_per_min,
       km_cost,
       min_cost,
       subtotal,

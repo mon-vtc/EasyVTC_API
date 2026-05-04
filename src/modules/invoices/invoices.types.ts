@@ -17,6 +17,7 @@ export interface DriverBillingSnapshot {
   first_name: string;
   last_name: string;
   phone: string | null;
+  email: string | null;
   siret: string | null;
   /** Taux de TVA en % (ex: 10 pour 10%) — 0 si non assujetti */
   tva_rate: number;

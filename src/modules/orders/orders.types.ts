@@ -38,6 +38,7 @@ export interface TripSnapshot {
   vehicle_type: VehicleType;
   country: PricingCountry;
   scheduled_at: string;             // ISO 8601
+  nb_passengers: number;
   comment: string | null;
   via: string;                      // Canal/source, ex: "EazyVTC"
   pricing_type: PricingType;

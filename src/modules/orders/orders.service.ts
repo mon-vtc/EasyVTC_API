@@ -124,6 +124,7 @@ export class OrdersService {
       vehicle_type:   (reservation as any).vehicle_type,
       country:        (reservation as any).country,
       scheduled_at:   (reservation as any).scheduled_at,
+      nb_passengers:  (reservation as any).nb_passengers ?? 1,
       comment:        (reservation as any).comment ?? null,
       via:            COMPANY.via,
       pricing_type:   (reservation as any).pricing_type ?? 'formula',
@@ -224,15 +225,33 @@ export class OrdersService {
     requesterId:   string,
     requesterRole: UserRole,
   ): Promise<string> {
-    const order = await this.getById(orderId, requesterId, requesterRole);
+    let order = await this.getById(orderId, requesterId, requesterRole);
 
+    // Génération à la demande si le PDF n'existe pas encore
     if (!order.pdf_url) {
-      throw { status: 404, message: 'Le PDF de ce bon de commande n\'est pas encore disponible' };
+      const pdfBuffer = await this._buildPdf({
+        orderNumber:       order.order_number,
+        driverSnapshot:    order.driver_snapshot,
+        passengerSnapshot: order.passenger_snapshot,
+        tripSnapshot:      order.trip_snapshot,
+        issuedAt:          new Date(order.issued_at),
+      });
+      const pdfPath = await this._uploadPdf(pdfBuffer, order.order_number);
+
+      const { data: updated } = await supabaseAdmin
+        .from('orders')
+        .update({ pdf_url: pdfPath })
+        .eq('id', orderId)
+        .select()
+        .single();
+
+      if (updated) order = updated as typeof order;
+      order.pdf_url = pdfPath;
     }
 
     const { data, error } = await supabaseAdmin.storage
       .from(BUCKET_NAME)
-      .createSignedUrl(order.pdf_url, SIGNED_URL_EXPIRY);
+      .createSignedUrl(order.pdf_url!, SIGNED_URL_EXPIRY);
 
     if (error || !data?.signedUrl) {
       console.error('[Orders] Erreur génération URL signée:', error);

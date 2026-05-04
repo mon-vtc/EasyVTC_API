@@ -130,7 +130,11 @@ export class UsersService {
 
     // Filtres optionnels
     if (filters.role) {
+      // Filtre de rôle explicite — les admins ne sont jamais dans l'enum donc implicitement exclus
       query = query.eq('role', filters.role);
+    } else {
+      // Pas de filtre : tous les utilisateurs sauf les admins
+      query = query.neq('role', 'admin');
     }
     if (filters.status) {
       query = query.eq('status', filters.status);
@@ -168,6 +172,7 @@ export class UsersService {
       .from('users')
       .select(USER_PROFILE_COLUMNS)
       .eq('id', userId)
+      .neq('role', 'admin')
       .single();
 
     if (error || !data) {

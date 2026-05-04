@@ -151,7 +151,8 @@ export class DriversService {
 
     let query = supabaseAdmin
       .from('drivers')
-      .select(DRIVER_WITH_USER_SELECT, { count: 'exact' });
+      .select(DRIVER_WITH_USER_SELECT, { count: 'exact' })
+      .eq('users.role', 'driver');
 
     if (filters.status) {
       query = query.eq('status', filters.status);
@@ -168,7 +169,8 @@ export class DriversService {
     if (filters.search) {
       const term = `%${filters.search}%`;
       query = query.or(
-        `user.email.ilike.${term},user.first_name.ilike.${term},user.last_name.ilike.${term}`
+        `email.ilike.${term},first_name.ilike.${term},last_name.ilike.${term}`,
+        { foreignTable: 'users' }
       );
     }
 

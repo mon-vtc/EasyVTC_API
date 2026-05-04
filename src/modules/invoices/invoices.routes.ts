@@ -19,9 +19,11 @@ const router = Router();
 router.use(authMiddleware);
 
 // Lecture — accessibles à tous les rôles (accès filtré par service)
-router.get('/',          (req, res) => controller.listInvoices(req, res));
-router.get('/:id',       (req, res) => controller.getInvoice(req, res));
-router.get('/:id/pdf',   (req, res) => controller.getInvoicePdf(req, res));
+router.get('/',                                    (req, res) => controller.listInvoices(req, res));
+// Par réservation — avant /:id pour éviter le conflit de paramètre
+router.get('/by-reservation/:reservationId',       (req, res) => controller.getInvoiceByReservation(req, res));
+router.get('/:id/pdf',                             (req, res) => controller.getInvoicePdf(req, res));
+router.get('/:id',                                 (req, res) => controller.getInvoice(req, res));
 
 // Écriture — admin uniquement
 router.put('/:id/price', requireAdmin, (req, res) => controller.adjustInvoicePrice(req, res));

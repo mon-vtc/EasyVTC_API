@@ -16,6 +16,8 @@ export interface UserProfile {
   status_changed_by: string | null;
   status_changed_at: string | null;
   status_reason: string | null;
+  coverage_zone: string | null;
+  priority_level: number | null;
   rgpd_consent: boolean;
   rgpd_consent_at: string | null;
   deleted_at: string | null;
