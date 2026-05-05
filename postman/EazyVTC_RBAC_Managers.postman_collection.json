@@ -1,0 +1,1537 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-rbac-managers-collection",
+    "name": "EazyVTC — RBAC & Permissions Gestionnaire",
+    "description": "# EazyVTC — RBAC & Permissions Gestionnaire\n\n## Setup\n1. Importer cette collection et l'environnement `EazyVTC_Local`\n2. Renseigner `admin_email` / `admin_password` dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Exécuter **🔐 Authentification › Login Admin** en premier\n5. Suivre les dossiers dans l'ordre numéroté\n\n## Variables gérées automatiquement\n- `admin_token` — après Login Admin\n- `manager_id` — après POST /admin/managers\n- `manager_token` — après Login Manager\n\n## Permissions disponibles\n```\nview_users        → GET /admin/users, GET /users\nview_drivers      → GET /admin/drivers\nview_clients      → GET /admin/clients\nview_pricing      → GET /pricing/grids\nview_documents    → GET /admin/documents\nview_reservations → GET /admin/reservations (S5)\nassign_reservation→ PUT /admin/reservations/:id/assign (S5)\ncancel_reservation→ PUT /admin/reservations/:id/cancel (S5)\nmanage_pricing    → POST/PATCH/DELETE pricing (S5)\nview_orders       → GET /orders (S4)\nview_invoices     → GET /invoices (S4)\n```\n\n## Règle fondamentale\n- Les **admins** passent toujours (bypass `requirePermission`)\n- Les **managers** doivent avoir la permission explicitement accordée\n- Les managers n'ont **jamais** accès aux routes d'écriture (create/update/delete)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",      "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",   "value": "", "type": "string" },
+    { "key": "manager_token", "value": "", "type": "string" },
+    { "key": "manager_id",    "value": "", "type": "string", "description": "Sauvegardé après POST /admin/managers" },
+    { "key": "manager_email", "value": "rbac.manager@eazyvtc.fr", "type": "string" },
+    { "key": "manager_pass",  "value": "Manager123!", "type": "string", "description": "Mot de passe connu passé à la création pour pouvoir se connecter ensuite" },
+    { "key": "target_user_id",   "value": "", "type": "string", "description": "Premier utilisateur non-admin récupéré lors du listing" },
+    { "key": "target_driver_id", "value": "", "type": "string", "description": "UUID de public.drivers — à renseigner manuellement si la liste est vide" },
+    { "key": "target_doc_id",    "value": "", "type": "string", "description": "UUID d'un document — sauvegardé après GET /admin/documents" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Authentification",
+      "description": "Étape 1 obligatoire. Obtenir admin_token, puis créer le gestionnaire de test et obtenir manager_token.",
+      "item": [
+        {
+          "name": "Login Admin → admin_token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Token admin sauvegardé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.user.role).to.equal('admin');",
+            "  pm.collectionVariables.set('admin_token', json.data.access_token);",
+            "  console.log('✅ admin_token sauvegardé');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Manager → manager_token (après création)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Token manager sauvegardé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.user.role).to.equal('manager');",
+            "  pm.collectionVariables.set('manager_token', json.data.access_token);",
+            "  console.log('✅ manager_token sauvegardé');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{manager_email}}\",\n  \"password\": \"{{manager_pass}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "1️⃣ Gestion des gestionnaires (CRUD)",
+      "description": "CRUD complet sur /admin/managers. Toutes ces routes sont réservées à l'admin.",
+      "item": [
+
+        {
+          "name": "POST /admin/managers — Créer le gestionnaire de test ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Gestionnaire créé + manager_id sauvegardé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.role).to.equal('manager');",
+            "  pm.expect(json.data.email).to.equal(pm.collectionVariables.get('manager_email'));",
+            "  pm.collectionVariables.set('manager_id', json.data.id);",
+            "  console.log('✅ manager_id sauvegardé:', json.data.id);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\",\n  \"email\": \"{{manager_email}}\",\n  \"password\": \"{{manager_pass}}\",\n  \"phone\": \"+33612345678\",\n  \"coverage_zone\": \"Île-de-France\",\n  \"priority_level\": 2\n}"
+            }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Email déjà utilisé (409) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 409', () => pm.response.to.have.status(409));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Doublon\",\n  \"email\": \"{{manager_email}}\"\n}"
+            }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Validation Zod : email manquant (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ email', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('email');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\"\n}" }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Validation Zod : prénom trop court (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ first_name', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('first_name');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"A\",\n  \"last_name\": \"Martin\",\n  \"email\": \"test@eazyvtc.fr\"\n}" }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Validation Zod : téléphone format invalide (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ phone', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('phone');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Phone\",\n  \"email\": \"phone.test@eazyvtc.fr\",\n  \"phone\": \"0612345678\"\n}" }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Validation Zod : priority_level hors plage (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ priority_level', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('priority_level');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Priority\",\n  \"email\": \"priority.test@eazyvtc.fr\",\n  \"priority_level\": 5\n}" }
+          }
+        },
+
+        {
+          "name": "POST /admin/managers — Token absent (401) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Anon\",\n  \"email\": \"anon@test.com\"\n}" }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers — Liste paginée ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Liste paginée des managers', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.managers).to.be.an('array');",
+            "  pm.expect(json.data).to.have.all.keys('managers','total','page','limit','total_pages');",
+            "  pm.expect(json.data.page).to.equal(1);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers?status=active&limit=5 — Filtres ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Filtres appliqués', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.limit).to.equal(5);",
+            "  json.data.managers.forEach(m => pm.expect(m.status).to.equal('active'));",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers?status=active&limit=5",
+              "host": ["{{base_url}}"], "path": ["admin","managers"],
+              "query": [
+                { "key": "status", "value": "active" },
+                { "key": "limit",  "value": "5" }
+              ]
+            }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers?search=sophie — Recherche ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers?search=sophie",
+              "host": ["{{base_url}}"], "path": ["admin","managers"],
+              "query": [{ "key": "search", "value": "sophie" }]
+            }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers/:id — Détail ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Gestionnaire retourné', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.id).to.equal(pm.collectionVariables.get('manager_id'));",
+            "  pm.expect(json.data.role).to.equal('manager');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers/:id — ID inexistant (404) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin","managers","00000000-0000-0000-0000-000000000000"]
+            }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id — Mettre à jour infos ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Données mises à jour', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.coverage_zone).to.equal('Paris intramuros');",
+            "  pm.expect(json.data.priority_level).to.equal(1);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"coverage_zone\": \"Paris intramuros\",\n  \"priority_level\": 1\n}"
+            }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id — Validation Zod : prénom trop court (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur first_name', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('first_name');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"X\"\n}" }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id/status — Suspendre ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Statut inactive', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.status).to.equal('inactive');",
+            "  pm.expect(json.data.status_reason).to.be.a('string').and.not.empty;",
+            "  pm.expect(json.data.status_changed_at).to.not.be.null;",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"inactive\",\n  \"reason\": \"Vérification du profil en cours.\"\n}" }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id/status — Réactiver ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Statut active', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.status).to.equal('active');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\",\n  \"reason\": \"Vérification terminée.\"\n}" }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id/status — Statut invalide (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ status', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('status');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"banned\",\n  \"reason\": \"Test.\"\n}" }
+          }
+        },
+
+        {
+          "name": "PATCH /admin/managers/:id/status — Motif trop court (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ reason', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('reason');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"locked\",\n  \"reason\": \"OK\"\n}" }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "2️⃣ Permissions RBAC",
+      "description": "GET et PUT /admin/managers/:id/permissions\nLe PUT remplace toujours l'intégralité des permissions (pas d'ajout partiel).\n\nPermissions disponibles :\n• view_users • view_drivers • view_clients • view_pricing\n• view_documents • view_reservations • view_orders • view_invoices\n• assign_reservation • cancel_reservation • manage_pricing",
+      "item": [
+
+        {
+          "name": "GET /admin/managers/:id/permissions — Aucune permission (tableau vide) ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure correcte', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.manager_id).to.equal(pm.collectionVariables.get('manager_id'));",
+            "  pm.expect(json.data.permissions).to.be.an('array');",
+            "  console.log('Permissions actuelles:', json.data.permissions);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Accorder : view_users + view_drivers ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Permissions mises à jour', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.message).to.equal('Permissions mises à jour');",
+            "  pm.expect(json.data.permissions).to.include.members(['view_users','view_drivers']);",
+            "  pm.expect(json.data.permissions).to.have.lengthOf(2);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\"view_users\", \"view_drivers\"]\n}"
+            }
+          }
+        },
+
+        {
+          "name": "GET /admin/managers/:id/permissions — Vérifier view_users + view_drivers ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('2 permissions présentes', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.permissions).to.have.lengthOf(2);",
+            "  pm.expect(json.data.permissions).to.include.members(['view_users','view_drivers']);",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Remplacer par toutes les permissions lecture ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Toutes les permissions lecture accordées', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  const expected = ['view_users','view_drivers','view_clients','view_pricing','view_documents'];",
+            "  expected.forEach(p => pm.expect(json.data.permissions).to.include(p));",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"view_users\",\n    \"view_drivers\",\n    \"view_clients\",\n    \"view_pricing\",\n    \"view_documents\",\n    \"view_reservations\",\n    \"view_orders\",\n    \"view_invoices\"\n  ]\n}"
+            }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Révoquer toutes (tableau vide) ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tableau de permissions vide', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.permissions).to.be.an('array').that.is.empty;",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Permission inconnue (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur champ permissions', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.errors).to.have.property('permissions');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"delete_everything\"]\n}" }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Body malformé (400) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400', () => pm.response.to.have.status(400));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": \"view_users\"\n}" }
+          }
+        },
+
+        {
+          "name": "PUT /admin/managers/:id/permissions — Gestionnaire inexistant (404) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/00000000-0000-0000-0000-000000000000/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","00000000-0000-0000-0000-000000000000","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_users\"]\n}" }
+          }
+        },
+
+        {
+          "name": "GET/PUT permissions — Token absent (401) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "3️⃣ Accès Manager — view_users",
+      "description": "Accorder view_users au gestionnaire, puis tester les endpoints GET /admin/users et GET /users/:id.\nPRÉREQUIS : manager_token valide (Login Manager exécuté).",
+      "item": [
+
+        {
+          "name": "[SETUP] Accorder view_users au gestionnaire",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — permission accordée', () => pm.response.to.have.status(200));",
+            "pm.test('view_users présent', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.data.permissions).to.include('view_users');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_users\"]\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_users] GET /admin/users — Liste ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut lister les utilisateurs', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.users).to.be.an('array');",
+            "  if (json.data.users.length > 0) {",
+            "    pm.collectionVariables.set('target_user_id', json.data.users[0].id);",
+            "    console.log('✅ target_user_id sauvegardé:', json.data.users[0].id);",
+            "  }",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin","users"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_users] GET /admin/users/:id — Détail ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut voir le détail', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data).to.have.property('id');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{target_user_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","users","{{target_user_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[SETUP] Révoquer view_users",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — permissions révoquées', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager sans permission] GET /admin/users — Refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('Permission insuffisante', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.required_permission).to.equal('view_users');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin","users"] }
+          }
+        },
+
+        {
+          "name": "[Manager] PUT /admin/users/:id/status — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — écriture refusée', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/users/{{target_user_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","users","{{target_user_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"inactive\",\n  \"reason\": \"Tentative manager.\"\n}" }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "4️⃣ Accès Manager — view_drivers",
+      "description": "Tester l'accès aux chauffeurs avec permission view_drivers.\nLes PATCH (mise à jour, statut) restent réservés à l'admin.",
+      "item": [
+
+        {
+          "name": "[SETUP] Accorder view_drivers",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_drivers\"]\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_drivers] GET /admin/drivers — Liste ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut lister les chauffeurs', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data).to.have.property('drivers');",
+            "  pm.expect(json.data.drivers).to.be.an('array');",
+            "  if (json.data.drivers.length > 0) {",
+            "    pm.collectionVariables.set('target_driver_id', json.data.drivers[0].id);",
+            "    console.log('✅ target_driver_id sauvegardé:', json.data.drivers[0].id);",
+            "  }",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/drivers", "host": ["{{base_url}}"], "path": ["admin","drivers"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_drivers] GET /admin/drivers/:id — Détail ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut voir le profil chauffeur', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{target_driver_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","drivers","{{target_driver_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[Manager + view_drivers] PATCH /admin/drivers/:id — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — écriture réservée admin', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{target_driver_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","drivers","{{target_driver_id}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"tva_rate\": 20\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_drivers] PATCH /admin/drivers/:id/status — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{target_driver_id}}/status",
+              "host": ["{{base_url}}"], "path": ["admin","drivers","{{target_driver_id}}","status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"validated\",\n  \"reason\": \"Test.\"\n}" }
+          }
+        },
+
+        {
+          "name": "[SETUP] Révoquer view_drivers",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager sans permission] GET /admin/drivers — Refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('required_permission: view_drivers', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.required_permission).to.equal('view_drivers');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/drivers", "host": ["{{base_url}}"], "path": ["admin","drivers"] }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "5️⃣ Accès Manager — view_pricing",
+      "description": "Tester l'accès aux grilles tarifaires avec permission view_pricing.\nLes routes d'écriture (POST/PATCH/DELETE) restent réservées à l'admin.\nNote : GET /pricing/grids/active/:country et GET /pricing/flat-rates sont publics — pas besoin de permission.",
+      "item": [
+
+        {
+          "name": "[SETUP] Accorder view_pricing",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_pricing\"]\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_pricing] GET /pricing/grids — Toutes les grilles ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut voir toutes les grilles', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data).to.have.property('grids');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/pricing/grids", "host": ["{{base_url}}"], "path": ["pricing","grids"] }
+          }
+        },
+
+        {
+          "name": "[Public] GET /pricing/grids/active/france — Sans auth ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — route publique', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/pricing/grids/active/france", "host": ["{{base_url}}"], "path": ["pricing","grids","active","france"] }
+          }
+        },
+
+        {
+          "name": "[Public] GET /pricing/flat-rates — Sans auth ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — route publique', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/pricing/flat-rates", "host": ["{{base_url}}"], "path": ["pricing","flat-rates"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_pricing] POST /pricing/grids — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — écriture réservée admin', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/pricing/grids", "host": ["{{base_url}}"], "path": ["pricing","grids"] },
+            "body": { "mode": "raw", "raw": "{\n  \"country\": \"france\",\n  \"base_price\": 5,\n  \"price_per_km\": 1.5,\n  \"price_per_min\": 0.3\n}" }
+          }
+        },
+
+        {
+          "name": "[SETUP] Révoquer view_pricing",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager sans permission] GET /pricing/grids — Refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('required_permission: view_pricing', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.required_permission).to.equal('view_pricing');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/pricing/grids", "host": ["{{base_url}}"], "path": ["pricing","grids"] }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "6️⃣ Accès Manager — view_documents",
+      "description": "Tester l'accès aux documents chauffeurs avec permission view_documents.\nLes PATCH validate/reject restent réservés à l'admin.",
+      "item": [
+
+        {
+          "name": "[SETUP] Accorder view_documents",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_documents\"]\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_documents] GET /admin/documents — Liste ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut lister les documents', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data).to.have.property('documents');",
+            "  pm.expect(json.data.documents).to.be.an('array');",
+            "  if (json.data.documents.length > 0) {",
+            "    pm.collectionVariables.set('target_doc_id', json.data.documents[0].id);",
+            "    console.log('✅ target_doc_id sauvegardé:', json.data.documents[0].id);",
+            "  }",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents", "host": ["{{base_url}}"], "path": ["admin","documents"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_documents] GET /admin/documents/stats — Statistiques ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut voir les stats documents', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents/stats", "host": ["{{base_url}}"], "path": ["admin","documents","stats"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_documents] GET /admin/documents/:id — Détail ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut voir un document', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{target_doc_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{target_doc_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[Manager + view_documents] PATCH /admin/documents/:id/validate — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — validation réservée admin', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{target_doc_id}}/validate",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{target_doc_id}}","validate"]
+            },
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_documents] PATCH /admin/documents/:id/reject — Écriture refusée (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — rejet réservé admin', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{manager_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{target_doc_id}}/reject",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{target_doc_id}}","reject"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Tentative manager.\"\n}" }
+          }
+        },
+
+        {
+          "name": "[SETUP] Révoquer view_documents",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager sans permission] GET /admin/documents — Refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('required_permission: view_documents', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.required_permission).to.equal('view_documents');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents", "host": ["{{base_url}}"], "path": ["admin","documents"] }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "7️⃣ Accès Manager — view_clients",
+      "description": "Tester l'accès aux clients avec permission view_clients.\nDonne accès à /admin/clients (avec stats), /admin/clients/:id et /admin/clients/:id/trips.",
+      "item": [
+
+        {
+          "name": "[SETUP] Accorder view_clients",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": [\"view_clients\"]\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager + view_clients] GET /admin/clients — Liste avec stats globales ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Manager peut lister les clients', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.clients).to.be.an('array');",
+            "  pm.expect(json.data.global_stats).to.have.all.keys('active_count','total_trips','total_revenue');",
+            "  if (json.data.clients.length > 0) {",
+            "    pm.collectionVariables.set('target_user_id', json.data.clients[0].id);",
+            "    console.log('✅ target_user_id (client) sauvegardé:', json.data.clients[0].id);",
+            "  }",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/clients", "host": ["{{base_url}}"], "path": ["admin","clients"] }
+          }
+        },
+
+        {
+          "name": "[Manager + view_clients] GET /admin/clients?search=jean — Recherche ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/clients?search=jean",
+              "host": ["{{base_url}}"], "path": ["admin","clients"],
+              "query": [{ "key": "search", "value": "jean" }]
+            }
+          }
+        },
+
+        {
+          "name": "[Manager + view_clients] GET /admin/clients/:id — Détail avec stats ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Stats client présentes', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data).to.have.all.keys('total_trips','total_spent','last_trip_date','cancellation_rate','avg_rating');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/clients/{{target_user_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","clients","{{target_user_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[Manager + view_clients] GET /admin/clients/:id/trips — Historique ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Historique paginé', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.data.trips).to.be.an('array');",
+            "  pm.expect(json.data).to.have.all.keys('trips','total','page','limit','total_pages');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/clients/{{target_user_id}}/trips?page=1&limit=10",
+              "host": ["{{base_url}}"], "path": ["admin","clients","{{target_user_id}}","trips"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+
+        {
+          "name": "[SETUP] Révoquer view_clients",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}/permissions",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}","permissions"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"permissions\": []\n}" }
+          }
+        },
+
+        {
+          "name": "[Manager sans permission] GET /admin/clients — Refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));",
+            "pm.test('required_permission: view_clients', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.false;",
+            "  pm.expect(json.required_permission).to.equal('view_clients');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/clients", "host": ["{{base_url}}"], "path": ["admin","clients"] }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "8️⃣ Admin bypass — permissions ignorées pour admin",
+      "description": "Vérifier que l'admin accède à tout sans avoir besoin de permissions explicites (bypass total de requirePermission).",
+      "item": [
+
+        {
+          "name": "[Admin] GET /admin/users — bypass total ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin bypass', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/users", "host": ["{{base_url}}"], "path": ["admin","users"] }
+          }
+        },
+
+        {
+          "name": "[Admin] GET /admin/drivers — bypass total ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin bypass', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/drivers", "host": ["{{base_url}}"], "path": ["admin","drivers"] }
+          }
+        },
+
+        {
+          "name": "[Admin] GET /pricing/grids — bypass total ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin bypass', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/pricing/grids", "host": ["{{base_url}}"], "path": ["pricing","grids"] }
+          }
+        },
+
+        {
+          "name": "[Admin] GET /admin/documents — bypass total ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin bypass', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents", "host": ["{{base_url}}"], "path": ["admin","documents"] }
+          }
+        },
+
+        {
+          "name": "[Admin] GET /admin/clients — bypass total ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin bypass', () => pm.response.to.have.status(200));",
+            "pm.test('ok: true', () => pm.expect(pm.response.json().ok).to.be.true);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/clients", "host": ["{{base_url}}"], "path": ["admin","clients"] }
+          }
+        }
+
+      ]
+    },
+
+    {
+      "name": "9️⃣ Suppression du gestionnaire",
+      "description": "DELETE /admin/managers/:id — Soft delete (deleted_at + status=inactive). Réservé à l'admin.",
+      "item": [
+
+        {
+          "name": "[Admin] DELETE /admin/managers/:id — Soft delete ✅",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Message suppression', () => {",
+            "  const json = pm.response.json();",
+            "  pm.expect(json.ok).to.be.true;",
+            "  pm.expect(json.message).to.equal('Gestionnaire supprimé');",
+            "});"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[Admin] GET /admin/managers/:id après suppression (404) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — soft delete effectif', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            }
+          }
+        },
+
+        {
+          "name": "[Admin] DELETE — ID inexistant (404) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin","managers","00000000-0000-0000-0000-000000000000"]
+            }
+          }
+        },
+
+        {
+          "name": "[Manager] DELETE /admin/managers/:id — Accès refusé (403) ❌",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — suppression réservée admin', () => pm.response.to.have.status(403));",
+            "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{manager_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/managers/{{manager_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","managers","{{manager_id}}"]
+            }
+          }
+        }
+
+      ]
+    }
+
+  ]
+}
