@@ -12,7 +12,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireAdmin, requireStaff } from '../../middlewares/role.middleware.js';
+import { requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import { usersController } from '../users/users.controller.js';
 import { adminController } from './admin.controller.js';
 
@@ -20,7 +20,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // ── Gestion des utilisateurs ─────────────────────────────────────────────────
-router.get( '/users',            requireAdmin, (req, res) => usersController.listUsers(req, res));
+router.get( '/users',            requireStaff, requirePermission('view_users'), (req, res) => usersController.listUsers(req, res));
 router.put( '/users/:id/status', requireAdmin, (req, res) => usersController.changeUserStatus(req, res));
 
 // ── Gestion des gestionnaires ─────────────────────────────────────────────────
@@ -34,9 +34,9 @@ router.get(   '/managers/:id/permissions',    requireAdmin, (req, res) => adminC
 router.put(   '/managers/:id/permissions',    requireAdmin, (req, res) => adminController.setManagerPermissions(req, res));
 
 // ── Gestion des clients ───────────────────────────────────────────────────────
-router.get('/clients',            requireAdmin, (req, res) => adminController.listClients(req, res));
-router.get('/clients/:id',        requireAdmin, (req, res) => adminController.getClientById(req, res));
-router.get('/clients/:id/trips',  requireAdmin, (req, res) => adminController.getClientTrips(req, res));
+router.get('/clients',            requireStaff, requirePermission('view_clients'), (req, res) => adminController.listClients(req, res));
+router.get('/clients/:id',        requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientById(req, res));
+router.get('/clients/:id/trips',  requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientTrips(req, res));
 
 // ── Réservations & statistiques — Sprint 5-7 ─────────────────────────────────
 router.get('/reservations',            requireStaff, (_req, res) => res.status(501).json({ ok: false, message: 'Not implemented' }));

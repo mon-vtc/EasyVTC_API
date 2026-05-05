@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireAdmin } from '../../middlewares/role.middleware.js';
+import { requireRole, requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import * as controller from './driver-documents.controller.js';
 
 // ── Configuration Multer (stockage mémoire) ──────────────────────────────────
@@ -66,37 +66,41 @@ driverDocumentsRoutes.delete(
 
 export const adminDocumentsRoutes = Router();
 
-// Toutes les routes admin nécessitent authentification + rôle admin
+// Toutes les routes admin nécessitent authentification
 adminDocumentsRoutes.use(authMiddleware);
-adminDocumentsRoutes.use(requireAdmin);
 
-// Liste tous les documents (avec filtres)
+// Liste tous les documents — lecture : admin + manager avec view_documents
 adminDocumentsRoutes.get(
   '/',
+  requireStaff, requirePermission('view_documents'),
   (req, res) => controller.listAllDocuments(req, res)
 );
 
-// Statistiques des documents
+// Statistiques des documents — lecture : admin + manager avec view_documents
 adminDocumentsRoutes.get(
   '/stats',
+  requireStaff, requirePermission('view_documents'),
   (req, res) => controller.getDocumentStats(req, res)
 );
 
-// Détail d'un document
+// Détail d'un document — lecture : admin + manager avec view_documents
 adminDocumentsRoutes.get(
   '/:id',
+  requireStaff, requirePermission('view_documents'),
   (req, res) => controller.getDocumentById(req, res)
 );
 
-// Valider un document
+// Valider un document — écriture : admin uniquement
 adminDocumentsRoutes.patch(
   '/:id/validate',
+  requireAdmin,
   (req, res) => controller.validateDocument(req, res)
 );
 
-// Rejeter un document
+// Rejeter un document — écriture : admin uniquement
 adminDocumentsRoutes.patch(
   '/:id/reject',
+  requireAdmin,
   (req, res) => controller.rejectDocument(req, res)
 );
 

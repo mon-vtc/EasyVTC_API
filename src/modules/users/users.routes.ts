@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { usersController } from './users.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole } from '../../middlewares/role.middleware.js';
+import { requireRole, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 
 const router = Router();
 
@@ -37,8 +37,8 @@ router.post(  '/me/avatar', upload.single('avatar'), (req, res) => usersControll
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES ADMIN (gestion des utilisateurs)
 // ══════════════════════════════════════════════════════════════════════════════
-router.get(   '/',            requireRole('admin'),  (req, res) => usersController.listUsers(req, res));
-router.get(   '/:id',         requireRole('admin'),  (req, res) => usersController.getUserById(req, res));
+router.get(   '/',            requireStaff, requirePermission('view_users'), (req, res) => usersController.listUsers(req, res));
+router.get(   '/:id',         requireStaff, requirePermission('view_users'), (req, res) => usersController.getUserById(req, res));
 router.patch( '/:id/status',  requireRole('admin'),  (req, res) => usersController.changeUserStatus(req, res));
 
 export default router;

@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireAdmin } from '../../middlewares/role.middleware.js';
+import { requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import { pricingController } from './pricing.controller.js';
 
 const router = Router();
@@ -34,8 +34,8 @@ router.post('/estimate', authMiddleware, (req, res) => pricingController.estimat
 // ROUTES ADMIN — Authentification + rôle admin
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Grilles tarifaires — lecture (toutes, avec historique)
-router.get('/grids', authMiddleware, requireAdmin, (req, res) => pricingController.getAllGrids(req, res));
+// Grilles tarifaires — lecture (toutes, avec historique) : admin + manager avec view_pricing
+router.get('/grids', authMiddleware, requireStaff, requirePermission('view_pricing'), (req, res) => pricingController.getAllGrids(req, res));
 
 // Grilles tarifaires — écriture
 router.post('/grids',      authMiddleware, requireAdmin, (req, res) => pricingController.createGrid(req, res));

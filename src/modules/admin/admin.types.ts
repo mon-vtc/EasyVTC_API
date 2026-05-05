@@ -6,6 +6,7 @@ export const MANAGER_PERMISSIONS = [
   'view_reservations',
   'assign_reservation',
   'cancel_reservation',
+  'view_users',
   'view_drivers',
   'view_clients',
   'view_pricing',

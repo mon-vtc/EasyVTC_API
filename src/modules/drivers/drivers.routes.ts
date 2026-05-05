@@ -5,7 +5,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireAdmin } from '../../middlewares/role.middleware.js';
+import { requireRole, requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import * as controller from './drivers.controller.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -53,28 +53,31 @@ driversSelfRoutes.get(
 export const adminDriversRoutes = Router();
 
 adminDriversRoutes.use(authMiddleware);
-adminDriversRoutes.use(requireAdmin);
 
-// Liste paginée
+// Liste paginée — lecture : admin + manager avec view_drivers
 adminDriversRoutes.get(
   '/',
+  requireStaff, requirePermission('view_drivers'),
   (req, res) => controller.listDrivers(req, res)
 );
 
-// Détail par ID
+// Détail par ID — lecture : admin + manager avec view_drivers
 adminDriversRoutes.get(
   '/:id',
+  requireStaff, requirePermission('view_drivers'),
   (req, res) => controller.getDriverById(req, res)
 );
 
-// Mise à jour admin (tva_rate, siret, zone, vehicle_type)
+// Mise à jour admin (tva_rate, siret, zone, vehicle_type) — écriture : admin uniquement
 adminDriversRoutes.patch(
   '/:id',
+  requireAdmin,
   (req, res) => controller.adminUpdateDriver(req, res)
 );
 
-// Changement de statut (valider / rejeter / suspendre)
+// Changement de statut (valider / rejeter / suspendre) — écriture : admin uniquement
 adminDriversRoutes.patch(
   '/:id/status',
+  requireAdmin,
   (req, res) => controller.changeDriverStatus(req, res)
 );
