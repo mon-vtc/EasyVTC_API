@@ -10,7 +10,8 @@ import authRoutes          from './modules/auth/auth.routes.js';
 import usersRoutes         from './modules/users/users.routes.js';
 import pricingRoutes       from './modules/pricing/pricing.routes.js';
 import reservationsRoutes  from './modules/reservations/reservations.routes.js';
-import notificationsRoutes from './modules/notifications/notifications.routes.js';
+import notificationsRoutes, { cronNotificationsRouter } from './modules/notifications/notifications.routes.js';
+import chatRoutes, { adminChatRouter } from './modules/chat/chat.routes.js';
 import {
   driverDocumentsRoutes,
   adminDocumentsRoutes,
@@ -77,7 +78,8 @@ app.use('/admin', adminRoutes);
 // ── Driver Documents Routes ───────────────────────────────────────────────────
 app.use('/drivers/documents', driverDocumentsRoutes);
 app.use('/admin/documents', adminDocumentsRoutes);
-app.use('/cron/documents', cronDocumentsRoutes);
+app.use('/cron/documents',      cronDocumentsRoutes);
+app.use('/cron/notifications',  cronNotificationsRouter);
 app.use('/drivers',         driversSelfRoutes);
 app.use('/vehicle-types',       vehicleTypesPublicRoutes);
 app.use('/admin/vehicle-types', vehicleTypesAdminRoutes);
@@ -87,6 +89,8 @@ app.use('/admin/vehicles',  adminVehiclesRoutes);
 app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);
+app.use('/chat',          chatRoutes);
+app.use('/admin/chat',    adminChatRouter);
 app.use('/orders',        ordersRoutes);
 app.use('/invoices',      invoicesRoutes);
 

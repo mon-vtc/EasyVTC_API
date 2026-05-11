@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express';
 import { adminService } from './admin.service.js';
+import { reservationsService } from '../reservations/reservations.service.js';
+import { reservationListFiltersSchema, assignDriverSchema, reservationIdParamSchema } from '../reservations/reservations.validator.js';
 import {
   createManagerSchema,
   updateManagerSchema,
@@ -54,7 +56,7 @@ export class AdminController {
   // GET /admin/managers/:id
   async getManagerById(req: Request, res: Response): Promise<void> {
     try {
-      const manager = await adminService.getManagerById(req.params.id);
+      const manager = await adminService.getManagerById(req.params['id'] as string);
       res.json({ ok: true, data: manager });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -74,7 +76,7 @@ export class AdminController {
       return;
     }
     try {
-      const manager = await adminService.updateManager(req.params.id, parsed.data);
+      const manager = await adminService.updateManager(req.params['id'] as string, parsed.data);
       res.json({ ok: true, data: manager });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -95,7 +97,7 @@ export class AdminController {
     }
     try {
       const manager = await adminService.changeManagerStatus(
-        req.params.id,
+        req.params['id'] as string,
         parsed.data,
         req.user!.id,
       );
@@ -109,7 +111,7 @@ export class AdminController {
   // GET /admin/managers/:id/permissions
   async getManagerPermissions(req: Request, res: Response): Promise<void> {
     try {
-      const result = await adminService.getManagerPermissions(req.params.id);
+      const result = await adminService.getManagerPermissions(req.params['id'] as string);
       res.json({ ok: true, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -130,7 +132,7 @@ export class AdminController {
     }
     try {
       const result = await adminService.setManagerPermissions(
-        req.params.id,
+        req.params['id'] as string,
         parsed.data as any,
         req.user!.id,
       );
@@ -144,7 +146,7 @@ export class AdminController {
   // DELETE /admin/managers/:id
   async deleteManager(req: Request, res: Response): Promise<void> {
     try {
-      await adminService.deleteManager(req.params.id);
+      await adminService.deleteManager(req.params['id'] as string);
       res.json({ ok: true, message: 'Gestionnaire supprimé' });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -172,8 +174,60 @@ export class AdminController {
   // GET /admin/clients/:id
   async getClientById(req: Request, res: Response): Promise<void> {
     try {
-      const client = await adminService.getClientById(req.params.id);
+      const client = await adminService.getClientById(req.params['id'] as string);
       res.json({ ok: true, data: client });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/stats
+  async getStats(_req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await adminService.getStats();
+      res.json({ ok: true, data: stats });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/reservations
+  async listReservations(req: Request, res: Response): Promise<void> {
+    const parsed = reservationListFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const result = await reservationsService.listReservations(parsed.data);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PUT /admin/reservations/:id/assign
+  async assignReservation(req: Request, res: Response): Promise<void> {
+    const paramParsed = reservationIdParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID invalide' });
+      return;
+    }
+    const bodyParsed = assignDriverSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: bodyParsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const reservation = await reservationsService.assignDriver(
+        paramParsed.data.id,
+        bodyParsed.data,
+        req.user!.id,
+      );
+      res.json({ ok: true, message: 'Chauffeur assigné avec succès', data: reservation });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
@@ -185,7 +239,7 @@ export class AdminController {
     const page  = req.query.page  ? Number(req.query.page)  : 1;
     const limit = req.query.limit ? Number(req.query.limit) : 20;
     try {
-      const result = await adminService.getClientTrips(req.params.id, page, limit);
+      const result = await adminService.getClientTrips(req.params['id'] as string, page, limit);
       res.json({ ok: true, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

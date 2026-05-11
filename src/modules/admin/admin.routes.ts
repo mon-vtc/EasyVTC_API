@@ -38,9 +38,9 @@ router.get('/clients',            requireStaff, requirePermission('view_clients'
 router.get('/clients/:id',        requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientById(req, res));
 router.get('/clients/:id/trips',  requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientTrips(req, res));
 
-// ── Réservations & statistiques — Sprint 5-7 ─────────────────────────────────
-router.get('/reservations',            requireStaff, (_req, res) => res.status(501).json({ ok: false, message: 'Not implemented' }));
-router.put('/reservations/:id/assign', requireStaff, (_req, res) => res.status(501).json({ ok: false, message: 'Not implemented' }));
-router.get('/stats',                   requireAdmin, (_req, res) => res.status(501).json({ ok: false, message: 'Not implemented' }));
+// ── Réservations & statistiques ───────────────────────────────────────────────
+router.get('/reservations',            requireStaff, requirePermission('view_reservations'), (req, res) => adminController.listReservations(req, res));
+router.put('/reservations/:id/assign', requireStaff, requirePermission('assign_reservation'), (req, res) => adminController.assignReservation(req, res));
+router.get('/stats',                   requireAdmin, (req, res) => adminController.getStats(req, res));
 
 export default router;

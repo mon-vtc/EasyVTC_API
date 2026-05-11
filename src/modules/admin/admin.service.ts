@@ -5,6 +5,7 @@ import type {
   ClientListFilters, ClientListResult, ClientWithStats,
   ClientGlobalStats, ClientTripsResult, ClientTripItem,
   SetManagerPermissionsDto, ManagerPermissionsResult, ManagerPermission,
+  AdminStats,
 } from './admin.types.js';
 import type { UserProfile } from '../users/users.types.js';
 
@@ -32,7 +33,7 @@ export class AdminService {
   }
 
   // ── POST /admin/managers — Créer un compte gestionnaire ─────────────────────
-  async createManager(dto: CreateManagerDto): Promise<UserProfile> {
+  async createManager(dto: CreateManagerDto, _createdBy?: string): Promise<UserProfile> {
     const password = dto.password ?? this.generatePassword();
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email:         dto.email,
@@ -409,6 +410,84 @@ export class AdminService {
       last_trip_date,
       avg_rating:        null,
       cancellation_rate: total_trips > 0 ? Math.round((cancelled / total_trips) * 100) : 0,
+    };
+  }
+
+  // ── GET /admin/stats — Tableau de bord statistiques ────────────────────────
+  async getStats(): Promise<AdminStats> {
+    const [
+      { data: reservations },
+      { data: drivers },
+      { count: totalClients },
+      { count: activeClients },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('reservations')
+        .select('status, price_final, price_estimated, country, vehicle_type'),
+      supabaseAdmin
+        .from('drivers')
+        .select('status, is_online'),
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .is('deleted_at', null),
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .eq('status', 'active')
+        .is('deleted_at', null),
+    ]);
+
+    // Réservations — totaux et répartition par statut
+    const rows = reservations ?? [];
+    const by_status: Record<string, number> = {};
+    let total_eur = 0;
+    let total_xof = 0;
+    const vehicleDist: Record<string, number> = {};
+
+    for (const r of rows) {
+      by_status[r.status] = (by_status[r.status] ?? 0) + 1;
+
+      if (r.status === 'completed') {
+        const amount = Number(r.price_final ?? r.price_estimated ?? 0);
+        if (r.country === 'senegal') total_xof += amount;
+        else                         total_eur += amount;
+
+        if (r.vehicle_type) {
+          vehicleDist[r.vehicle_type] = (vehicleDist[r.vehicle_type] ?? 0) + 1;
+        }
+      }
+    }
+
+    // Chauffeurs — décompte par statut
+    const driverRows = drivers ?? [];
+    const totalDrivers  = driverRows.length;
+    const activeDrivers = driverRows.filter(d => d.status === 'active').length;
+    const onlineDrivers = driverRows.filter(d => d.is_online === true).length;
+    const onTripDrivers = driverRows.filter(d => d.status === 'on_trip').length;
+
+    return {
+      reservations: {
+        total:     rows.length,
+        by_status,
+      },
+      revenue: {
+        total_eur: Math.round(total_eur * 100) / 100,
+        total_xof: Math.round(total_xof),
+      },
+      drivers: {
+        total:   totalDrivers,
+        active:  activeDrivers,
+        online:  onlineDrivers,
+        on_trip: onTripDrivers,
+      },
+      clients: {
+        total:  totalClients  ?? 0,
+        active: activeClients ?? 0,
+      },
+      vehicle_type_distribution: vehicleDist,
     };
   }
 
