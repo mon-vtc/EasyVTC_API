@@ -22,6 +22,7 @@ router.use(authMiddleware);
 // ── Gestion des utilisateurs ─────────────────────────────────────────────────
 router.get( '/users',            requireStaff, requirePermission('view_users'), (req, res) => usersController.listUsers(req, res));
 router.put( '/users/:id/status', requireAdmin, (req, res) => usersController.changeUserStatus(req, res));
+router.put( '/drivers/:id/status', requireAdmin, (req, res) => adminController.changeDriverStatus(req, res));
 
 // ── Gestion des gestionnaires ─────────────────────────────────────────────────
 router.get(   '/managers',                    requireAdmin, (req, res) => adminController.listManagers(req, res));

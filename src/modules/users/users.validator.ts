@@ -28,6 +28,19 @@ export const changeUserStatusSchema = z.object({
 
 export type ChangeUserStatusInput = z.infer<typeof changeUserStatusSchema>;
 
+// ── Changement de statut (par admin) ─────────────────────────────────────────
+export const changeDriverStatusSchema = z.object({
+  status: z.enum(['active', 'probationary', 'rejected', 'suspended'], {
+    message: 'Statut invalide. Valeurs acceptées : active, probationary, rejected, suspended',
+  }),
+  reason: z
+    .string()
+    .min(10, 'Le motif doit contenir au moins 10 caractères')
+    .max(500, 'Le motif ne peut pas dépasser 500 caractères'),
+});
+
+export type ChangeDriverStatusInput = z.infer<typeof changeDriverStatusSchema>;
+
 // ── Filtres de liste des utilisateurs (admin) ────────────────────────────────
 export const userListFiltersSchema = z.object({
   role: z.enum(['client', 'driver', 'manager']).optional(),

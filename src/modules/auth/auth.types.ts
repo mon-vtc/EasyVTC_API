@@ -3,7 +3,7 @@ import type { ManagerPermission } from '../admin/admin.types.js';
 
 export type UserRole = 'client' | 'driver' | 'admin' | 'manager';
 export type UserStatus = 'active' | 'inactive' | 'locked';
-export type DriverStatus = 'pending' | 'active' | 'on_trip' | 'rejected' | 'suspended';
+export type DriverStatus = 'pending' | 'active' | 'on_trip' | 'rejected' | 'suspended' | 'probationary';
 export type VehicleType = string;
 export type ZoneType = 'france' | 'senegal';
 

@@ -8,6 +8,7 @@ import {
   changeManagerStatusSchema,
   setManagerPermissionsSchema,
 } from './admin.validator.js';
+import { changeDriverStatusSchema } from '../drivers/drivers.validator.js';
 
 export class AdminController {
 
@@ -246,6 +247,46 @@ export class AdminController {
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
     }
   }
+
+  async changeDriverStatus(req: Request, res: Response): Promise<void> {
+    const id = req.params.id as string;
+
+    if (!id) {
+      res.status(400).json({ ok: false, message: 'ID chauffeur requis' });
+      return;
+    }
+
+     const parsed = changeDriverStatusSchema.safeParse(req.body);
+     if (!parsed.success) {
+       res.status(400).json({
+         ok: false,
+         message: 'Données invalides',
+         errors: parsed.error.flatten().fieldErrors,
+       });
+       return;
+     }
+
+    try {
+      const driver = await adminService.changeDriverStatus(id, parsed.data, req.user!.id);
+      
+      const statusMessages: Record<string, string> = {
+        active:       'Chauffeur validé et activé avec succès',
+        probationary: 'Le statut du chauffeur est passé en "probationary"',
+        rejected:     'Chauffeur rejeté',
+        suspended:    'Chauffeur suspendu',
+      };
+
+      res.status(200).json({ 
+        ok: true, 
+        message: statusMessages[driver.status] ?? `Statut du chauffeur changé à ${driver.status}`,
+        data: driver,
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
 }
+
 
 export const adminController = new AdminController();

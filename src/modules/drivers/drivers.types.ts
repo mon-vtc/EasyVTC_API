@@ -6,7 +6,6 @@
 import type { DriverStatus, VehicleType, ZoneType } from '../auth/auth.types.js';
 
 export type { DriverStatus, VehicleType, ZoneType };
-
 // ── Profil chauffeur complet avec infos utilisateur joint ─────────────────────
 export interface DriverWithUser {
   id: string;
@@ -41,7 +40,7 @@ export interface UpdateDriverDto {
 
 // ── DTO changement de statut (par l'admin) ────────────────────────────────────
 export interface ChangeDriverStatusDto {
-  status: 'active' | 'rejected' | 'suspended';
+  status: 'active' | 'rejected' | 'suspended' | 'probationary' | 'on_trip' | 'on_trip_probationary';
   reason: string;
 }
 

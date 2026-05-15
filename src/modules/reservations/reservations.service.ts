@@ -261,12 +261,14 @@ export class ReservationsService {
       .single();
 
     if (!driver) throw { status: 404, message: 'Chauffeur introuvable' };
-    if (driver.status !== 'active') {
+    if (!['active', 'probationary', 'on_trip', 'on_trip_probationary'].includes(driver.status)) {
       const statusLabels: Record<string, string> = {
         pending:   'dossier en attente de validation',
         on_trip:   'en cours de mission',
+        on_trip_probationary: 'en cours de mission',
         rejected:  'dossier rejeté',
         suspended: 'suspendu',
+        probationary: 'en validation temporaire', // Bien que permis, on le met ici pour info
       };
       const label = statusLabels[driver.status] ?? driver.status;
       throw { status: 400, message: `Ce chauffeur ne peut pas être assigné (${label})` };
@@ -611,11 +613,82 @@ export class ReservationsService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Retourne les chauffeurs actifs et en ligne, sans conflit horaire
-   * sur la plage demandée si `scheduledAt` est fourni.
+   * Retourne les chauffeurs actifs et en ligne.
    * Si `vehicleType` est fourni, seuls les chauffeurs dont le vehicle_type correspond sont retournés.
    * Utilisé par le DriverPickerModal pour l'assignation manuelle.
    */
+  // async getAvailableDrivers(scheduledAt?: string, durationMin?: number, vehicleType?: string): Promise<AvailableDriverDto[]> {
+  //   let query = supabaseAdmin
+  //     .from('drivers')
+  //     .select(`
+  //       id, is_online, status, vehicle_type, zone,
+  //       user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
+  //       vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
+  //     `)
+  //     .in('status', ['active', 'probationary'])
+  //     .eq('is_online', true);
+
+  //   if (vehicleType) {
+  //     query = query.eq('vehicle_type', vehicleType);
+  //   }
+
+  //   const { data, error } = await query;
+
+  //   if (error) {
+  //     console.error('[Reservations] getAvailableDrivers error:', error);
+  //     throw { status: 500, message: 'Erreur lors de la récupération des chauffeurs disponibles' };
+  //   }
+
+  //   const rows = (data ?? []) as any[];
+
+  //   // Si une date est fournie, exclure les chauffeurs avec un conflit horaire
+  //   let conflictingDriverIds = new Set<string>();
+  //   if (scheduledAt) {
+  //     const newTime     = new Date(scheduledAt).getTime();
+  //     const effectiveDuration = durationMin ?? TRIP_CONFLICT_FALLBACK_MIN;
+  //     const windowStart = new Date(newTime - TRIP_BUFFER_MIN * 60 * 1000).toISOString();
+  //     const windowEnd   = new Date(newTime + (effectiveDuration + TRIP_BUFFER_MIN) * 60 * 1000).toISOString();
+
+  //     const { data: conflicts } = await supabaseAdmin
+  //       .from('reservations')
+  //       .select('driver_id')
+  //       .in('status', ['assigned', 'driver_arrived', 'in_progress'])
+  //       .gte('scheduled_at', windowStart)
+  //       .lte('scheduled_at', windowEnd);
+
+  //     conflictingDriverIds = new Set((conflicts ?? []).map((c: any) => c.driver_id));
+  //   }
+
+  //   return rows
+  //     .filter(d => !conflictingDriverIds.has(d.id))
+  //     .map(d => {
+  //       const activeVehicle = Array.isArray(d.vehicles)
+  //         ? (d.vehicles.find((v: any) => v.is_active) ?? null)
+  //         : null;
+
+  //       return {
+  //         id:           d.id,
+  //         rating:       null,
+  //         is_online:    d.is_online,
+  //         status:       d.status,
+  //         vehicle_type: d.vehicle_type,
+  //         zone:         d.zone,
+  //         user:         d.user,
+  //         vehicle:      activeVehicle
+  //           ? {
+  //               id:           activeVehicle.id,
+  //               model:        activeVehicle.model,
+  //               plate_number: activeVehicle.plate_number,
+  //               brand:        activeVehicle.brand,
+  //               color:        activeVehicle.color,
+  //               type:         activeVehicle.type,
+  //               photo_url:    activeVehicle.photo_url,
+  //             }
+  //           : null,
+  //       } satisfies AvailableDriverDto;
+  //     });
+  // }
+
   async getAvailableDrivers(scheduledAt?: string, durationMin?: number, vehicleType?: string): Promise<AvailableDriverDto[]> {
     let query = supabaseAdmin
       .from('drivers')
@@ -624,7 +697,7 @@ export class ReservationsService {
         user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
         vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
       `)
-      .eq('status', 'active')
+      .in('status', ['active', 'probationary', 'on_trip', 'on_trip_probationary']) // Inclure les chauffeurs en cours de mission, ils seront filtrés plus bas s'ils ont un conflit horaire
       .eq('is_online', true);
 
     if (vehicleType) {
@@ -640,26 +713,7 @@ export class ReservationsService {
 
     const rows = (data ?? []) as any[];
 
-    // Si une date est fournie, exclure les chauffeurs avec un conflit horaire
-    let conflictingDriverIds = new Set<string>();
-    if (scheduledAt) {
-      const newTime     = new Date(scheduledAt).getTime();
-      const effectiveDuration = durationMin ?? TRIP_CONFLICT_FALLBACK_MIN;
-      const windowStart = new Date(newTime - TRIP_BUFFER_MIN * 60 * 1000).toISOString();
-      const windowEnd   = new Date(newTime + (effectiveDuration + TRIP_BUFFER_MIN) * 60 * 1000).toISOString();
-
-      const { data: conflicts } = await supabaseAdmin
-        .from('reservations')
-        .select('driver_id')
-        .in('status', ['assigned', 'driver_arrived', 'in_progress'])
-        .gte('scheduled_at', windowStart)
-        .lte('scheduled_at', windowEnd);
-
-      conflictingDriverIds = new Set((conflicts ?? []).map((c: any) => c.driver_id));
-    }
-
     return rows
-      .filter(d => !conflictingDriverIds.has(d.id))
       .map(d => {
         const activeVehicle = Array.isArray(d.vehicles)
           ? (d.vehicles.find((v: any) => v.is_active) ?? null)

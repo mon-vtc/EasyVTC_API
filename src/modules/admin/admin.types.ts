@@ -120,6 +120,11 @@ export interface ChangeManagerStatusDto {
   reason: string;
 }
 
+export interface ChangeDriverStatusDto {
+  status: string;
+  reason: string;
+}
+
 export interface ManagerListFilters {
   status?: UserStatus;
   search?: string;

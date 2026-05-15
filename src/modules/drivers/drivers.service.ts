@@ -108,14 +108,14 @@ export class DriversService {
       throw { status: 404, message: 'Profil chauffeur non trouvé' };
     }
 
-    if (driver.status === 'on_trip') {
+    if (['on_trip', 'on_trip_probationary'].includes(driver.status)) {
       throw {
         status: 403,
         message: 'Vous ne pouvez pas modifier votre disponibilité en cours de mission',
       };
     }
 
-    if (isOnline && driver.status !== 'active') {
+    if (isOnline && !['active', 'probationary'].includes(driver.status)) {
       throw {
         status: 403,
         message: 'Votre profil chauffeur doit être validé avant de pouvoir passer en ligne',
@@ -232,7 +232,7 @@ export class DriversService {
     if (existing.status === 'rejected' && dto.status !== 'active') {
       throw { status: 400, message: 'Un chauffeur rejeté ne peut être que réactivé (active)' };
     }
-    if (existing.status === 'on_trip' && dto.status !== 'suspended') {
+    if (['on_trip', 'on_trip_probationary'].includes(existing.status) && dto.status !== 'suspended') {
       throw { status: 400, message: 'Un chauffeur en mission ne peut être que suspendu (urgence)' };
     }
     if (existing.status === 'suspended' && dto.status === 'rejected') {
@@ -240,7 +240,7 @@ export class DriversService {
     }
 
     // Si on suspend ou rejette un chauffeur, le passer hors ligne
-    const extraFields = (dto.status === 'suspended' || dto.status === 'rejected')
+    const extraFields = ['suspended', 'rejected'].includes(dto.status)
       ? { is_online: false }
       : {};
 
@@ -439,19 +439,31 @@ export class DriversService {
       throw { status: 404, message: 'Chauffeur non trouvé' };
     }
 
-    if (onTrip && driver.status !== 'active') {
+    if (onTrip && !['active', 'probationary'].includes(driver.status)) {
       throw {
         status: 400,
         message: `Impossible de mettre en mission un chauffeur au statut "${driver.status}"`,
       };
     }
 
-    if (!onTrip && driver.status !== 'on_trip') {
+    if (!onTrip && !['on_trip', 'on_trip_probationary'].includes(driver.status)) {
       // Pas en mission — rien à faire (idempotent)
       return;
     }
 
-    const newStatus = onTrip ? 'on_trip' : 'active';
+    let newStatus: string;
+
+    if (onTrip) {
+      // Début de mission : on choisit le statut de mission en fonction du statut actuel
+      newStatus = driver.status === 'probationary' ? 'on_trip_probationary' : 'on_trip';
+    } else {
+      // Fin de mission : on restaure le statut d'origine
+      if (driver.status === 'on_trip_probationary') {
+        newStatus = 'probationary';
+      } else { // on_trip ou autre cas (sécurité)
+        newStatus = 'active';
+      }
+    }
 
     const { error } = await supabaseAdmin
       .from('drivers')

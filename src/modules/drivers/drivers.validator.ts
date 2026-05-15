@@ -6,7 +6,7 @@
 import { z } from 'zod';
 
 const zoneTypes = ['france', 'senegal'] as const;
-const driverStatusTransitions = ['active', 'rejected', 'suspended'] as const;
+const driverStatusTransitions = ['active', 'rejected', 'suspended', 'probationary'] as const;
 
 // ── Mise à jour profil chauffeur (self) ───────────────────────────────────────
 export const updateDriverSchema = z.object({
@@ -31,7 +31,7 @@ export const toggleOnlineSchema = z.object({
 // ── Changement de statut (admin) ──────────────────────────────────────────────
 export const changeDriverStatusSchema = z.object({
   status: z.enum(driverStatusTransitions, {
-    error: 'Statut invalide. Valeurs acceptées: active, rejected, suspended',
+    error: 'Statut invalide. Valeurs acceptées: active, rejected, suspended, probationary',
   }),
   reason: z
     .string()
@@ -61,7 +61,7 @@ export const adminUpdateDriverSchema = z.object({
 
 // ── Filtres liste (admin) ─────────────────────────────────────────────────────
 export const driverListFiltersSchema = z.object({
-  status: z.enum(['pending', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
+  status: z.enum(['pending', 'active', 'on_trip', 'rejected', 'suspended', 'probationary'] as const).optional(),
   zone: z.enum(zoneTypes).optional(),
   vehicle_type: z.string().min(1).max(50).optional(),
   is_online: z

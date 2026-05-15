@@ -1,0 +1,220 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-probationary-flow",
+    "name": "EazyVTC — Scénario Statut Probationary",
+    "description": "# EazyVTC — Scénario de test pour le statut `probationary`\n\nCe scénario de bout en bout valide le cycle de vie d'un chauffeur avec le statut de validation temporaire (`probationary`).\n\n## Prérequis\n1. Avoir un compte **admin** et un compte **chauffeur** avec le statut `pending`.\n2. Renseigner les variables `admin_email`, `admin_password`, `driver_pending_email` et `driver_pending_password` dans l'environnement Postman.\n3. Avoir au moins une réservation au statut `pending` dans la base de données.\n\n## Scénario\n1. **Login Admin** : Récupération du token admin.\n2. **Trouver un chauffeur `pending`** : Recherche d'un chauffeur en attente et sauvegarde de son ID.\n3. **Passer en `probationary`** : L'admin change le statut du chauffeur.\n4. **Login Chauffeur** : Le chauffeur se connecte.\n5. **Passer en ligne** : Le chauffeur `probationary` tente de se mettre en ligne (doit réussir).\n6. **Trouver une réservation `pending`** : L'admin cherche une course à assigner.\n7. **Assigner la course** : L'admin assigne la course au chauffeur `probationary` (doit réussir).\n8. **Nettoyage** : Le statut du chauffeur est remis à `pending` pour rejouer le test.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token", "value": "", "type": "string" },
+    { "key": "driver_token", "value": "", "type": "string" },
+    { "key": "driver_id", "value": "", "type": "string", "description": "ID du chauffeur de test (statut initial: pending)" },
+    { "key": "reservation_id", "value": "", "type": "string", "description": "ID d'une réservation en attente pour le test d'assignation" }
+  ],
+  "item": [
+    {
+      "name": "🔐 1. Authentification",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const json = pm.response.json();",
+            "pm.collectionVariables.set('admin_token', json.data.access_token);",
+            "console.log('✅ admin_token sauvegardé');"
+          ]}}]
+        }
+      ]
+    },
+    {
+      "name": "🔍 2. Admin: Trouver un chauffeur 'pending'",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+        "url": {
+          "raw": "{{base_url}}/admin/drivers?status=pending&limit=1",
+          "host": ["{{base_url}}"],
+          "path": ["admin", "drivers"],
+          "query": [
+            { "key": "status", "value": "pending" },
+            { "key": "limit", "value": "1" }
+          ]
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('Au moins un chauffeur pending trouvé', () => {",
+        "  pm.expect(json.data.drivers.length).to.be.greaterThan(0, 'Aucun chauffeur pending trouvé. Créez-en un pour ce test.');",
+        "});",
+        "const driver = json.data.drivers[0];",
+        "pm.collectionVariables.set('driver_id', driver.id);",
+        "console.log(`✅ Chauffeur pending trouvé, ID: ${driver.id}`);"
+      ]}}]
+    },
+    {
+      "name": "⏳ 3. Admin: Passer le chauffeur en 'probationary'",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/admin/drivers/{{driver_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["admin", "drivers", "{{driver_id}}", "status"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"probationary\",\n  \"reason\": \"Validation temporaire pour test Postman\"\n}"
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('Statut du chauffeur est bien probationary', () => {",
+        "  pm.expect(json.data.status).to.equal('probationary');",
+        "});",
+        "console.log('✅ Chauffeur passé en statut probationary');"
+      ]}}]
+    },
+    {
+      "name": "🚗 4. Chauffeur: Se connecter",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{driver_pending_email}}\",\n  \"password\": \"{{driver_pending_password}}\"\n}"
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.collectionVariables.set('driver_token', json.data.access_token);",
+        "console.log('✅ Chauffeur connecté, driver_token sauvegardé');"
+      ]}}]
+    }, 
+    {
+      "name": "🟢 5. Chauffeur: Passer 'en ligne'",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/drivers/me/online",
+          "host": ["{{base_url}}"],
+          "path": ["drivers", "me", "online"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"is_online\": true\n}"
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('Le chauffeur est bien passé en ligne', () => {",
+        "  pm.expect(json.data.is_online).to.be.true;",
+        "});",
+        "console.log('✅ Le chauffeur probationary a pu passer en ligne.');"
+      ]}}]
+    },
+    {
+      "name": "📋 6. Admin: Trouver une réservation 'pending'",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+        "url": {
+          "raw": "{{base_url}}/admin/reservations?status=pending&limit=1",
+          "host": ["{{base_url}}"],
+          "path": ["admin", "reservations"],
+          "query": [
+            { "key": "status", "value": "pending" },
+            { "key": "limit", "value": "1" }
+          ]
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('Au moins une réservation pending trouvée', () => {",
+        "  pm.expect(json.data.reservations.length).to.be.greaterThan(0, 'Aucune réservation pending trouvée. Créez-en une pour ce test.');",
+        "});",
+        "const reservation = json.data.reservations[0];",
+        "pm.collectionVariables.set('reservation_id', reservation.id);",
+        "console.log(`✅ Réservation pending trouvée, ID: ${reservation.id}`);"
+      ]}}]
+    },
+    {
+      "name": "👍 7. Admin: Assigner la course au chauffeur 'probationary'",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/reservations/{{reservation_id}}/assign",
+          "host": ["{{base_url}}"],
+          "path": ["reservations", "{{reservation_id}}", "assign"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"driver_id\": \"{{driver_id}}\"\n}"
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('La réservation est bien assignée au chauffeur', () => {",
+        "  pm.expect(json.data.status).to.equal('assigned');",
+        "  pm.expect(json.data.driver_id).to.equal(pm.collectionVariables.get('driver_id'));",
+        "});",
+        "console.log('✅ Le chauffeur probationary a bien été assigné à la course.');"
+      ]}}]
+    },
+    {
+      "name": "🧹 8. Nettoyage: Repasser le chauffeur en 'pending'",
+      "description": "Cette étape remet le chauffeur en statut 'pending' pour que le test puisse être rejoué.",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/admin/drivers/{{driver_id}}/status",
+          "host": ["{{base_url}}"],
+          "path": ["admin", "drivers", "{{driver_id}}", "status"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"pending\",\n  \"reason\": \"Reset pour test Postman\"\n}"
+        }
+      },
+      "event": [{ "listen": "test", "script": { "exec": [
+        "pm.test('Status 200', () => pm.response.to.have.status(200));",
+        "const json = pm.response.json();",
+        "pm.test('Statut du chauffeur est bien pending', () => {",
+        "  pm.expect(json.data.status).to.equal('pending');",
+        "});",
+        "console.log('✅ Nettoyage terminé. Le chauffeur est de nouveau en statut pending.');"
+      ]}}]
+    }
+  ]
+}

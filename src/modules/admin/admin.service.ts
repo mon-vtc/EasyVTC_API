@@ -5,9 +5,10 @@ import type {
   ClientListFilters, ClientListResult, ClientWithStats,
   ClientGlobalStats, ClientTripsResult, ClientTripItem,
   SetManagerPermissionsDto, ManagerPermissionsResult, ManagerPermission,
-  AdminStats,
+  AdminStats, ChangeDriverStatusDto,
 } from './admin.types.js';
 import type { UserProfile } from '../users/users.types.js';
+import { DriverProfile } from '../auth/auth.types.js';
 
 const USER_PROFILE_COLUMNS = `
   id, email, role, first_name, last_name, phone,
@@ -552,6 +553,22 @@ export class AdminService {
 
     const total = count ?? 0;
     return { trips: tripItems, total, page, limit, total_pages: Math.ceil(total / limit) };
+  }
+
+  async changeDriverStatus(driverId: string, dto: ChangeDriverStatusDto, changedBy: string): Promise<DriverProfile> {
+    const { data,  error } = await supabaseAdmin
+      .from('drivers')
+      .update({
+        status: dto.status,
+        status_changed_at: new Date().toISOString(),
+        status_changed_by: changedBy,
+        status_reason: null,
+      })
+      .eq('id', driverId);
+
+    if (error || !data) throw { status: 500, message: 'Erreur lors du changement de statut' };
+    return data as DriverProfile;
+    
   }
 }
 

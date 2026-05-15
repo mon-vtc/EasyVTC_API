@@ -244,9 +244,10 @@ export async function changeDriverStatus(req: Request, res: Response) {
     );
 
     const statusMessages: Record<string, string> = {
-      active:    'Chauffeur validé et activé avec succès',
-      rejected:  'Chauffeur rejeté',
-      suspended: 'Chauffeur suspendu',
+      active:       'Chauffeur validé et activé avec succès',
+      probationary: 'Le statut du chauffeur est passé en "probationary"',
+      rejected:     'Chauffeur rejeté',
+      suspended:    'Chauffeur suspendu',
     };
 
     return res.json({
