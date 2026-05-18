@@ -7,6 +7,7 @@ import {
   updateManagerSchema,
   changeManagerStatusSchema,
   setManagerPermissionsSchema,
+  adminStatsFiltersSchema,
 } from './admin.validator.js';
 
 export class AdminController {
@@ -182,10 +183,16 @@ export class AdminController {
     }
   }
 
-  // GET /admin/stats
-  async getStats(_req: Request, res: Response): Promise<void> {
+  // GET /admin/stats — filters: period=day|week|month|all, date=YYYY-MM-DD or DD-MM-YYYY, date_from=YYYY-MM-DD or DD-MM-YYYY, date_to=YYYY-MM-DD or DD-MM-YYYY
+  async getStats(req: Request, res: Response): Promise<void> {
+    const parsed = adminStatsFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+
     try {
-      const stats = await adminService.getStats();
+      const stats = await adminService.getStats(parsed.data);
       res.json({ ok: true, data: stats });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
