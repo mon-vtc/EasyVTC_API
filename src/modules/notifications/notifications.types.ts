@@ -12,6 +12,8 @@ export type NotificationType =
   | 'driver_arrived'          // Client : le chauffeur est arrivé au point de pickup
   | 'invoice_available'       // Client : facture disponible après la course
   | 'document_expiry'         // Chauffeur : document bientôt expiré
+  | 'document_validated'      // Chauffeur : document validé par l'admin
+  | 'document_rejected'       // Chauffeur : document rejeté par l'admin (avec motif)
   | 'reservation_cancelled';  // Chauffeur ou client : course annulée
 
 export type NotificationChannel = 'push' | 'email';

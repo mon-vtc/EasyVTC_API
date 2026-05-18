@@ -9,6 +9,7 @@ import {
   registerTokenSchema,
   notificationIdParamSchema,
   notificationListFiltersSchema,
+  sendNotificationSchema,
 } from './notifications.validator.js';
 
 export class NotificationsController {
@@ -81,6 +82,45 @@ export class NotificationsController {
     try {
       await notificationsService.removeToken(req.user!.id);
       res.status(200).json({ ok: true, message: 'Token FCM supprimé' });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /notifications/send — Envoi manuel (admin)
+  async send(req: Request, res: Response): Promise<void> {
+    const parsed = sendNotificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const notif = await notificationsService.send({
+        user_id: parsed.data.user_id,
+        type:    parsed.data.type,
+        channel: 'push',
+        title:   parsed.data.title,
+        body:    parsed.data.body,
+        data:    parsed.data.data as Record<string, string> | undefined,
+      });
+      res.status(201).json({ ok: true, message: 'Notification envoyée', data: notif });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /cron/notifications/reminders — Rappels 1h avant course (cron protégé)
+  async sendTripReminders(req: Request, res: Response): Promise<void> {
+    const cronSecret = req.headers['x-cron-secret'];
+    if (!cronSecret || cronSecret !== process.env['CRON_SECRET']) {
+      res.status(401).json({ ok: false, message: 'Non autorisé' });
+      return;
+    }
+    try {
+      const result = await notificationsService.sendUpcomingTripReminders();
+      res.status(200).json({ ok: true, message: `${result.sent} rappel(s) envoyé(s)`, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

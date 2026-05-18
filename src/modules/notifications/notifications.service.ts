@@ -9,6 +9,7 @@
 //     le flux principal (réservation, assignation…)
 // ══════════════════════════════════════════════════════════════════════════════
 
+import admin from 'firebase-admin';
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { env } from '../../config/env.js';
 import type {
@@ -17,6 +18,25 @@ import type {
   CreateNotificationDto,
   NotificationListFilters,
 } from './notifications.types.js';
+
+// ── Firebase Admin SDK — initialisation lazy (singleton) ─────────────────────
+let _firebaseApp: admin.app.App | null = null;
+
+function getFirebaseApp(): admin.app.App | null {
+  if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
+    return null;
+  }
+  if (!_firebaseApp) {
+    _firebaseApp = admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId:   env.FIREBASE_PROJECT_ID,
+        privateKey:  env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        clientEmail: env.FIREBASE_CLIENT_EMAIL,
+      }),
+    });
+  }
+  return _firebaseApp;
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE
@@ -177,13 +197,71 @@ export class NotificationsService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // RAPPELS AVANT COURSE — appelé par le cron
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Envoie une notification push + stocke en BDD pour chaque réservation
+   * dont l'horaire est dans la fenêtre [now + 45min, now + 75min].
+   * Idempotent : ignore les réservations déjà rappelées (trip_reminder existant).
+   */
+  async sendUpcomingTripReminders(): Promise<{ sent: number }> {
+    const now      = new Date();
+    const from     = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
+    const to       = new Date(now.getTime() + 75 * 60 * 1000).toISOString();
+
+    const { data: reservations } = await supabaseAdmin
+      .from('reservations')
+      .select('id, client_id, scheduled_at, pickup_address, dest_address')
+      .in('status', ['assigned', 'driver_arrived'])
+      .gte('scheduled_at', from)
+      .lte('scheduled_at', to);
+
+    if (!reservations?.length) return { sent: 0 };
+
+    // Exclure les réservations déjà rappelées
+    const reservationIds = reservations.map(r => r.id);
+    const { data: alreadySent } = await supabaseAdmin
+      .from('notifications')
+      .select('data')
+      .eq('type', 'trip_reminder')
+      .in('data->>reservation_id', reservationIds);
+
+    const alreadySentIds = new Set(
+      (alreadySent ?? []).map(n => (n.data as Record<string, string>)?.reservation_id).filter(Boolean),
+    );
+
+    let sent = 0;
+    for (const r of reservations) {
+      if (alreadySentIds.has(r.id)) continue;
+
+      const scheduledTime = new Date(r.scheduled_at).toLocaleTimeString('fr-FR', {
+        hour: '2-digit', minute: '2-digit',
+      });
+
+      this.sendToUser(
+        r.client_id,
+        'trip_reminder',
+        'Rappel — votre course approche',
+        `Votre chauffeur vous prendra en charge à ${scheduledTime} au ${r.pickup_address}.`,
+        { reservation_id: r.id },
+      );
+      sent++;
+    }
+
+    return { sent };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // TOKEN FCM — Enregistrement device mobile
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
    * Enregistre ou met à jour le token FCM de l'appareil mobile de l'utilisateur.
    * À appeler au démarrage de l'app ou quand FCM génère un nouveau token.
+   * Le token est stocké dans la table users (device_token) pour simplifier le dispatch
    */
+  
   async registerToken(userId: string, deviceToken: string): Promise<void> {
     const { error } = await supabaseAdmin
       .from('users')
@@ -210,13 +288,23 @@ export class NotificationsService {
   // ──────────────────────────────────────────────────────────────────────────
 
   private async _dispatchPush(
-    notifId:  string,
-    userId:   string,
-    title:    string,
-    body:     string,
-    data?:    Record<string, string>,
+    notifId: string,
+    userId:  string,
+    title:   string,
+    body:    string,
+    data?:   Record<string, string>,
   ): Promise<void> {
-    // Récupérer le device_token de l'utilisateur
+    // Vérification Firebase avant toute requête BDD (early exit si non configuré)
+    const firebaseApp = getFirebaseApp();
+    if (!firebaseApp) {
+      console.warn('[Notifications] Firebase non configuré — FIREBASE_PROJECT_ID / PRIVATE_KEY / CLIENT_EMAIL manquants');
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'failed', error_log: 'Firebase Admin SDK non configuré' })
+        .eq('id', notifId);
+      return;
+    }
+
     const { data: user } = await supabaseAdmin
       .from('users')
       .select('device_token')
@@ -231,63 +319,26 @@ export class NotificationsService {
       return;
     }
 
-    if (!env.FCM_SERVER_KEY) {
-      console.warn('[Notifications] FCM_SERVER_KEY non configuré — notification non envoyée');
-      await supabaseAdmin
-        .from('notifications')
-        .update({ status: 'failed', error_log: 'FCM_SERVER_KEY manquant dans la configuration' })
-        .eq('id', notifId);
-      return;
-    }
-
     try {
-      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
-        method:  'POST',
-        headers: {
-          Authorization:  `key=${env.FCM_SERVER_KEY}`,
-          'Content-Type': 'application/json',
+      await admin.messaging(firebaseApp).send({
+        token: user.device_token as string,
+        notification: { title, body },
+        data: data ?? {},
+        android: { priority: 'high' },
+        apns: {
+          payload: { aps: { sound: 'default', badge: 1, contentAvailable: true } },
         },
-        body: JSON.stringify({
-          to: user.device_token,
-          notification: {
-            title,
-            body,
-            sound: 'default',
-            badge: 1,
-          },
-          data:     data ?? {},
-          priority: 'high',
-          // content_available: true pour iOS background notifications
-          content_available: true,
-        }),
       });
 
-      if (response.ok) {
-        const fcmResponse = await response.json() as { success?: number; failure?: number };
-        if (fcmResponse.failure && fcmResponse.failure > 0) {
-          // Token invalide ou révoqué
-          await supabaseAdmin
-            .from('notifications')
-            .update({ status: 'failed', error_log: `FCM failure: ${JSON.stringify(fcmResponse)}` })
-            .eq('id', notifId);
-        } else {
-          await supabaseAdmin
-            .from('notifications')
-            .update({ status: 'sent', sent_at: new Date().toISOString() })
-            .eq('id', notifId);
-        }
-      } else {
-        const errorText = await response.text();
-        await supabaseAdmin
-          .from('notifications')
-          .update({ status: 'failed', error_log: errorText.substring(0, 500) })
-          .eq('id', notifId);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erreur réseau FCM inconnue';
       await supabaseAdmin
         .from('notifications')
-        .update({ status: 'failed', error_log: msg })
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', notifId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur Firebase inconnue';
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'failed', error_log: msg.substring(0, 500) })
         .eq('id', notifId);
     }
   }

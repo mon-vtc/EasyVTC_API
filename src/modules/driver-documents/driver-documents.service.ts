@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import {
   DriverDocument,
   DriverDocumentWithSignedUrl,
@@ -391,8 +392,22 @@ export class DriverDocumentsService {
     // Vérifier si le dossier complet est validé → activer le chauffeur automatiquement
     await this.checkAndActivateDriver(existing.driver_id);
 
-    // TODO: Envoyer notification au chauffeur (push + email)
-    // await this.notifyDriver(existing.driver_id, 'validated', existing.doc_type);
+    // Notifier le chauffeur
+    const { data: driverRecord } = await supabaseAdmin
+      .from('drivers')
+      .select('user_id')
+      .eq('id', existing.driver_id)
+      .single();
+
+    if (driverRecord) {
+      notificationsService.sendToUser(
+        driverRecord.user_id as string,
+        'document_validated',
+        'Document validé',
+        `Votre ${DOCUMENT_TYPE_LABELS[existing.doc_type as DocumentType]} a été validé par l'équipe.`,
+        { document_id: documentId, doc_type: existing.doc_type },
+      );
+    }
 
     return updated;
   }
@@ -434,8 +449,22 @@ export class DriverDocumentsService {
       throw { status: 500, message: 'Erreur lors du rejet du document' };
     }
 
-    // TODO: Envoyer notification au chauffeur (push + email)
-    // await this.notifyDriver(existing.driver_id, 'rejected', existing.doc_type, dto.reason);
+    // Notifier le chauffeur
+    const { data: driverRecord } = await supabaseAdmin
+      .from('drivers')
+      .select('user_id')
+      .eq('id', existing.driver_id)
+      .single();
+
+    if (driverRecord) {
+      notificationsService.sendToUser(
+        driverRecord.user_id as string,
+        'document_rejected',
+        'Document rejeté',
+        `Votre ${DOCUMENT_TYPE_LABELS[existing.doc_type as DocumentType]} n'a pas été validé. Motif : ${dto.reason}`,
+        { document_id: documentId, doc_type: existing.doc_type, reason: dto.reason },
+      );
+    }
 
     return updated;
   }

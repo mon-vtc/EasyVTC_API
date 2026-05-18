@@ -14,6 +14,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
+import { requireStaff } from '../../middlewares/role.middleware.js';
 import { notificationsController } from './notifications.controller.js';
 
 const router = Router();
@@ -30,4 +31,12 @@ router.get  ('/',            (req, res) => notificationsController.list(req, res
 router.patch('/read-all',    (req, res) => notificationsController.markAllAsRead(req, res));
 router.patch('/:id/read',    (req, res) => notificationsController.markAsRead(req, res));
 
+// Envoi manuel (admin/manager uniquement)
+router.post('/send', requireStaff, (req, res) => notificationsController.send(req, res));
+
 export default router;
+
+// ── Route cron (montée sur /cron/notifications dans app.ts) ──────────────────
+import { Router as CronRouter } from 'express';
+export const cronNotificationsRouter = CronRouter();
+cronNotificationsRouter.post('/reminders', (req, res) => notificationsController.sendTripReminders(req, res));
