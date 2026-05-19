@@ -1,0 +1,758 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-chat-sprint5",
+    "name": "EazyVTC API — Chat",
+    "description": "# EazyVTC — Module Chat (Sprint 5)\n\n## Endpoints couverts\n- `POST /chat/reservations/:reservationId/messages` → Envoyer un message\n- `GET  /chat/reservations/:reservationId/messages` → Historique paginé\n- `GET  /admin/chat`                                → Vue admin des conversations actives\n\n## Architecture\nLes messages sont stockés dans `chat_messages`. Supabase Realtime diffuse chaque INSERT aux clients abonnés au canal `chat:reservation:{id}`. Le backend ne maintient pas de WebSocket — il expose uniquement des routes REST.\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active, assigné à une réservation)\n   - Un compte `admin@test.com` (rôle admin)\n3. Avoir une réservation en statut `assigned` ou `in_progress` appartenant au client de test\n\n## Ordre d'exécution recommandé\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens\n2. **🔍 Setup — Réservation** : trouver et sauvegarder une reservation_id valide\n3. **💬 Client — Envoyer un message** : POST (sauvegarde message_id)\n4. **📖 Client — Historique** : GET avec pagination\n5. **🚗 Driver — Envoyer un message** : POST depuis le compte chauffeur\n6. **👨‍💼 Admin — Vue conversations** : GET /admin/chat\n7. **🔒 Contrôle d'accès** : vérifier 401 / 403 / 400 / 404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `client_user_id` — pour les assertions admin\n- `reservation_id` — depuis la liste des réservations client\n- `message_id` — après envoi du premier message",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:4000", "type": "string" },
+    { "key": "client_token",   "value": "", "type": "string" },
+    { "key": "driver_token",   "value": "", "type": "string" },
+    { "key": "admin_token",    "value": "", "type": "string" },
+    { "key": "client_user_id", "value": "", "type": "string", "description": "Sauvegardé depuis Login Client" },
+    { "key": "reservation_id", "value": "", "type": "string", "description": "ID d'une réservation assigned/in_progress — sauvegardé via 'Get mes réservations'" },
+    { "key": "message_id",     "value": "", "type": "string", "description": "Sauvegardé après le premier POST message client" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Exécuter ces 3 requêtes en premier pour remplir client_token, driver_token et admin_token.",
+      "item": [
+
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('client_token + client_user_id sauvegardés', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.access_token).to.be.a('string').and.not.empty;",
+                "  pm.collectionVariables.set('client_token', data.access_token);",
+                "  if (data.user?.id) {",
+                "    pm.collectionVariables.set('client_user_id', data.user.id);",
+                "    console.log('client_user_id:', data.user.id);",
+                "  }",
+                "  console.log('client_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('driver_token sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.collectionVariables.set('driver_token', data.access_token);",
+                "  console.log('driver_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('admin_token sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.collectionVariables.set('admin_token', data.access_token);",
+                "  console.log('admin_token OK');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔍 Setup — Réservation test",
+      "description": "Trouver une réservation assigned ou in_progress appartenant au client de test. Sauvegarde automatiquement reservation_id.",
+      "item": [
+
+        {
+          "name": "Get mes réservations (client) — sauvegarde reservation_id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations?status=assigned&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["reservations"],
+              "query": [
+                { "key": "status", "value": "assigned" },
+                { "key": "limit",  "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('reservation_id sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  const reservations = data.reservations ?? data.data ?? data;",
+                "  if (Array.isArray(reservations) && reservations.length > 0) {",
+                "    pm.collectionVariables.set('reservation_id', reservations[0].id);",
+                "    console.log('reservation_id:', reservations[0].id);",
+                "  } else {",
+                "    console.warn('Aucune réservation assigned trouvée — saisir reservation_id manuellement');",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "💬 Client — Envoyer un message",
+      "description": "POST /chat/reservations/:reservationId/messages — Nécessite client_token et reservation_id.",
+      "item": [
+
+        {
+          "name": "[Client] Envoyer un message — OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Bonjour, je serai en bas dans 5 minutes.\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('Message retourné avec les bons champs', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data).to.have.property('id');",
+                "  pm.expect(data).to.have.property('reservation_id');",
+                "  pm.expect(data).to.have.property('sender_id');",
+                "  pm.expect(data.sender_role).to.equal('client');",
+                "  pm.expect(data.content).to.equal('Bonjour, je serai en bas dans 5 minutes.');",
+                "  pm.expect(data.read_at).to.be.null;",
+                "  pm.expect(data).to.have.property('created_at');",
+                "  pm.collectionVariables.set('message_id', data.id);",
+                "  console.log('message_id:', data.id);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Envoyer un deuxième message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Je suis au niveau de la porte principale.\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('Second message envoyé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.content).to.equal('Je suis au niveau de la porte principale.');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "📖 Client — Historique des messages",
+      "description": "GET /chat/reservations/:reservationId/messages — Historique paginé, marque les messages comme lus.",
+      "item": [
+
+        {
+          "name": "[Client] Historique — page 1 (défaut)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Structure paginée correcte', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data).to.have.property('messages').that.is.an('array');",
+                "  pm.expect(data).to.have.property('total').that.is.a('number');",
+                "  pm.expect(data).to.have.property('page').that.equal(1);",
+                "  pm.expect(data).to.have.property('limit').that.equal(50);",
+                "  pm.expect(data).to.have.property('total_pages');",
+                "});",
+                "pm.test('Messages triés par created_at ASC', () => {",
+                "  const { data } = pm.response.json();",
+                "  if (data.messages.length >= 2) {",
+                "    const t1 = new Date(data.messages[0].created_at).getTime();",
+                "    const t2 = new Date(data.messages[1].created_at).getTime();",
+                "    pm.expect(t1).to.be.at.most(t2);",
+                "  }",
+                "});",
+                "pm.test('Chaque message a les champs attendus', () => {",
+                "  const { data } = pm.response.json();",
+                "  if (data.messages.length > 0) {",
+                "    const msg = data.messages[0];",
+                "    pm.expect(msg).to.have.all.keys('id', 'reservation_id', 'sender_id', 'sender_role', 'content', 'read_at', 'created_at');",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Historique — pagination (page=1&limit=1)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages?page=1&limit=1",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "1" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Limite appliquée — max 1 message retourné', () => {",
+                "  const { data } = pm.response.json();",
+                "  pm.expect(data.messages.length).to.be.at.most(1);",
+                "  pm.expect(data.limit).to.equal(1);",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🚗 Driver — Envoyer un message",
+      "description": "POST /chat/reservations/:reservationId/messages — Le driver doit être assigné à la réservation.",
+      "item": [
+
+        {
+          "name": "[Driver] Envoyer un message — OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Je suis en route, j'arrive dans 10 minutes.\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('sender_role = driver', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.sender_role).to.equal('driver');",
+                "  pm.expect(data.content).to.include('route');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Admin] Envoyer un message dans la conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Message de support : tout se passe bien ?\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('sender_role = admin', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.sender_role).to.equal('admin');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Vue toutes les conversations",
+      "description": "GET /admin/chat — Accessible uniquement admin et manager. Retourne toutes les réservations actives avec dernier message et nb non-lus.",
+      "item": [
+
+        {
+          "name": "[Admin] GET /admin/chat — liste paginée",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "chat"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Structure paginée correcte', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data).to.have.property('conversations').that.is.an('array');",
+                "  pm.expect(data).to.have.property('total').that.is.a('number');",
+                "  pm.expect(data).to.have.property('page').that.equal(1);",
+                "  pm.expect(data).to.have.property('limit').that.equal(10);",
+                "  pm.expect(data).to.have.property('total_pages');",
+                "});",
+                "pm.test('Chaque conversation a les champs attendus', () => {",
+                "  const { data } = pm.response.json();",
+                "  if (data.conversations.length > 0) {",
+                "    const conv = data.conversations[0];",
+                "    pm.expect(conv).to.have.property('reservation_id');",
+                "    pm.expect(conv).to.have.property('pickup_address');",
+                "    pm.expect(conv).to.have.property('dest_address');",
+                "    pm.expect(conv).to.have.property('last_message');",
+                "    pm.expect(conv).to.have.property('last_message_at');",
+                "    pm.expect(conv).to.have.property('unread_count').that.is.a('number');",
+                "    pm.expect(conv).to.have.property('client');",
+                "    pm.expect(conv).to.have.property('driver');",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Admin] GET /admin/chat — page 2",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat?page=2&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "chat"],
+              "query": [
+                { "key": "page",  "value": "2" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('page = 2 dans la réponse', () => {",
+                "  const { data } = pm.response.json();",
+                "  pm.expect(data.page).to.equal(2);",
+                "  pm.expect(data.limit).to.equal(5);",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "description": "Vérifier les cas d'erreur : 401 (pas de token), 403 (mauvais rôle ou mauvaise réservation), 400 (données invalides), 404 (ressource introuvable).",
+      "item": [
+
+        {
+          "name": "[401] POST /chat sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Test sans token\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 401 — non authentifié', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[401] GET /chat sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 401 — non authentifié', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[401] GET /admin/chat sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/chat",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "chat"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 401 — non authentifié', () => pm.response.to.have.status(401));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[403] Client accède à /admin/chat",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "chat"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 403 — rôle insuffisant', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[403] Driver accède à /admin/chat",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "chat"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 403 — rôle insuffisant', () => pm.response.to.have.status(403));"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Message vide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — message vide', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur de validation retournée', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Message trop long (> 2000 chars)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}{{$randomLoremParagraphs}}\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "prerequest",
+            "script": {
+              "exec": [
+                "// Générer un contenu de 2001 caractères",
+                "pm.collectionVariables.set('long_content', 'A'.repeat(2001));"
+              ]
+            }
+          }, {
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — message trop long', () => pm.response.to.have.status(400));",
+                "pm.test('ok = false', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] reservationId invalide (pas un UUID)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/not-a-valid-uuid/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "not-a-valid-uuid", "messages"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+                "pm.test('ok = false', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[404] Réservation inexistante",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/00000000-0000-0000-0000-000000000000/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "00000000-0000-0000-0000-000000000000", "messages"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 403 ou 404 — réservation inconnue', () => {",
+                "  pm.expect(pm.response.code).to.be.oneOf([403, 404]);",
+                "});",
+                "pm.test('ok = false', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Body manquant (POST sans content)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"],
+              "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — body invalide', () => pm.response.to.have.status(400));",
+                "pm.test('Erreurs de champs présentes', () => {",
+                "  const body = pm.response.json();",
+                "  pm.expect(body.ok).to.be.false;",
+                "  pm.expect(body.errors ?? body.message).to.exist;",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    }
+
+  ]
+}

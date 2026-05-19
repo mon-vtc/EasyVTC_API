@@ -9,3 +9,7 @@ uploads/
 Claude.md
 EazyVTC_API.postman_collection.json
 EazyVTC_Local.postman_environment_corrigé.json
+
+# Firebase Admin SDK — NE JAMAIS COMMITER
+*-firebase-adminsdk-*.json
+firebase-adminsdk.json
