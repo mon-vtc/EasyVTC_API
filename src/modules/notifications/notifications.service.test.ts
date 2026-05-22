@@ -23,6 +23,11 @@ jest.unstable_mockModule('../../config/env.js', () => ({
   },
 }));
 
+const mockSendNotificationEmail: jest.Mock = jest.fn();
+jest.unstable_mockModule('../../utils/email.service.js', () => ({
+  sendNotificationEmail: mockSendNotificationEmail,
+}));
+
 const mockFcmSend = jest.fn();
 jest.unstable_mockModule('firebase-admin', () => ({
   default: {
@@ -156,9 +161,11 @@ describe('NotificationsService', () => {
       );
     });
 
-    it('canal email — n\'appelle pas _dispatchPush', async () => {
+    it('canal email — appelle _dispatchEmail, pas _dispatchPush', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const dispatch = jest.spyOn(service as any, '_dispatchPush').mockResolvedValue(undefined);
+      const dispatchPush  = jest.spyOn(service as any, '_dispatchPush').mockResolvedValue(undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const dispatchEmail = jest.spyOn(service as any, '_dispatchEmail').mockResolvedValue(undefined);
       mockFrom.mockReturnValueOnce(chain({ ...mockNotif, channel: 'email' }));
 
       await service.send({
@@ -169,7 +176,12 @@ describe('NotificationsService', () => {
         body:    'Votre réservation a été prise en compte.',
       });
 
-      expect(dispatch).not.toHaveBeenCalled();
+      // fire-and-forget : on attend la micro-tâche suivante
+      await Promise.resolve();
+      expect(dispatchPush).not.toHaveBeenCalled();
+      expect(dispatchEmail).toHaveBeenCalledWith(
+        NOTIF_ID, USER_ID, 'reservation_confirmed', 'Réservation confirmée', 'Votre réservation a été prise en compte.',
+      );
     });
   });
 
@@ -462,6 +474,52 @@ describe('NotificationsService', () => {
         expect.any(String),
         { reservation_id: 'resa-xyz' },
       );
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // _dispatchEmail()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('_dispatchEmail()', () => {
+    const mockUser = { email: 'jean@example.com', first_name: 'Jean' };
+
+    it('envoie l\'email et marque la notification comme sent', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockUser))   // users select
+        .mockReturnValueOnce(chain(null));        // notifications update → sent
+
+      mockSendNotificationEmail.mockImplementation(() => Promise.resolve());
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (service as any)._dispatchEmail(NOTIF_ID, USER_ID, 'reservation_confirmed', 'Titre', 'Corps');
+
+      expect(mockSendNotificationEmail).toHaveBeenCalledWith(
+        'jean@example.com', 'Jean', 'reservation_confirmed', 'Titre', 'Corps',
+      );
+    });
+
+    it('marque failed si l\'utilisateur n\'a pas d\'email', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(null))   // users select → aucun user
+        .mockReturnValueOnce(chain(null));   // notifications update → failed
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (service as any)._dispatchEmail(NOTIF_ID, USER_ID, 'trip_reminder', 'Titre', 'Corps');
+
+      expect(mockSendNotificationEmail).not.toHaveBeenCalled();
+    });
+
+    it('marque failed si sendNotificationEmail lève une erreur', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockUser))   // users select
+        .mockReturnValueOnce(chain(null));        // notifications update → failed
+
+      mockSendNotificationEmail.mockImplementation(() => Promise.reject(new Error('SendGrid unavailable')));
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect((service as any)._dispatchEmail(
+        NOTIF_ID, USER_ID, 'document_expiry', 'Titre', 'Corps',
+      )).resolves.toBeUndefined(); // ne lève jamais vers l'appelant
     });
   });
 });

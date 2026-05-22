@@ -4,7 +4,8 @@
 //
 // Architecture push :
 //   - Stockage systématique en BDD (table notifications)
-//   - Envoi push via FCM Legacy HTTP API (nécessite FCM_SERVER_KEY dans .env)
+//   - Envoi push via Firebase Admin SDK / FCM v1 (nécessite FIREBASE_PROJECT_ID,
+//     FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL dans .env)
 //   - Les notifications sont fire-and-forget : elles ne bloquent jamais
 //     le flux principal (réservation, assignation…)
 // ══════════════════════════════════════════════════════════════════════════════
@@ -12,6 +13,7 @@
 import admin from 'firebase-admin';
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { env } from '../../config/env.js';
+import { sendNotificationEmail } from '../../utils/email.service.js';
 import type {
   Notification,
   NotificationType,
@@ -21,6 +23,7 @@ import type {
 
 // ── Firebase Admin SDK — initialisation lazy (singleton) ─────────────────────
 let _firebaseApp: admin.app.App | null = null;
+let _firebaseWarningLogged = false;
 
 function getFirebaseApp(): admin.app.App | null {
   if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
@@ -75,6 +78,11 @@ export class NotificationsService {
       // Fire-and-forget : l'échec FCM ne remonte pas au caller
       this._dispatchPush(notif.id as string, dto.user_id, dto.title, dto.body, dto.data).catch(
         (err) => console.error('[Notifications] Erreur dispatch push:', err),
+      );
+    } else if (dto.channel === 'email') {
+      // Fire-and-forget : l'échec email ne remonte pas au caller
+      this._dispatchEmail(notif.id as string, dto.user_id, dto.type, dto.title, dto.body).catch(
+        (err) => console.error('[Notifications] Erreur dispatch email:', err),
       );
     }
 
@@ -284,7 +292,7 @@ export class NotificationsService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // PRIVÉ — Dispatch FCM Legacy HTTP API
+  // PRIVÉ — Dispatch push via Firebase Admin SDK (FCM v1)
   // ──────────────────────────────────────────────────────────────────────────
 
   private async _dispatchPush(
@@ -297,7 +305,10 @@ export class NotificationsService {
     // Vérification Firebase avant toute requête BDD (early exit si non configuré)
     const firebaseApp = getFirebaseApp();
     if (!firebaseApp) {
-      console.warn('[Notifications] Firebase non configuré — FIREBASE_PROJECT_ID / PRIVATE_KEY / CLIENT_EMAIL manquants');
+      if (!_firebaseWarningLogged) {
+        console.warn('[Notifications] Firebase non configuré — notifications push désactivées (FIREBASE_PROJECT_ID / FIREBASE_PRIVATE_KEY / FIREBASE_CLIENT_EMAIL manquants dans .env)');
+        _firebaseWarningLogged = true;
+      }
       await supabaseAdmin
         .from('notifications')
         .update({ status: 'failed', error_log: 'Firebase Admin SDK non configuré' })
@@ -336,6 +347,47 @@ export class NotificationsService {
         .eq('id', notifId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erreur Firebase inconnue';
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'failed', error_log: msg.substring(0, 500) })
+        .eq('id', notifId);
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // PRIVÉ — Dispatch email via SendGrid (prod) / Mailtrap (dev)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  private async _dispatchEmail(
+    notifId: string,
+    userId:  string,
+    type:    NotificationType,
+    title:   string,
+    body:    string,
+  ): Promise<void> {
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('email, first_name')
+      .eq('id', userId)
+      .single();
+
+    if (!user?.email) {
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'failed', error_log: 'Aucun email enregistré pour cet utilisateur' })
+        .eq('id', notifId);
+      return;
+    }
+
+    try {
+      await sendNotificationEmail(user.email, user.first_name as string, type, title, body);
+
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', notifId);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur email inconnue';
       await supabaseAdmin
         .from('notifications')
         .update({ status: 'failed', error_log: msg.substring(0, 500) })

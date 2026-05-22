@@ -33,6 +33,7 @@ export const sendNotificationSchema = z.object({
     'reservation_confirmed', 'trip_assigned', 'trip_reminder',
     'driver_arrived', 'invoice_available', 'document_expiry',
     'document_validated', 'document_rejected', 'reservation_cancelled',
+    'new_message',
   ]),
   title: z.string().min(1).max(100),
   body:  z.string().min(1).max(500),

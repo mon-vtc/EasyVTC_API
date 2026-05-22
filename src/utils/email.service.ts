@@ -334,7 +334,59 @@ export async function sendReservationConfirmedEmail(
   await sendMail(to, ` Réservation confirmée — ${reservationRef}`, html);
 }
 
-// 5. Confirmation de réinitialisation du mot de passe
+// =============================================================================
+// 5. Notification générique (canal email du service notifications)
+// =============================================================================
+
+const TYPE_LABELS: Record<string, { label: string; color: string }> = {
+  reservation_confirmed: { label: 'Réservation confirmée',  color: '#38A169' },
+  trip_assigned:         { label: 'Course attribuée',        color: '#3182CE' },
+  trip_reminder:         { label: 'Rappel de course',        color: '#D97706' },
+  driver_arrived:        { label: 'Chauffeur arrivé',        color: '#4A1C1C' },
+  invoice_available:     { label: 'Facture disponible',      color: '#38A169' },
+  document_expiry:       { label: 'Document expirant',       color: '#E53E3E' },
+  document_validated:    { label: 'Document validé',         color: '#38A169' },
+  document_rejected:     { label: 'Document rejeté',         color: '#E53E3E' },
+  reservation_cancelled: { label: 'Réservation annulée',     color: '#E53E3E' },
+  new_message:           { label: 'Nouveau message',         color: '#3182CE' },
+};
+
+export async function sendNotificationEmail(
+  to: string,
+  firstName: string,
+  type: string,
+  title: string,
+  body: string,
+): Promise<void> {
+  const { label, color } = TYPE_LABELS[type] ?? { label: 'Notification', color: C.bordeaux };
+
+  const html = layout(`
+    <p style="margin:0 0 20px;">
+      <span style="display:inline-block;background:${color};color:#fff;
+                   font-size:12px;font-weight:bold;letter-spacing:0.8px;
+                   text-transform:uppercase;padding:4px 12px;border-radius:20px;">
+        ${label}
+      </span>
+    </p>
+    <h2 style="margin:0 0 6px;color:${C.bordeaux};font-size:22px;font-weight:bold;">
+      ${title}</h2>
+    ${hr()}
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 24px;">
+      Bonjour <strong>${firstName}</strong>,</p>
+    <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 24px;">${body}</p>
+    ${hr()}
+    <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
+      Support :
+      <a href="mailto:support@easyvtc.com"
+         style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
+        support@easyvtc.com</a></p>
+  `, `${firstName} — ${title}`);
+
+  await sendMail(to, `${title} — EasyVTC`, html);
+}
+
+// =============================================================================
+// 6. Confirmation de réinitialisation du mot de passe
 export async function sendPasswordChangedEmail(
   to: string,
   firstName: string,
