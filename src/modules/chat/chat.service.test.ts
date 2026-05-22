@@ -526,3 +526,732 @@ describe('ChatService', () => {
     });
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TESTS — ChatService.listConversations()
+// ══════════════════════════════════════════════════════════════════════════════
+
+const RESA_ID_2    = 'resa-uuid-B';
+const DRIVER_USER_2 = 'driver-user-uuid-999';
+
+const mockMsgA = {
+  reservation_id: RESA_ID,
+  content:        'Bonjour, je serai en bas.',
+  created_at:     '2026-05-21T10:00:00Z',
+  sender_role:    'client',
+  sender_id:      CLIENT_ID,
+};
+const mockMsgB = {
+  reservation_id: RESA_ID_2,
+  content:        'En route !',
+  created_at:     '2026-05-21T11:00:00Z', // plus récent → doit apparaître en tête
+  sender_role:    'driver',
+  sender_id:      DRIVER_USER_ID,
+};
+
+const mockResaA = {
+  id:             RESA_ID,
+  scheduled_at:   '2026-05-22T09:00:00Z',
+  status:         'assigned',
+  pickup_address: '1 rue de la Paix, Paris',
+  dest_address:   'CDG Terminal 2E',
+  client:  { id: CLIENT_ID,      first_name: 'Alice', last_name: 'Dupont',  profile_photo_url: null },
+  driver:  { user: { id: DRIVER_USER_ID, first_name: 'Bob',   last_name: 'Martin', profile_photo_url: null } },
+};
+const mockResaB = {
+  id:             RESA_ID_2,
+  scheduled_at:   '2026-05-23T10:00:00Z',
+  status:         'in_progress',
+  pickup_address: 'Gare du Nord',
+  dest_address:   'Orly Sud',
+  client:  { id: CLIENT_ID,       first_name: 'Alice', last_name: 'Dupont',  profile_photo_url: null },
+  driver:  { user: { id: DRIVER_USER_2, first_name: 'Luc',   last_name: 'Bernard', profile_photo_url: null } },
+};
+
+describe('ChatService — listConversations()', () => {
+  let service: InstanceType<typeof ChatService>;
+
+  beforeEach(() => {
+    service = new ChatService();
+    jest.resetAllMocks();
+  });
+
+  it('client — retourne les conversations triées par dernier message DESC', async () => {
+    // Requête 1 : reservation IDs du client
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }, { id: RESA_ID_2 }], error: null } as never),
+    };
+    // Requête 2 : messages triés DESC (RESA_ID_2 plus récent → en tête)
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: [mockMsgB, mockMsgA], error: null } as never),
+    };
+    // Requêtes 3+4 parallèles
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [mockResaA, mockResaB], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [{ reservation_id: RESA_ID }], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations).toHaveLength(2);
+    expect(result.total).toBe(2);
+    // RESA_ID_2 (message à 11h) doit être en tête
+    expect(result.conversations[0].reservation_id).toBe(RESA_ID_2);
+    expect(result.conversations[1].reservation_id).toBe(RESA_ID);
+  });
+
+  it('unread_count correct : 1 non-lu sur RESA_ID', async () => {
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }], error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: [mockMsgA], error: null } as never),
+    };
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [mockResaA], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [{ reservation_id: RESA_ID }], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations[0].unread_count).toBe(1);
+  });
+
+  it('is_mine = true quand le dernier message vient du user courant', async () => {
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }], error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: [mockMsgA], error: null } as never), // sender = CLIENT_ID
+    };
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [mockResaA], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations[0].last_message?.is_mine).toBe(true);
+  });
+
+  it('other_party = driver pour un client, avec role = "driver"', async () => {
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }], error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: [mockMsgA], error: null } as never),
+    };
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [mockResaA], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations[0].other_party?.role).toBe('driver');
+    expect(result.conversations[0].other_party?.first_name).toBe('Bob');
+  });
+
+  it('preview tronquée à 80 chars + "…" si le message est long', async () => {
+    const longContent = 'X'.repeat(100);
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }], error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({
+        data: [{ ...mockMsgA, content: longContent }], error: null,
+      } as never),
+    };
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [mockResaA], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+    const preview = result.conversations[0].last_message?.content ?? '';
+
+    expect(preview).toHaveLength(81); // 80 + '…'
+    expect(preview).toMatch(/…$/);
+  });
+
+  it('retourne liste vide si aucune réservation pour le client', async () => {
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+    mockFrom.mockReturnValueOnce(resIdsChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations).toHaveLength(0);
+    expect(result.total).toBe(0);
+    expect(mockFrom).toHaveBeenCalledTimes(1); // s'arrête tôt
+  });
+
+  it('retourne liste vide si aucun message dans les réservations', async () => {
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [{ id: RESA_ID }], error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 1, 20);
+
+    expect(result.conversations).toHaveLength(0);
+    expect(result.total).toBe(0);
+  });
+
+  it('driver — résout driverId avant de requêter les réservations', async () => {
+    const driverRecordChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { id: DRIVER_ID }, error: null } as never),
+    };
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+    mockFrom
+      .mockReturnValueOnce(driverRecordChain)
+      .mockReturnValueOnce(resIdsChain);
+
+    const result = await service.listConversations(DRIVER_USER_ID, 'driver', 1, 20);
+
+    expect(result.conversations).toHaveLength(0);
+    // Le premier appel doit être pour résoudre le driverId
+    expect(driverRecordChain.eq).toHaveBeenCalledWith('user_id', DRIVER_USER_ID);
+    // Le deuxième filtre sur driver_id (le record id, pas user_id)
+    expect(resIdsChain.eq).toHaveBeenCalledWith('driver_id', DRIVER_ID);
+  });
+
+  it('driver introuvable — retourne liste vide sans requêtes supplémentaires', async () => {
+    const driverRecordChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: null } as never),
+    };
+    mockFrom.mockReturnValueOnce(driverRecordChain);
+
+    const result = await service.listConversations(DRIVER_USER_ID, 'driver', 1, 20);
+
+    expect(result.conversations).toHaveLength(0);
+    expect(mockFrom).toHaveBeenCalledTimes(1); // s'arrête tôt
+  });
+
+  it('pagination : page 2 retourne les bons IDs', async () => {
+    const ids = ['r1', 'r2', 'r3', 'r4', 'r5'];
+    const msgs = ids.map((id, i) => ({
+      reservation_id: id,
+      content: `msg ${i}`,
+      created_at: `2026-05-21T${String(10 + i).padStart(2, '0')}:00:00Z`,
+      sender_role: 'client',
+      sender_id: CLIENT_ID,
+    })).reverse(); // DESC order (le plus récent en tête)
+
+    const resIdsChain = {
+      select: jest.fn().mockReturnThis(),
+      eq:     jest.fn().mockResolvedValue({ data: ids.map(id => ({ id })), error: null } as never),
+    };
+    const msgChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      order:  jest.fn().mockResolvedValue({ data: msgs, error: null } as never),
+    };
+    // Page 2, limit 2 → slice(2, 4) = ['r3', 'r2'] (ids reversées dans msgs)
+    const resaChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+    const unreadChain = {
+      select: jest.fn().mockReturnThis(),
+      in:     jest.fn().mockReturnThis(),
+      neq:    jest.fn().mockReturnThis(),
+      is:     jest.fn().mockResolvedValue({ data: [], error: null } as never),
+    };
+
+    mockFrom
+      .mockReturnValueOnce(resIdsChain)
+      .mockReturnValueOnce(msgChain)
+      .mockReturnValueOnce(resaChain)
+      .mockReturnValueOnce(unreadChain);
+
+    const result = await service.listConversations(CLIENT_ID, 'client', 2, 2);
+
+    expect(result.total).toBe(5);
+    expect(result.total_pages).toBe(3);
+    expect(result.page).toBe(2);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TESTS — ChatService (canal support)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const TICKET_ID = 'ticket-uuid-777';
+const mockTicket = {
+  id:         TICKET_ID,
+  user_id:    CLIENT_ID,
+  user_role:  'client',
+  category:   'reservation',
+  subject:    'Problème avec ma réservation',
+  status:     'pending',
+  priority:   'normal',
+  created_at: '2026-05-21T10:00:00Z',
+  updated_at: '2026-05-21T10:00:00Z',
+  closed_at:  null,
+};
+
+const mockSupportMessage = {
+  id:          'smsg-uuid-888',
+  ticket_id:   TICKET_ID,
+  sender_id:   CLIENT_ID,
+  sender_role: 'client',
+  content:     "Mon chauffeur n'est pas arrivé.",
+  created_at:  '2026-05-21T10:00:00Z',
+  read_at:     null,
+};
+
+describe('ChatService — Support', () => {
+  let service: InstanceType<typeof ChatService>;
+
+  beforeEach(() => {
+    service = new ChatService();
+    jest.resetAllMocks();
+    mockSendToUser.mockImplementation(() => {});
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // createSupportTicket()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('createSupportTicket()', () => {
+
+    it('crée un ticket et retourne le détail avec le message initial', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(mockSupportMessage));
+
+      const result = await service.createSupportTicket(CLIENT_ID, 'client', {
+        category: 'reservation',
+        subject:  'Problème avec ma réservation',
+        message:  "Mon chauffeur n'est pas arrivé.",
+      });
+
+      expect(result.id).toBe(TICKET_ID);
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].content).toBe("Mon chauffeur n'est pas arrivé.");
+    });
+
+    it('lève 403 si le rôle est admin', async () => {
+      await expect(
+        service.createSupportTicket(ADMIN_ID, 'admin', {
+          category: 'other',
+          subject:  'Test',
+          message:  'Test',
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("lève 500 si l'INSERT ticket échoue", async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
+
+      await expect(
+        service.createSupportTicket(CLIENT_ID, 'client', {
+          category: 'payment',
+          subject:  'Sujet',
+          message:  'Message',
+        }),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+
+    it("lève 500 si l'INSERT message initial échoue", async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(null, { message: 'db error' }));
+
+      await expect(
+        service.createSupportTicket(CLIENT_ID, 'client', {
+          category: 'technical',
+          subject:  'Sujet',
+          message:  'Message',
+        }),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // listSupportTickets()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('listSupportTickets()', () => {
+
+    it('client — liste uniquement ses propres tickets', async () => {
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        range:  jest.fn().mockResolvedValue({ data: [{ ...mockTicket, user: null }], error: null, count: 1 } as never),
+      };
+      mockFrom.mockReturnValueOnce(listChain);
+
+      const result = await service.listSupportTickets(CLIENT_ID, 'client', { page: 1, limit: 20 });
+
+      expect(result.tickets).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(listChain.eq).toHaveBeenCalledWith('user_id', CLIENT_ID);
+    });
+
+    it('admin — liste tous les tickets sans filtre user_id', async () => {
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        range:  jest.fn().mockResolvedValue({ data: [], error: null, count: 0 } as never),
+      };
+      mockFrom.mockReturnValueOnce(listChain);
+
+      const result = await service.listSupportTickets(ADMIN_ID, 'admin', { page: 1, limit: 20 });
+
+      expect(result.total).toBe(0);
+      expect(listChain.eq).not.toHaveBeenCalledWith('user_id', ADMIN_ID);
+    });
+
+    it('filtre par statut si fourni', async () => {
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        range:  jest.fn().mockResolvedValue({ data: [], error: null, count: 0 } as never),
+      };
+      mockFrom.mockReturnValueOnce(listChain);
+
+      await service.listSupportTickets(ADMIN_ID, 'admin', { page: 1, limit: 20, status: 'pending' });
+
+      expect(listChain.eq).toHaveBeenCalledWith('status', 'pending');
+    });
+
+    it('lève 500 si la requête échoue', async () => {
+      const errorChain = {
+        select: jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        range:  jest.fn().mockResolvedValue({ data: null, error: { message: 'db error' }, count: null } as never),
+      };
+      mockFrom.mockReturnValueOnce(errorChain);
+
+      await expect(
+        service.listSupportTickets(CLIENT_ID, 'client', { page: 1, limit: 20 }),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getSupportTicketDetail()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getSupportTicketDetail()', () => {
+
+    it('retourne le ticket avec ses messages', async () => {
+      const ticketChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: { ...mockTicket, user: null }, error: null } as never),
+      };
+      const msgChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: [mockSupportMessage], error: null } as never),
+      };
+      const markReadChain = {
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        neq:    jest.fn().mockReturnThis(),
+        is:     jest.fn().mockResolvedValue({ error: null } as never),
+      };
+
+      mockFrom
+        .mockReturnValueOnce(ticketChain)
+        .mockReturnValueOnce(msgChain)
+        .mockReturnValueOnce(markReadChain);
+
+      const result = await service.getSupportTicketDetail(TICKET_ID, CLIENT_ID, 'client');
+
+      expect(result.id).toBe(TICKET_ID);
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].content).toBe("Mon chauffeur n'est pas arrivé.");
+    });
+
+    it('lève 404 si le ticket est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(
+        service.getSupportTicketDetail(TICKET_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("lève 403 si le client tente d'accéder au ticket d'un autre", async () => {
+      const ticketChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: { ...mockTicket, user_id: 'other-user-id', user: null }, error: null } as never),
+      };
+      mockFrom.mockReturnValueOnce(ticketChain);
+
+      await expect(
+        service.getSupportTicketDetail(TICKET_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("admin accède à n'importe quel ticket sans vérification user_id", async () => {
+      const ticketChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: { ...mockTicket, user_id: 'other-user-id', user: null }, error: null } as never),
+      };
+      const msgChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: [], error: null } as never),
+      };
+      const markReadChain = {
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        neq:    jest.fn().mockReturnThis(),
+        is:     jest.fn().mockResolvedValue({ error: null } as never),
+      };
+
+      mockFrom
+        .mockReturnValueOnce(ticketChain)
+        .mockReturnValueOnce(msgChain)
+        .mockReturnValueOnce(markReadChain);
+
+      const result = await service.getSupportTicketDetail(TICKET_ID, ADMIN_ID, 'admin');
+      expect(result.id).toBe(TICKET_ID);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // updateSupportTicketStatus()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('updateSupportTicketStatus()', () => {
+
+    it('met à jour le statut et retourne le ticket modifié', async () => {
+      const updatedTicket = { ...mockTicket, status: 'in_progress' };
+      mockFrom.mockReturnValueOnce(chain(updatedTicket));
+
+      const result = await service.updateSupportTicketStatus(TICKET_ID, 'in_progress');
+
+      expect(result.status).toBe('in_progress');
+    });
+
+    it('met closed_at quand statut = resolved', async () => {
+      const updatedTicket = { ...mockTicket, status: 'resolved', closed_at: '2026-05-21T11:00:00Z' };
+      const updateChain = {
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: updatedTicket, error: null } as never),
+      };
+      mockFrom.mockReturnValueOnce(updateChain);
+
+      const result = await service.updateSupportTicketStatus(TICKET_ID, 'resolved');
+
+      expect(result.status).toBe('resolved');
+      expect(result.closed_at).toBeTruthy();
+    });
+
+    it('met à jour la priorité si fournie', async () => {
+      const updatedTicket = { ...mockTicket, priority: 'urgent' };
+      const updateChain = {
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: updatedTicket, error: null } as never),
+      };
+      mockFrom.mockReturnValueOnce(updateChain);
+
+      const result = await service.updateSupportTicketStatus(TICKET_ID, 'in_progress', 'urgent');
+
+      expect(result.priority).toBe('urgent');
+    });
+
+    it('lève 404 si le ticket est introuvable (PGRST116)', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { code: 'PGRST116', message: 'not found' }));
+
+      await expect(
+        service.updateSupportTicketStatus(TICKET_ID, 'resolved'),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('lève 500 si la requête UPDATE échoue', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { code: 'OTHER', message: 'db error' }));
+
+      await expect(
+        service.updateSupportTicketStatus(TICKET_ID, 'in_progress'),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // sendSupportMessage()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('sendSupportMessage()', () => {
+
+    it('client propriétaire — envoie un message avec succès', async () => {
+      jest.spyOn(service as any, '_notifySupportRecipient').mockImplementation(() => {});
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(mockSupportMessage));
+
+      const result = await service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', "Mon chauffeur n'est pas arrivé.");
+
+      expect(result.id).toBe(mockSupportMessage.id);
+    });
+
+    it("admin — peut répondre à n'importe quel ticket", async () => {
+      jest.spyOn(service as any, '_notifySupportRecipient').mockImplementation(() => {});
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain({ ...mockSupportMessage, sender_id: ADMIN_ID, sender_role: 'admin' }));
+
+      const result = await service.sendSupportMessage(TICKET_ID, ADMIN_ID, 'admin', 'Nous allons vous aider.');
+
+      expect(result.sender_role).toBe('admin');
+    });
+
+    it('lève 404 si le ticket est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(
+        service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', 'Test'),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("lève 403 si le client tente d'écrire dans le ticket d'un autre", async () => {
+      mockFrom.mockReturnValueOnce(chain({ ...mockTicket, user_id: 'other-user-id' }));
+
+      await expect(
+        service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', 'Test'),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("lève 500 si l'INSERT message échoue", async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(null, { message: 'db error' }));
+
+      await expect(
+        service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', 'Test'),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+
+    it('appelle _notifySupportRecipient après insertion réussie', async () => {
+      const spy = jest.spyOn(service as any, '_notifySupportRecipient').mockImplementation(() => {});
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(mockSupportMessage));
+
+      await service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', 'Test');
+
+      expect(spy).toHaveBeenCalledWith(TICKET_ID, CLIENT_ID, CLIENT_ID, 'client', 'Test');
+    });
+
+    it('réouverture automatique du ticket résolu si utilisateur répond', async () => {
+      const resolvedTicket = { ...mockTicket, status: 'resolved' };
+      const reopenChain = {
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+      };
+      jest.spyOn(service as any, '_notifySupportRecipient').mockImplementation(() => {});
+
+      mockFrom
+        .mockReturnValueOnce(chain(resolvedTicket))
+        .mockReturnValueOnce(reopenChain)
+        .mockReturnValueOnce(chain(mockSupportMessage));
+
+      const result = await service.sendSupportMessage(TICKET_ID, CLIENT_ID, 'client', 'Toujours pas résolu.');
+
+      expect(result).toBeDefined();
+      expect(reopenChain.update).toHaveBeenCalledWith({ status: 'in_progress', closed_at: null });
+    });
+  });
+});
