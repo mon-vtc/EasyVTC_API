@@ -23,6 +23,12 @@ import { driversSelfRoutes, adminDriversRoutes } from './modules/drivers/drivers
 import adminRoutes    from './modules/admin/admin.routes.js';
 import ordersRoutes   from './modules/orders/orders.routes.js';
 import invoicesRoutes from './modules/invoices/invoices.routes.js';
+import {
+  reservationRatingsRouter,
+  driverSelfRatingsRouter,
+  adminDriverRatingsRouter,
+  adminRatingsRouter,
+} from './modules/ratings/ratings.routes.js';
 
 const app = express();
 
@@ -94,6 +100,10 @@ app.use('/support',       supportRouter);
 app.use('/admin/chat',    adminChatRouter);
 app.use('/orders',        ordersRoutes);
 app.use('/invoices',      invoicesRoutes);
+app.use('/reservations',  reservationRatingsRouter);
+app.use('/drivers',       driverSelfRatingsRouter);
+app.use('/admin/drivers', adminDriverRatingsRouter);
+app.use('/admin/ratings', adminRatingsRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

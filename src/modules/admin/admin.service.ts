@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendManagerAccessEmail } from '../../utils/email.service.js';
+import { ratingsService } from '../ratings/ratings.service.js';
 import type {
   CreateManagerDto, UpdateManagerDto, ChangeManagerStatusDto, ManagerListFilters,
   ClientListFilters, ClientListResult, ClientWithStats,
@@ -348,8 +349,15 @@ export class AdminService {
       }
     }
 
+    const avgRatingMap = new Map<string, number | null>();
+    await Promise.all(
+      clientIds.map(async (id: string) => {
+        avgRatingMap.set(id, await ratingsService.computeAvgSubmittedByClient(id));
+      }),
+    );
+
     const clientsWithStats: ClientWithStats[] = (clients ?? []).map(c => {
-      const s = statsMap.get(c.id);
+      const s = statsMap.get((c as any).id);
       const cancellationRate = s && s.total_trips > 0
         ? Math.round((s.cancelled / s.total_trips) * 100)
         : 0;
@@ -358,7 +366,7 @@ export class AdminService {
         total_trips:       s?.total_trips        ?? 0,
         total_spent:       Math.round((s?.total_spent ?? 0) * 100) / 100,
         last_trip_date:    s?.last_trip_date      ?? null,
-        avg_rating:        null,
+        avg_rating:        avgRatingMap.get((c as any).id) ?? null,
         cancellation_rate: cancellationRate,
       };
     });
@@ -403,12 +411,14 @@ export class AdminService {
       if (!last_trip_date || r.scheduled_at > last_trip_date) last_trip_date = r.scheduled_at;
     }
 
+    const avg_rating = await ratingsService.computeAvgSubmittedByClient(id);
+
     return {
       ...(client as any),
       total_trips,
       total_spent:       Math.round(total_spent * 100) / 100,
       last_trip_date,
-      avg_rating:        null,
+      avg_rating,
       cancellation_rate: total_trips > 0 ? Math.round((cancelled / total_trips) * 100) : 0,
     };
   }
@@ -560,6 +570,14 @@ export class AdminService {
       }
     }
 
+    const reservationIds = (trips ?? []).map(t => t.id);
+    const ratingMap = new Map<string, number | null>();
+    await Promise.all(
+      reservationIds.map(async (id: string) => {
+        ratingMap.set(id, await ratingsService.getRatingForReservation(id));
+      }),
+    );
+
     const tripItems: ClientTripItem[] = (trips ?? []).map(t => {
       const driver = t.driver_id ? driverNameMap.get(t.driver_id) : undefined;
       return {
@@ -572,7 +590,7 @@ export class AdminService {
         status:            t.status,
         driver_first_name: driver?.first_name ?? null,
         driver_last_name:  driver?.last_name  ?? null,
-        rating:            null,
+        rating:            ratingMap.get(t.id) ?? null,
       };
     });
 
