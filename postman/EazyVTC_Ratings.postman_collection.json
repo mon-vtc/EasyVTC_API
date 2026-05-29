@@ -1,0 +1,771 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-ratings-sprint6",
+    "name": "EazyVTC API — Évaluations (Sprint 6)",
+    "description": "# EazyVTC — Module Évaluations (Ratings)\n\n## Endpoints couverts\n\n### Client\n- `POST /reservations/:id/rating`          → Soumettre une note 1–5 (course terminée)\n\n### Chauffeur\n- `GET  /drivers/me/ratings`               → Ses propres évaluations + moyenne\n\n### Admin / Manager\n- `GET  /admin/drivers/:id/ratings`         → Évaluations + moyenne d'un chauffeur\n- `GET  /admin/ratings`                    → Liste globale de toutes les évaluations\n- `DELETE /admin/ratings/:id`              → Supprimer une évaluation\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase : un compte client, driver (avec profil drivers), admin\n3. Avoir au moins une réservation en statut `completed` assignée au driver\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Tokens\n2. 🔍 Setup — IDs (réservation terminée + driver_id)\n3. ⭐ Client — Soumettre une évaluation\n4. 🚗 Chauffeur — Voir ses évaluations\n5. 👨‍💼 Admin — Gestion des évaluations\n6. 🔒 Contrôle d'accès\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `reservation_id` (completed), `driver_id` (drivers.id)\n- `rating_id`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:4000", "type": "string" },
+    { "key": "client_token",   "value": "", "type": "string" },
+    { "key": "driver_token",   "value": "", "type": "string" },
+    { "key": "admin_token",    "value": "", "type": "string" },
+    { "key": "reservation_id", "value": "", "type": "string" },
+    { "key": "driver_id",      "value": "", "type": "string" },
+    { "key": "rating_id",      "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Connexion des 3 rôles. Les tokens sont sauvegardés en variables de collection.",
+      "item": [
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('client_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('client_token', data.access_token);",
+            "  console.log('client_token OK — user_id:', data.user?.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('driver_token', data.access_token);",
+            "  console.log('driver_token OK');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('admin_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('admin_token', data.access_token);",
+            "  console.log('admin_token OK');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔍 Setup — IDs (réservation terminée + driver_id)",
+      "description": "Récupère une réservation completed du client et sauvegarde reservation_id + driver_id (drivers.id).\nSi aucune n'existe, les saisir manuellement dans les variables de collection.",
+      "item": [
+        {
+          "name": "GET mes réservations completed (client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/mine?status=completed&limit=5",
+              "host": ["{{base_url}}"], "path": ["reservations", "mine"],
+              "query": [{ "key": "status", "value": "completed" }, { "key": "limit", "value": "5" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('reservation_id et driver_id sauvegardés', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  const list = data.reservations ?? data.data ?? (Array.isArray(data) ? data : []);",
+            "  if (Array.isArray(list) && list.length > 0) {",
+            "    const resa = list[0];",
+            "    pm.collectionVariables.set('reservation_id', resa.id);",
+            "    if (resa.driver_id) pm.collectionVariables.set('driver_id', resa.driver_id);",
+            "    console.log('reservation_id:', resa.id, '| driver_id:', resa.driver_id);",
+            "  } else {",
+            "    console.warn('⚠️ Aucune réservation completed — saisir reservation_id et driver_id manuellement');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "GET liste chauffeurs (admin) — récupérer driver_id",
+          "description": "Alternative si le driver_id n'est pas dans la réservation. Sauvegarde le premier driver_id de la liste.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers?limit=5",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers"],
+              "query": [{ "key": "limit", "value": "5" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_id sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  const list = data.drivers ?? data.data ?? (Array.isArray(data) ? data : []);",
+            "  if (Array.isArray(list) && list.length > 0) {",
+            "    pm.collectionVariables.set('driver_id', list[0].id);",
+            "    console.log('driver_id (drivers.id):', list[0].id);",
+            "  } else {",
+            "    console.warn('⚠️ Aucun chauffeur trouvé — saisir driver_id manuellement');",
+            "  }",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "⭐ Client — Soumettre une évaluation",
+      "description": "POST /reservations/:id/rating\nLe client note le chauffeur après une course terminée (note 1–5 étoiles).",
+      "item": [
+        {
+          "name": "[Client] POST note 5/5 — OK ⭐⭐⭐⭐⭐",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 5\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Évaluation créée', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.have.property('id');",
+            "  pm.expect(data.note).to.equal(5);",
+            "  pm.expect(data.reservation_id).to.equal(pm.collectionVariables.get('reservation_id'));",
+            "  pm.expect(data.driver_id).to.be.a('string');",
+            "  pm.expect(data.client_id).to.be.a('string');",
+            "  pm.expect(data.created_at).to.be.a('string');",
+            "  pm.collectionVariables.set('rating_id', data.id);",
+            "  console.log('rating_id:', data.id, '| note:', data.note);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] POST note 3/5 (autre réservation) — OK ⭐⭐⭐",
+          "description": "Tester avec une autre réservation completed. Adapter reservation_id manuellement si besoin.",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 3\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const status = pm.response.code;",
+            "pm.test('201 créée ou 409 doublon attendu', () => {",
+            "  pm.expect(status).to.be.oneOf([201, 409]);",
+            "  console.log('Résultat attendu — code:', status);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[409] Double notation — même réservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 1\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 409 — déjà évaluée', () => pm.response.to.have.status(409));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "pm.test('Message doublon', () => {",
+            "  const { message } = pm.response.json();",
+            "  pm.expect(message).to.include('évaluée');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] Note invalide — 0 (hors plage 1–5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 0\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — note < 1', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "pm.test('Erreur sur le champ note', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.errors?.note ?? body.message).to.exist;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] Note invalide — 6 (hors plage 1–5)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 6\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — note > 5', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] Note manquante — body vide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — note manquante', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] Note décimale (non entier)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4.5\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — note non entière', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] reservation_id invalide (pas UUID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/not-a-uuid/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "not-a-uuid", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] Réservation inexistante (UUID valide inconnu)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/00000000-0000-0000-0000-000000000000/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "00000000-0000-0000-0000-000000000000", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — réservation inconnue', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 Chauffeur — Voir ses évaluations",
+      "description": "GET /drivers/me/ratings\nLe chauffeur consulte ses propres notes et sa moyenne.",
+      "item": [
+        {
+          "name": "[Driver] GET /drivers/me/ratings — page 1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/ratings?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "ratings"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.ratings).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "  console.log('Total évaluations:', data.total, '| Moyenne:', data.avg_note);",
+            "});",
+            "pm.test('avg_note est un nombre ou null', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.avg_note !== null) {",
+            "    pm.expect(data.avg_note).to.be.a('number');",
+            "    pm.expect(data.avg_note).to.be.at.least(1);",
+            "    pm.expect(data.avg_note).to.be.at.most(5);",
+            "  }",
+            "});",
+            "pm.test('Chaque évaluation a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.ratings.length > 0) {",
+            "    const r = data.ratings[0];",
+            "    ['id','reservation_id','client_id','driver_id','note','created_at',",
+            "     'client_first_name','client_last_name','reservation_scheduled_at'].forEach(k => {",
+            "      pm.expect(r, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(r.note).to.be.within(1, 5);",
+            "  }",
+            "});",
+            "pm.test('Évaluations triées DESC par created_at', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.ratings.length >= 2) {",
+            "    const t1 = new Date(data.ratings[0].created_at).getTime();",
+            "    const t2 = new Date(data.ratings[1].created_at).getTime();",
+            "    pm.expect(t1).to.be.at.least(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET /drivers/me/ratings — pagination limit=1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/ratings?page=1&limit=1",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "ratings"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "1" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Limite appliquée', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.ratings.length).to.be.at.most(1);",
+            "  pm.expect(data.limit).to.equal(1);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Gestion des évaluations",
+      "description": "Endpoints admin/manager : vue par chauffeur, liste globale, suppression.",
+      "item": [
+        {
+          "name": "[Admin] GET /admin/drivers/:id/ratings — évaluations d'un chauffeur",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/ratings?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "ratings"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.ratings).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "  console.log('Driver', pm.collectionVariables.get('driver_id'), '— évals:', data.total, '| avg_note:', data.avg_note);",
+            "});",
+            "pm.test('avg_note correct', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.avg_note !== null) {",
+            "    pm.expect(data.avg_note).to.be.a('number');",
+            "    pm.expect(data.avg_note).to.be.within(1, 5);",
+            "  }",
+            "});",
+            "pm.test('Chaque évaluation a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.ratings.length > 0) {",
+            "    const r = data.ratings[0];",
+            "    ['id','reservation_id','client_id','driver_id','note','created_at',",
+            "     'client_first_name','client_last_name','reservation_scheduled_at'].forEach(k => {",
+            "      pm.expect(r, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(r.note).to.be.within(1, 5);",
+            "    if (!pm.collectionVariables.get('rating_id') && r.id) {",
+            "      pm.collectionVariables.set('rating_id', r.id);",
+            "      console.log('rating_id récupéré via admin:', r.id);",
+            "    }",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/drivers/:id/ratings — page 2",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/ratings?page=2&limit=5",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "ratings"],
+              "query": [{ "key": "page", "value": "2" }, { "key": "limit", "value": "5" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('page = 2 dans la réponse', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.page).to.equal(2);",
+            "  pm.expect(data.limit).to.equal(5);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/ratings — liste globale page 1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.ratings).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "  console.log('Total évaluations toutes courses:', data.total);",
+            "});",
+            "pm.test('Chaque évaluation admin a driver_first_name/last_name', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.ratings.length > 0) {",
+            "    const r = data.ratings[0];",
+            "    ['id','reservation_id','client_id','driver_id','note','created_at',",
+            "     'client_first_name','client_last_name',",
+            "     'driver_first_name','driver_last_name',",
+            "     'reservation_scheduled_at'].forEach(k => {",
+            "      pm.expect(r, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(r.note).to.be.within(1, 5);",
+            "    if (!pm.collectionVariables.get('rating_id')) {",
+            "      pm.collectionVariables.set('rating_id', r.id);",
+            "      console.log('rating_id:', r.id);",
+            "    }",
+            "  }",
+            "});",
+            "pm.test('Évaluations triées DESC par created_at', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.ratings.length >= 2) {",
+            "    const t1 = new Date(data.ratings[0].created_at).getTime();",
+            "    const t2 = new Date(data.ratings[1].created_at).getTime();",
+            "    pm.expect(t1).to.be.at.least(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/ratings — pagination limit=2",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings?page=1&limit=2",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "2" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Max 2 évaluations dans la page', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.ratings.length).to.be.at.most(2);",
+            "  pm.expect(data.limit).to.equal(2);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] DELETE /admin/ratings/:id — supprimer une évaluation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings/{{rating_id}}",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings", "{{rating_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Évaluation supprimée', () => {",
+            "  const { ok, message } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(message).to.include('supprimée');",
+            "  console.log('rating_id supprimé:', pm.collectionVariables.get('rating_id'));",
+            "  pm.collectionVariables.set('rating_id', '');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[404] DELETE rating inexistant",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — évaluation inconnue', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] DELETE rating_id invalide (pas UUID)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings/not-a-uuid",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings", "not-a-uuid"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "description": "Vérifications 401 (sans token), 403 (mauvais rôle), et scénarios métier refusés.",
+      "item": [
+        {
+          "name": "[401] POST /reservations/:id/rating sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /drivers/me/ratings sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/drivers/me/ratings", "host": ["{{base_url}}"], "path": ["drivers", "me", "ratings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /admin/ratings sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/ratings", "host": ["{{base_url}}"], "path": ["admin", "ratings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver ne peut pas soumettre une note (seul le client peut)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — seul le client peut noter', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Admin ne peut pas soumettre une note",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — admin ne peut pas noter', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/ratings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/ratings", "host": ["{{base_url}}"], "path": ["admin", "ratings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — client ne peut pas accéder à la liste globale', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/drivers/:id/ratings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/ratings",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "ratings"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /drivers/me/ratings (rôle incorrect)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/me/ratings", "host": ["{{base_url}}"], "path": ["drivers", "me", "ratings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — seul un driver peut accéder', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client supprime une évaluation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/ratings/{{rating_id}}",
+              "host": ["{{base_url}}"], "path": ["admin", "ratings", "{{rating_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — seul admin/manager peut supprimer', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[422] Réservation non terminée (status != completed)",
+          "description": "Nécessite une réservation en cours (assigned ou in_progress). Adapter reservation_id manuellement.",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/reservations/{{reservation_id}}/rating",
+              "host": ["{{base_url}}"], "path": ["reservations", "{{reservation_id}}", "rating"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": 4\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const status = pm.response.code;",
+            "pm.test('422 (non terminée) ou 409 (doublon) ou 201 (succès) selon l\\'état', () => {",
+            "  pm.expect(status).to.be.oneOf([201, 409, 422]);",
+            "  console.log('Code:', status, '—', pm.response.json().message ?? 'OK');",
+            "});"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

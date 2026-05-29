@@ -12,6 +12,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { ratingsService } from '../ratings/ratings.service.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import { pricingService } from '../pricing/pricing.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
@@ -676,48 +677,55 @@ export class ReservationsService {
       conflictingDriverIds = new Set((conflicts ?? []).map((c: any) => c.driver_id));
     }
 
-    return rows
-      .filter(d => !conflictingDriverIds.has(d.id))
-      .map(d => {
-        const activeVehicle = Array.isArray(d.vehicles)
-          ? (d.vehicles.find((v: any) => v.is_active) ?? null)
-          : null;
+    const eligible = rows.filter(d => !conflictingDriverIds.has(d.id));
 
-        return {
-          id:           d.id,
-          rating:       null,
-          is_online:    d.is_online,
-          status:       d.status,
-          vehicle_type: d.vehicle_type,
-          zone:         d.zone,
-          user:         d.user,
-          vehicle:      activeVehicle
-            ? {
-                id:           activeVehicle.id,
-                model:        activeVehicle.model,
-                plate_number: activeVehicle.plate_number,
-                brand:        activeVehicle.brand,
-                color:        activeVehicle.color,
-                type:         activeVehicle.type,
-                photo_url:    activeVehicle.photo_url,
-              }
-            : null,
-        } satisfies AvailableDriverDto;
-      });
+    const avgRatingMap = new Map<string, number | null>();
+    await Promise.all(
+      eligible.map(async d => {
+        avgRatingMap.set(d.id, await ratingsService.computeAvgForDriver(d.id));
+      }),
+    );
+
+    return eligible.map(d => {
+      const activeVehicle = Array.isArray(d.vehicles)
+        ? (d.vehicles.find((v: any) => v.is_active) ?? null)
+        : null;
+
+      return {
+        id:           d.id,
+        rating:       avgRatingMap.get(d.id) ?? null,
+        is_online:    d.is_online,
+        status:       d.status,
+        vehicle_type: d.vehicle_type,
+        zone:         d.zone,
+        user:         d.user,
+        vehicle:      activeVehicle
+          ? {
+              id:           activeVehicle.id,
+              model:        activeVehicle.model,
+              plate_number: activeVehicle.plate_number,
+              brand:        activeVehicle.brand,
+              color:        activeVehicle.color,
+              type:         activeVehicle.type,
+              photo_url:    activeVehicle.photo_url,
+            }
+          : null,
+      } satisfies AvailableDriverDto;
+    });
   }
 
   // ──────────────────────────────────────────────────────────────────────────
   // PRIVÉS — Helpers internes
   // ──────────────────────────────────────────────────────────────────────────
 
-  private _mapDriver(raw: any): AvailableDriverDto | null {
+  private _mapDriver(raw: any, avgRating: number | null = null): AvailableDriverDto | null {
     if (!raw) return null;
     const activeVehicle = Array.isArray(raw.vehicles)
       ? (raw.vehicles.find((v: any) => v.is_active) ?? null)
       : null;
     return {
       id:           raw.id,
-      rating:       null,
+      rating:       avgRating,
       is_online:    raw.is_online,
       status:       raw.status,
       vehicle_type: raw.vehicle_type,
