@@ -11,7 +11,7 @@ import usersRoutes         from './modules/users/users.routes.js';
 import pricingRoutes       from './modules/pricing/pricing.routes.js';
 import reservationsRoutes  from './modules/reservations/reservations.routes.js';
 import notificationsRoutes, { cronNotificationsRouter } from './modules/notifications/notifications.routes.js';
-import chatRoutes, { adminChatRouter } from './modules/chat/chat.routes.js';
+import chatRoutes, { adminChatRouter, supportRouter } from './modules/chat/chat.routes.js';
 import {
   driverDocumentsRoutes,
   adminDocumentsRoutes,
@@ -90,6 +90,7 @@ app.use('/pricing',       pricingRoutes);
 app.use('/reservations',  reservationsRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/chat',          chatRoutes);
+app.use('/support',       supportRouter);
 app.use('/admin/chat',    adminChatRouter);
 app.use('/orders',        ordersRoutes);
 app.use('/invoices',      invoicesRoutes);

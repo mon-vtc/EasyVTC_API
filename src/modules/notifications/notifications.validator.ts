@@ -27,5 +27,19 @@ export const notificationListFiltersSchema = z.object({
     .refine((v) => !isNaN(v) && v >= 1 && v <= 50, { message: 'Limit doit être entre 1 et 50' }),
 });
 
+export const sendNotificationSchema = z.object({
+  user_id: z.string().uuid('user_id invalide'),
+  type:    z.enum([
+    'reservation_confirmed', 'trip_assigned', 'trip_reminder',
+    'driver_arrived', 'invoice_available', 'document_expiry',
+    'document_validated', 'document_rejected', 'reservation_cancelled',
+    'new_message',
+  ]),
+  title: z.string().min(1).max(100),
+  body:  z.string().min(1).max(500),
+  data:  z.record(z.string(), z.string()).optional(),
+});
+
 export type RegisterTokenInput           = z.infer<typeof registerTokenSchema>;
 export type NotificationListFiltersInput = z.infer<typeof notificationListFiltersSchema>;
+export type SendNotificationInput        = z.infer<typeof sendNotificationSchema>;

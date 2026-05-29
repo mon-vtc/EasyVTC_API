@@ -41,7 +41,34 @@ export const setManagerPermissionsSchema = z.object({
     .max(MANAGER_PERMISSIONS.length, 'Permissions invalides'),
 });
 
+const normalizeDateValue = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+    const [day, month, year] = trimmed.split('-');
+    return `${year}-${month}-${day}`;
+  }
+  return trimmed;
+};
+
+const normalizedDateSchema = z.preprocess(normalizeDateValue, z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date invalide (format YYYY-MM-DD ou DD-MM-YYYY)')).optional();
+
+export const adminStatsFiltersSchema = z.object({
+  period: z.enum(['all', 'day', 'week', 'month']).optional(),
+  date: normalizedDateSchema,
+  date_from: normalizedDateSchema,
+  date_to: normalizedDateSchema,
+}).refine((data) => {
+  if (data.date && (data.date_from || data.date_to)) return false;
+  if (data.date_from && data.date_to) return data.date_from <= data.date_to;
+  return true;
+}, {
+  message: 'Utilisez soit date + period, soit date_from/date_to, et date_from doit précéder date_to.',
+});
+
 export type CreateManagerInput = z.infer<typeof createManagerSchema>;
 export type UpdateManagerInput = z.infer<typeof updateManagerSchema>;
 export type ChangeManagerStatusInput = z.infer<typeof changeManagerStatusSchema>;
 export type SetManagerPermissionsInput = z.infer<typeof setManagerPermissionsSchema>;
+export type AdminStatsFiltersInput = z.infer<typeof adminStatsFiltersSchema>;

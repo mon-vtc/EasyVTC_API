@@ -5,7 +5,7 @@ import type {
   ClientListFilters, ClientListResult, ClientWithStats,
   ClientGlobalStats, ClientTripsResult, ClientTripItem,
   SetManagerPermissionsDto, ManagerPermissionsResult, ManagerPermission,
-  AdminStats,
+  AdminStats, AdminStatsFilters,
 } from './admin.types.js';
 import type { UserProfile } from '../users/users.types.js';
 
@@ -414,16 +414,23 @@ export class AdminService {
   }
 
   // ── GET /admin/stats — Tableau de bord statistiques ────────────────────────
-  async getStats(): Promise<AdminStats> {
+  async getStats(filters?: AdminStatsFilters): Promise<AdminStats> {
+    const { dateFrom, dateTo } = this.normalizeStatsDateRange(filters);
+
+    let reservationsQuery = supabaseAdmin
+      .from('reservations')
+      .select('status, price_final, price_estimated, country, driver_id');
+
+    if (dateFrom) reservationsQuery = reservationsQuery.gte('scheduled_at', dateFrom);
+    if (dateTo)   reservationsQuery = reservationsQuery.lte('scheduled_at', dateTo);
+
     const [
       { data: reservations },
       { data: drivers },
       { count: totalClients },
       { count: activeClients },
     ] = await Promise.all([
-      supabaseAdmin
-        .from('reservations')
-        .select('status, price_final, price_estimated, country, vehicle_type'),
+      reservationsQuery,
       supabaseAdmin
         .from('drivers')
         .select('status, is_online'),
@@ -446,6 +453,7 @@ export class AdminService {
     let total_eur = 0;
     let total_xof = 0;
     const vehicleDist: Record<string, number> = {};
+    const completedDriverIds = new Set<string>();
 
     for (const r of rows) {
       by_status[r.status] = (by_status[r.status] ?? 0) + 1;
@@ -455,10 +463,26 @@ export class AdminService {
         if (r.country === 'senegal') total_xof += amount;
         else                         total_eur += amount;
 
-        if (r.vehicle_type) {
-          vehicleDist[r.vehicle_type] = (vehicleDist[r.vehicle_type] ?? 0) + 1;
+        if (r.driver_id) {
+          completedDriverIds.add(r.driver_id);
         }
       }
+    }
+
+    let reservationDriverTypes: Array<{ id: string; vehicle_type: string | null }> = [];
+    if (completedDriverIds.size > 0) {
+      const { data: driverTypes, error: driverTypesError } = await supabaseAdmin
+        .from('drivers')
+        .select('id, vehicle_type')
+        .in('id', Array.from(completedDriverIds));
+
+      if (driverTypesError) throw { status: 500, message: driverTypesError.message };
+      reservationDriverTypes = driverTypes ?? [];
+    }
+
+    for (const driver of reservationDriverTypes) {
+      if (!driver.vehicle_type) continue;
+      vehicleDist[driver.vehicle_type] = (vehicleDist[driver.vehicle_type] ?? 0) + 1;
     }
 
     // Chauffeurs — décompte par statut
@@ -469,6 +493,8 @@ export class AdminService {
     const onTripDrivers = driverRows.filter(d => d.status === 'on_trip').length;
 
     return {
+      date_from: dateFrom,
+      date_to:   dateTo,
       reservations: {
         total:     rows.length,
         by_status,
@@ -552,6 +578,88 @@ export class AdminService {
 
     const total = count ?? 0;
     return { trips: tripItems, total, page, limit, total_pages: Math.ceil(total / limit) };
+  }
+
+  private normalizeStatsDateRange(filters?: AdminStatsFilters): { dateFrom: string | null; dateTo: string | null } {
+    if (!filters) return { dateFrom: null, dateTo: null };
+    if (filters.date_from || filters.date_to) {
+      const dateFrom = filters.date_from ? this.toStartOfDay(filters.date_from) : null;
+      const dateTo   = filters.date_to   ? this.toEndOfDay(filters.date_to)   : null;
+      return { dateFrom, dateTo };
+    }
+
+    if (filters.date || filters.period) {
+      const period = filters.period ?? 'day';
+      const date   = filters.date;
+      return this.computeDateRange(period, date);
+    }
+
+    return { dateFrom: null, dateTo: null };
+  }
+
+  private computeDateRange(period: 'all' | 'day' | 'week' | 'month', date?: string): { dateFrom: string | null; dateTo: string | null } {
+    if (period === 'all') return { dateFrom: null, dateTo: null };
+
+    const today = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
+    if (Number.isNaN(today.getTime())) throw { status: 400, message: 'Date invalide' };
+
+    if (period === 'day') {
+      return {
+        dateFrom: this.toStartOfDay(date ?? today.toISOString().slice(0, 10)),
+        dateTo:   this.toEndOfDay(date ?? today.toISOString().slice(0, 10)),
+      };
+    }
+
+    if (period === 'week') {
+      const day = today.getUTCDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const monday = new Date(today);
+      monday.setUTCDate(today.getUTCDate() + diffToMonday);
+      monday.setUTCHours(0, 0, 0, 0);
+
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      sunday.setUTCHours(23, 59, 59, 999);
+
+      return {
+        dateFrom: monday.toISOString(),
+        dateTo:   sunday.toISOString(),
+      };
+    }
+
+    const firstDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1, 0, 0, 0, 0));
+    const lastDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+
+    return {
+      dateFrom: firstDay.toISOString(),
+      dateTo:   lastDay.toISOString(),
+    };
+  }
+
+  private normalizeDateString(dateString: string): string {
+    const trimmed = dateString.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    if (/^\d{2}-\d{2}-\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split('-');
+      return `${year}-${month}-${day}`;
+    }
+    throw { status: 400, message: 'Date invalide' };
+  }
+
+  private toStartOfDay(dateString: string): string {
+    const normalized = this.normalizeDateString(dateString);
+    const [year, month, day] = normalized.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    if (Number.isNaN(date.getTime())) throw { status: 400, message: 'Date invalide' };
+    return date.toISOString();
+  }
+
+  private toEndOfDay(dateString: string): string {
+    const normalized = this.normalizeDateString(dateString);
+    const [year, month, day] = normalized.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+    if (Number.isNaN(date.getTime())) throw { status: 400, message: 'Date invalide' };
+    return date.toISOString();
   }
 }
 

@@ -1,0 +1,1020 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-notifications",
+    "name": "EazyVTC API — Notifications",
+    "description": "# EazyVTC — Module Notifications (Sprint 5)\n\n## Endpoints couverts\n- `POST   /notifications/token`         → Enregistrer le token FCM de l'appareil\n- `DELETE /notifications/token`         → Supprimer le token FCM\n- `GET    /notifications`               → Liste des notifications (paginée + filtres)\n- `PATCH  /notifications/read-all`      → Tout marquer comme lu\n- `PATCH  /notifications/:id/read`      → Marquer une notification comme lue\n- `POST   /notifications/send`          → Envoi manuel (admin/manager uniquement)\n- `POST   /cron/notifications/reminders`→ Rappels 1h avant course (CRON_SECRET)\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n3. Firebase optionnel en local — les notifications sont créées en base même sans FCM configuré\n\n## Ordre d'exécution recommandé\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens + sauvegarder client_user_id\n2. **👨‍💼 Admin — Envoi manuel** : créer une notification de test (sauvegarde notification_id)\n3. **📱 Token FCM** : tester enregistrement / suppression token\n4. **🔔 Lecture des notifications** : tester GET avec filtres et pagination\n5. **✅ Marquer comme lu** : tester markAsRead et markAllAsRead\n6. **⏰ Cron** : déclencher le rappel automatique\n7. **🔒 Contrôle d'accès** : vérifier 401 / 403 / 400 / 404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `client_user_id` — pour les requêtes admin (envoi ciblé)\n- `notification_id` — après envoi admin, réutilisé pour markAsRead",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",        "value": "http://localhost:4000", "type": "string" },
+    { "key": "client_token",    "value": "", "type": "string" },
+    { "key": "driver_token",    "value": "", "type": "string" },
+    { "key": "admin_token",     "value": "", "type": "string" },
+    { "key": "client_user_id",  "value": "", "type": "string", "description": "Sauvegardé depuis Login Client — utilisé pour POST /notifications/send" },
+    { "key": "notification_id", "value": "", "type": "string", "description": "Sauvegardé après envoi admin — utilisé pour PATCH /:id/read" },
+    { "key": "cron_secret",     "value": "votre-secret-aleatoire-32-caracteres", "type": "string", "description": "Valeur de CRON_SECRET dans .env" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Exécuter ces 3 requêtes en premier pour remplir client_token, driver_token et admin_token. Le Login Client sauvegarde aussi client_user_id nécessaire pour les envois admin.",
+      "item": [
+
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('client_token + client_user_id sauvegardés', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.access_token).to.be.a('string').and.not.empty;",
+                "  pm.collectionVariables.set('client_token', data.access_token);",
+                "  if (data.user && data.user.id) {",
+                "    pm.collectionVariables.set('client_user_id', data.user.id);",
+                "    console.log(' client_user_id:', data.user.id);",
+                "  }",
+                "  console.log(' client_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('driver_token sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.collectionVariables.set('driver_token', data.access_token);",
+                "  console.log(' driver_token OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('admin_token sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.collectionVariables.set('admin_token', data.access_token);",
+                "  console.log(' admin_token OK');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Envoi manuel",
+      "description": "Envoi manuel d'une notification par un admin vers un utilisateur cible. Nécessite client_user_id (sauvegardé au Login Client). Sauvegarde notification_id pour les tests markAsRead.",
+      "item": [
+
+        {
+          "name": "[Admin] Envoyer — trip_assigned au client",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"Chauffeur assigné\",\n  \"body\": \"Jean Dupont prendra en charge votre course du 15 juin.\",\n  \"data\": {\n    \"reservation_id\": \"00000000-0000-0000-0000-000000000001\"\n  }\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('Notification créée + notification_id sauvegardé', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.id).to.be.a('string');",
+                "  pm.expect(data.type).to.equal('trip_assigned');",
+                "  pm.expect(data.channel).to.equal('push');",
+                "  pm.expect(data.status).to.be.oneOf(['pending', 'sent', 'failed']);",
+                "  pm.expect(data.title).to.equal('Chauffeur assigné');",
+                "  pm.expect(data.body).to.include('Jean Dupont');",
+                "  pm.collectionVariables.set('notification_id', data.id);",
+                "  console.log(' notification_id sauvegardé:', data.id);",
+                "  console.log('   Status FCM:', data.status, '(failed = Firebase non configuré en local — normal)');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Admin] Envoyer — document_validated au driver",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"document_validated\",\n  \"title\": \"Document validé\",\n  \"body\": \"Votre Permis de conduire a été validé par l'équipe.\",\n  \"data\": {\n    \"doc_type\": \"license\"\n  }\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('Type document_validated correct', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.type).to.equal('document_validated');",
+                "  pm.expect(data.data).to.deep.include({ doc_type: 'license' });",
+                "  console.log(' Notification document_validated créée:', data.id);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Admin] Envoyer — reservation_cancelled",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"reservation_cancelled\",\n  \"title\": \"Réservation annulée\",\n  \"body\": \"Votre course du 15 juin a été annulée par l'équipe. Motif : Indisponibilité chauffeur.\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                "pm.test('reservation_cancelled sans champ data (optionnel)', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.type).to.equal('reservation_cancelled');",
+                "  pm.expect(data.data).to.be.null;",
+                "  console.log(' data null quand non fourni — OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Envoyer — type invalide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"type_inexistant\",\n  \"title\": \"Test\",\n  \"body\": \"Corps de test\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — type invalide rejeté par Zod', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur de validation', () => {",
+                "  const { ok, errors } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "  pm.expect(errors).to.have.property('type');",
+                "  console.log(' Erreur type:', JSON.stringify(errors.type));",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Envoyer — user_id non-UUID",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"pas-un-uuid\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"Test\",\n  \"body\": \"Corps de test\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — user_id non-UUID rejeté', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur sur user_id', () => {",
+                "  const { ok, errors } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "  pm.expect(errors).to.have.property('user_id');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Envoyer — title trop long (> 100 chars)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n  \"body\": \"Corps valide\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — title > 100 chars rejeté', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur sur title', () => {",
+                "  const { errors } = pm.response.json();",
+                "  pm.expect(errors).to.have.property('title');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "📱 Token FCM",
+      "description": "Gestion du token Firebase Cloud Messaging de l'appareil mobile. Le token est stocké dans la colonne device_token de la table users.",
+      "item": [
+
+        {
+          "name": "[Client] Enregistrer token FCM",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EazyVTC_Local_Dev\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Token enregistré', () => {",
+                "  const { ok, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(message).to.include('Token FCM');",
+                "  console.log(' Token FCM enregistré en base (colonne device_token sur users)');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Enregistrer token FCM — mise à jour",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_token\": \"fGE3j_NOUVEAU:APA91bHPRgkNouveauToken_Apres_Reinstallation_App\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — mise à jour idempotente', () => pm.response.to.have.status(200));",
+                "pm.test('Idempotence : même endpoint pour créer ou mettre à jour', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  console.log(' Remplacement token OK — un seul token par utilisateur');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Enregistrer token trop court (< 10 chars)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_token\": \"court\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — token trop court rejeté par Zod', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur de validation', () => {",
+                "  const { ok, errors } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "  pm.expect(errors).to.have.property('device_token');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Supprimer token FCM (déconnexion)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Token supprimé', () => {",
+                "  const { ok, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(message).to.include('Token FCM supprimé');",
+                "  console.log(' device_token mis à null en base — plus de push pour ce device');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Re-enregistrer token (après delete)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{client_token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EazyVTC_Local_Dev\"\n}"
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — re-enregistrement après suppression', () => pm.response.to.have.status(200));",
+                "const { ok } = pm.response.json();",
+                "pm.expect(ok).to.be.true;"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔔 Lecture des notifications",
+      "description": "GET /notifications — Liste paginée avec filtres. Requiert notification_id sauvegardé (depuis envoi admin).",
+      "item": [
+
+        {
+          "name": "[Client] Liste toutes les notifications (défaut)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Structure pagination valide', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data).to.include.keys(['notifications', 'total', 'unread_count', 'page', 'limit', 'total_pages']);",
+                "  pm.expect(data.notifications).to.be.an('array');",
+                "  pm.expect(data.page).to.equal(1);",
+                "  pm.expect(data.limit).to.equal(20);",
+                "  console.log('Total notifications:', data.total, '| Non lues:', data.unread_count);",
+                "  if (data.notifications.length > 0) {",
+                "    const n = data.notifications[0];",
+                "    pm.expect(n).to.include.keys(['id','type','channel','status','title','body','read_at','created_at']);",
+                "    if (!pm.collectionVariables.get('notification_id')) {",
+                "      pm.collectionVariables.set('notification_id', n.id);",
+                "      console.log(' notification_id sauvegardé depuis liste:', n.id);",
+                "    }",
+                "  }",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Liste — non lues uniquement (unread_only=true)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications?unread_only=true",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [{ "key": "unread_only", "value": "true" }]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Toutes les notifications retournées sont non lues', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  data.notifications.forEach(n => {",
+                "    pm.expect(n.read_at).to.be.null;",
+                "  });",
+                "  console.log('Notifications non lues:', data.total);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Liste — page 1, limit 5",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications?page=1&limit=5",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "5" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Pagination respectée', () => {",
+                "  const { data } = pm.response.json();",
+                "  pm.expect(data.page).to.equal(1);",
+                "  pm.expect(data.limit).to.equal(5);",
+                "  pm.expect(data.notifications.length).to.be.at.most(5);",
+                "  pm.expect(data.total_pages).to.equal(Math.ceil(data.total / 5));",
+                "  console.log('Page 1/5 résultats — total_pages:', data.total_pages);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Liste — page 1, limit 51 (> max Zod)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications?page=1&limit=51",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "51" }
+              ]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — limit > 50 rejeté par Zod', () => pm.response.to.have.status(400));",
+                "pm.test('Erreur limit', () => {",
+                "  const { ok, errors } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "  pm.expect(errors).to.have.property('limit');",
+                "  console.log(' Limite max 50 respectée');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Driver] Liste ses propres notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["notifications"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — driver voit uniquement ses propres notifications', () => pm.response.to.have.status(200));",
+                "pm.test('Isolation par utilisateur', () => {",
+                "  const { ok, data } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.notifications).to.be.an('array');",
+                "  console.log('Notifications driver:', data.total, '(ne doit pas inclure celles du client)');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "✅ Marquer comme lu",
+      "description": "PATCH /notifications/:id/read et PATCH /notifications/read-all. Requiert notification_id sauvegardé.",
+      "item": [
+
+        {
+          "name": "[Client] Marquer une notification comme lue",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_id}}", "read"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Notification marquée comme lue', () => {",
+                "  const { ok, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(message).to.include('lue');",
+                "  console.log(' Notification', pm.collectionVariables.get('notification_id'), 'marquée comme lue');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Marquer une notification lue — idempotence",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_id}}", "read"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — idempotent (déjà lue = OK quand même)', () => pm.response.to.have.status(200));",
+                "pm.test('ok: true même si déjà lu', () => {",
+                "  const { ok } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  console.log(' Idempotence markAsRead : 2ème appel = 200 OK');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Marquer tout comme lu",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/read-all",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "read-all"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Compteur mis à jour retourné', () => {",
+                "  const { ok, data, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.updated).to.be.a('number');",
+                "  pm.expect(data.updated).to.be.at.least(0);",
+                "  console.log(message);",
+                "  console.log('   Notifications marquées lues:', data.updated);",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[Client] Marquer tout — idempotence (déjà toutes lues)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/read-all",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "read-all"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200 — 0 notifications mises à jour (déjà toutes lues)', () => pm.response.to.have.status(200));",
+                "pm.test('updated = 0 si rien à marquer', () => {",
+                "  const { data } = pm.response.json();",
+                "  pm.expect(data.updated).to.equal(0);",
+                "  console.log(' Idempotence read-all : 0 nouvelles mises à jour');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[400] Marquer comme lu — ID non-UUID",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/pas-un-uuid/read",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "pas-un-uuid", "read"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 400 — UUID invalide rejeté', () => pm.response.to.have.status(400));",
+                "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[403/404] Driver essaie de lire une notif du client",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/notifications/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["notifications", "{{notification_id}}", "read"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 403 ou 404 — isolation inter-utilisateurs', () => {",
+                "  pm.expect([403, 404]).to.include(pm.response.code);",
+                "  console.log(' Status:', pm.response.code, '— notification appartenant à un autre user');",
+                "});",
+                "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "⏰ Cron — Rappels automatiques",
+      "description": "POST /cron/notifications/reminders — Envoie des rappels push aux clients 1h avant leur course (fenêtre 45–75 min). Protégé par l'en-tête x-cron-secret.",
+      "item": [
+
+        {
+          "name": "[Cron] Déclencher les rappels (secret valide)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-cron-secret", "value": "{{cron_secret}}" }],
+            "url": {
+              "raw": "{{base_url}}/cron/notifications/reminders",
+              "host": ["{{base_url}}"],
+              "path": ["cron", "notifications", "reminders"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                "pm.test('Résultat du cron retourné', () => {",
+                "  const { ok, data, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.true;",
+                "  pm.expect(data.sent).to.be.a('number');",
+                "  pm.expect(data.sent).to.be.at.least(0);",
+                "  console.log(message);",
+                "  console.log('   Rappels envoyés:', data.sent, '(0 si aucune course dans la fenêtre 45-75min)');",
+                "});"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[401] Cron — secret manquant",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cron/notifications/reminders",
+              "host": ["{{base_url}}"],
+              "path": ["cron", "notifications", "reminders"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 401 — secret manquant', () => pm.response.to.have.status(401));",
+                "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+              ]
+            }
+          }]
+        },
+
+        {
+          "name": "[401] Cron — secret incorrect",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-cron-secret", "value": "mauvais-secret" }],
+            "url": {
+              "raw": "{{base_url}}/cron/notifications/reminders",
+              "host": ["{{base_url}}"],
+              "path": ["cron", "notifications", "reminders"]
+            }
+          },
+          "event": [{
+            "listen": "test",
+            "script": {
+              "exec": [
+                "pm.test('Status 401 — secret incorrect', () => pm.response.to.have.status(401));",
+                "pm.test('Accès refusé', () => {",
+                "  const { ok, message } = pm.response.json();",
+                "  pm.expect(ok).to.be.false;",
+                "  pm.expect(message).to.include('autorisé');",
+                "});"
+              ]
+            }
+          }]
+        }
+
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès — Erreurs attendues",
+      "description": "Vérifier les règles d'autorisation : 401 sans token, 403 rôle insuffisant.",
+      "item": [
+
+        {
+          "name": "📂 401 — Non authentifié",
+          "item": [
+
+            {
+              "name": "[401] GET /notifications sans token",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{base_url}}/notifications", "host": ["{{base_url}}"], "path": ["notifications"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401 — authentification requise', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[401] POST /notifications/token sans token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyTokenTest\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[401] PATCH /notifications/read-all sans token",
+              "request": {
+                "method": "PATCH",
+                "header": [],
+                "url": { "raw": "{{base_url}}/notifications/read-all", "host": ["{{base_url}}"], "path": ["notifications", "read-all"] }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[401] POST /notifications/send sans token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"00000000-0000-0000-0000-000000000001\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"Test\",\n  \"body\": \"Test\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        },
+
+        {
+          "name": "📂 403 — Rôle insuffisant",
+          "item": [
+
+            {
+              "name": "[403] Client essaie POST /notifications/send (admin only)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type",  "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{client_token}}" }
+                ],
+                "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"Tentative\",\n  \"body\": \"Un client ne peut pas envoyer des notifications\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — client ne peut pas envoyer manuellement', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            },
+
+            {
+              "name": "[403] Driver essaie POST /notifications/send (admin only)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type",  "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{driver_token}}" }
+                ],
+                "url": { "raw": "{{base_url}}/notifications/send", "host": ["{{base_url}}"], "path": ["notifications", "send"] },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"{{client_user_id}}\",\n  \"type\": \"trip_assigned\",\n  \"title\": \"Tentative\",\n  \"body\": \"Un driver ne peut pas envoyer des notifications\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "pm.test('Status 403 — driver ne peut pas envoyer manuellement', () => pm.response.to.have.status(403));",
+                    "pm.test('ok: false', () => pm.expect(pm.response.json().ok).to.be.false);"
+                  ]
+                }
+              }]
+            }
+
+          ]
+        }
+
+      ]
+    }
+
+  ]
+}

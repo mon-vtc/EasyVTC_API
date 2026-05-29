@@ -129,7 +129,18 @@ export interface ManagerListFilters {
 
 // ── Statistiques globales dashboard (admin) ───────────────────────────────────
 
+export type AdminStatsPeriod = 'all' | 'day' | 'week' | 'month';
+
+export interface AdminStatsFilters {
+  period?:    AdminStatsPeriod;
+  date?:      string;
+  date_from?: string;
+  date_to?:   string;
+}
+
 export interface AdminStats {
+  date_from?: string | null;
+  date_to?:   string | null;
   reservations: {
     total:       number;
     by_status:   Record<string, number>;

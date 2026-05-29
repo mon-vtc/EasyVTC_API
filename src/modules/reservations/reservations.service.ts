@@ -289,39 +289,50 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 500, message: "Erreur lors de l'assignation du chauffeur" };
 
-    // Générer automatiquement le bon de commande (fire-and-forget)
-    ordersService.createFromReservation(reservationId).catch((err) => {
-      console.error('[Reservations] Erreur génération bon de commande pour réservation', reservationId, err);
-    });
-
     const updated = this._mapReservation(data);
     const driverUserData = (driver as any).users;
     const driverName = driverUserData
       ? `${driverUserData.first_name} ${driverUserData.last_name}`
       : 'Votre chauffeur';
 
-    // Notification au chauffeur
-    notificationsService.sendToUser(
-      driver.user_id as string,
-      'trip_assigned',
-      'Nouvelle course assignée',
-      `Une course vous a été assignée pour le ${this._formatDate(reservation.scheduled_at)}.`,
-      {
-        reservation_id:  reservationId,
-        scheduled_at:    reservation.scheduled_at,
-        pickup_address:  reservation.pickup_address,
-        dest_address:    reservation.dest_address,
-      },
-    );
+    // Générer le bon de commande puis notifier avec l'order_id (fire-and-forget)
+    void (async () => {
+      let orderId: string | undefined;
+      try {
+        const order = await ordersService.createFromReservation(reservationId);
+        orderId = order?.id as string | undefined;
+      } catch (err) {
+        console.error('[Reservations] Erreur génération bon de commande pour réservation', reservationId, err);
+      }
 
-    // Notification au client
-    notificationsService.sendToUser(
-      reservation.client_id,
-      'trip_assigned',
-      'Chauffeur assigné',
-      `${driverName} prendra en charge votre course du ${this._formatDate(reservation.scheduled_at)}.`,
-      { reservation_id: reservationId, driver_id: dto.driver_id },
-    );
+      // Notification au chauffeur
+      notificationsService.sendToUser(
+        driver.user_id as string,
+        'trip_assigned',
+        'Nouvelle course assignée',
+        `Une course vous a été assignée pour le ${this._formatDate(reservation.scheduled_at)}.`,
+        {
+          reservation_id: reservationId,
+          ...(orderId && { order_id: orderId }),
+          scheduled_at:   reservation.scheduled_at,
+          pickup_address: reservation.pickup_address,
+          dest_address:   reservation.dest_address,
+        },
+      );
+
+      // Notification au client
+      notificationsService.sendToUser(
+        reservation.client_id,
+        'trip_assigned',
+        'Chauffeur assigné',
+        `${driverName} prendra en charge votre course du ${this._formatDate(reservation.scheduled_at)}.`,
+        {
+          reservation_id: reservationId,
+          driver_id:      dto.driver_id,
+          ...(orderId && { order_id: orderId }),
+        },
+      );
+    })();
 
     return updated;
   }
@@ -496,8 +507,11 @@ export class ReservationsService {
       })
       .eq('reservation_id', reservationId);
 
-    // Générer la facture automatiquement (fire-and-forget)
+    // Générer la facture puis notifier avec l'invoice_id (fire-and-forget)
+    const currency = reservation.country === 'senegal' ? 'XOF' : 'EUR';
+    const amount   = dto.price_adjusted ?? price_final;
     void (async () => {
+      let invoiceId: string | undefined;
       try {
         const { data: tripRow } = await supabaseAdmin
           .from('trips')
@@ -506,21 +520,25 @@ export class ReservationsService {
           .single();
 
         if (tripRow?.id) {
-          await invoicesService.createFromTrip(tripRow.id as string);
+          const invoice = await invoicesService.createFromTrip(tripRow.id as string);
+          invoiceId = invoice?.id as string | undefined;
         }
       } catch (err) {
         console.error('[Reservations] Erreur génération facture pour reservation', reservationId, err);
       }
-    })();
 
-    // Notification au client — facture disponible
-    notificationsService.sendToUser(
-      reservation.client_id,
-      'invoice_available',
-      'Course terminée',
-      `Merci pour votre course ! Montant : ${dto.price_adjusted ?? price_final} ${reservation.country === 'senegal' ? 'XOF' : 'EUR'}.`,
-      { reservation_id: reservationId },
-    );
+      // Notification au client — facture disponible (avec invoice_id si disponible)
+      notificationsService.sendToUser(
+        reservation.client_id,
+        'invoice_available',
+        'Course terminée',
+        `Merci pour votre course ! Montant : ${amount} ${currency}.`,
+        {
+          reservation_id: reservationId,
+          ...(invoiceId && { invoice_id: invoiceId }),
+        },
+      );
+    })();
 
     return this._mapReservation(data);
   }
