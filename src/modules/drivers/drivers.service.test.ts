@@ -58,6 +58,7 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     eq:          jest.fn().mockReturnThis(),
     neq:         jest.fn().mockReturnThis(),
     or:          jest.fn().mockReturnThis(),
+    in:          jest.fn().mockReturnThis(),
     gte:         jest.fn().mockReturnThis(),
     lte:         jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
@@ -68,6 +69,15 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
       Promise.resolve(resolved).then(resolve, reject),
   };
   return c;
+}
+
+// Chain pour la table commissions (resolves via .in())
+function commChain(commissions: unknown[] = []) {
+  const resolved = { data: commissions, error: null } as never;
+  return {
+    select: jest.fn().mockReturnThis(),
+    in:     jest.fn().mockResolvedValue(resolved),
+  };
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -363,9 +373,7 @@ describe('DriversService', () => {
       },
     ];
 
-    it(' retourne le total des revenus sur la semaine', async () => {
-      // La chaîne revenues : select→eq→eq→order→gte→lte→await
-      // Toutes les méthodes retournent this, la résolution se fait via then()
+    it(' retourne le total des revenus sur la semaine (sans commission configurée)', async () => {
       const resolved = { data: mockCompletedResas, error: null } as never;
       const revenuesChain: Record<string, unknown> = {
         select:  jest.fn().mockReturnThis(),
@@ -377,25 +385,35 @@ describe('DriversService', () => {
           Promise.resolve(resolved).then(resolve, reject),
       };
       mockFrom
-        .mockReturnValueOnce(chain(mockDriverRecord))
-        .mockReturnValueOnce(revenuesChain);
+        .mockReturnValueOnce(chain(mockDriverRecord))  // resolveDriverId
+        .mockReturnValueOnce(revenuesChain)            // réservations
+        .mockReturnValueOnce(commChain());             // commissions (vides = non configurées)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
       expect(result.total_trips).toBe(2);
+      // Sans commission, net = gross
+      expect(result.total_gross).toBeCloseTo(103.50, 2);
+      expect(result.total_commission).toBe(0);
+      expect(result.total_net).toBeCloseTo(103.50, 2);
       expect(result.total_revenue).toBeCloseTo(103.50, 2);
       expect(result.currency).toBe('EUR');
       expect(result.trips).toHaveLength(2);
+      expect(result.trips[0].commission_amount).toBe(0);
     });
 
     it(' period = all — retourne toutes les courses sans filtre de date', async () => {
-      const revenuesChain = {
+      const resolved = { data: mockCompletedResas, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
-        order:   jest.fn().mockResolvedValue({ data: mockCompletedResas, error: null } as never),
+        order:   jest.fn().mockReturnThis(),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
-        .mockReturnValueOnce(revenuesChain);
+        .mockReturnValueOnce(revenuesChain)
+        .mockReturnValueOnce(commChain());
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'all');
       expect(result.period).toBe('all');
@@ -418,15 +436,16 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
         .mockReturnValueOnce(emptyChain);
+      // Pas de mock commissions car early return si rows.length === 0
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'month', '2026-04-01');
       expect(result.total_trips).toBe(0);
       expect(result.total_revenue).toBe(0);
+      expect(result.total_gross).toBe(0);
+      expect(result.total_commission).toBe(0);
     });
 
     it(' price_adjusted écrase price_final dans le calcul du total', async () => {
-      // resa-1 : price_adjusted=60 (geste commercial), price_final=48.50 ignoré
-      // resa-2 : pas de price_adjusted → price_final=55 utilisé
       const resasWithAdjustment = [
         { id: 'resa-1', scheduled_at: '2026-04-10T09:00:00Z',
           pickup_address: '1 rue de la Paix', dest_address: 'CDG',
@@ -435,7 +454,6 @@ describe('DriversService', () => {
           pickup_address: 'Gare du Nord', dest_address: 'Orly',
           price_final: 55.00, price_adjusted: null, country: 'france' },
       ];
-
       const resolved = { data: resasWithAdjustment, error: null } as never;
       const revenuesChain: Record<string, unknown> = {
         select: jest.fn().mockReturnThis(),
@@ -448,10 +466,13 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
-        .mockReturnValueOnce(revenuesChain);
+        .mockReturnValueOnce(revenuesChain)
+        .mockReturnValueOnce(commChain());
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
-      // 60.00 (ajusté) + 55.00 (final) = 115.00
+      // gross: 60.00 (ajusté) + 55.00 = 115.00, sans commission net = gross
+      expect(result.total_gross).toBeCloseTo(115.00, 2);
+      expect(result.total_net).toBeCloseTo(115.00, 2);
       expect(result.total_revenue).toBeCloseTo(115.00, 2);
     });
 
@@ -480,6 +501,218 @@ describe('DriversService', () => {
       mockFrom.mockReturnValueOnce(chain(null));
       await expect(service.adminUpdateDriver('unknown-id', { tva_rate: 10 }))
         .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getPlanningAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getPlanningAdmin()', () => {
+    const mockReservations = [
+      {
+        id: 'resa-admin-1', status: 'completed',
+        scheduled_at: '2026-06-01T10:00:00Z',
+        pickup_address: '12 av. Victor Hugo', dest_address: 'Aéroport CDG T2',
+        vehicle_type: 'berline', price_estimated: 78, price_final: 78,
+        country: 'france', client: { first_name: 'Alice', last_name: 'Dubois', phone: '+33600000002' },
+        trip: { id: 'trip-1', started_at: '2026-06-01T10:15:00Z', ended_at: '2026-06-01T11:05:00Z', actual_distance_km: 42, actual_duration_min: 50 },
+      },
+    ];
+
+    it(' retourne le planning d\'un chauffeur par son driver_id (admin)', async () => {
+      const planningChain = {
+        select:  jest.fn().mockReturnThis(),
+        eq:      jest.fn().mockReturnThis(),
+        neq:     jest.fn().mockReturnThis(),
+        gte:     jest.fn().mockReturnThis(),
+        lte:     jest.fn().mockReturnThis(),
+        order:   jest.fn().mockResolvedValue({ data: mockReservations, error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // vérification existence
+        .mockReturnValueOnce(planningChain);             // requête réservations
+
+      const result = await service.getPlanningAdmin(DRIVER_ID, 'month', '2026-06-01');
+      expect(result.period).toBe('month');
+      expect(result.reservations).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.date_from).toContain('2026-06-01');
+    });
+
+    it(' retourne le planning hebdo vide pour un chauffeur sans course', async () => {
+      const planningChain = {
+        select:  jest.fn().mockReturnThis(),
+        eq:      jest.fn().mockReturnThis(),
+        neq:     jest.fn().mockReturnThis(),
+        gte:     jest.fn().mockReturnThis(),
+        lte:     jest.fn().mockReturnThis(),
+        order:   jest.fn().mockResolvedValue({ data: [], error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(planningChain);
+
+      const result = await service.getPlanningAdmin(DRIVER_ID, 'week');
+      expect(result.reservations).toHaveLength(0);
+      expect(result.total).toBe(0);
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+      await expect(service.getPlanningAdmin('unknown-driver-id', 'week'))
+        .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getRevenuesAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getRevenuesAdmin()', () => {
+    const mockCompletedResas = [
+      {
+        id: 'resa-a1', scheduled_at: '2026-06-02T09:00:00Z',
+        pickup_address: 'Gare de Lyon', dest_address: 'Orly T4',
+        price_final: 62.00, price_adjusted: null, country: 'france',
+      },
+      {
+        id: 'resa-a2', scheduled_at: '2026-06-04T14:00:00Z',
+        pickup_address: 'Montparnasse', dest_address: 'CDG T1',
+        price_final: 85.50, price_adjusted: null, country: 'france',
+      },
+    ];
+
+    it(' retourne les revenus d\'un chauffeur par son driver_id (admin, mois, sans commission)', async () => {
+      const resolved = { data: mockCompletedResas, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
+        select:  jest.fn().mockReturnThis(),
+        eq:      jest.fn().mockReturnThis(),
+        gte:     jest.fn().mockReturnThis(),
+        lte:     jest.fn().mockReturnThis(),
+        order:   jest.fn().mockReturnThis(),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // vérification existence
+        .mockReturnValueOnce(revenuesChain)             // requête revenus
+        .mockReturnValueOnce(commChain());              // commissions vides
+
+      const result = await service.getRevenuesAdmin(DRIVER_ID, 'month', '2026-06-01');
+      expect(result.total_trips).toBe(2);
+      expect(result.total_gross).toBeCloseTo(147.50, 2);
+      expect(result.total_commission).toBe(0);
+      expect(result.total_net).toBeCloseTo(147.50, 2);
+      expect(result.total_revenue).toBeCloseTo(147.50, 2);
+      expect(result.currency).toBe('EUR');
+      expect(result.revenue_by_currency.XOF).toBe(0);
+    });
+
+    it(' revenue_by_currency.XOF correctement agrégé pour un chauffeur Sénégal', async () => {
+      const xofResas = [
+        { id: 'xof-1', scheduled_at: '2026-06-03T08:00:00Z',
+          pickup_address: 'Dakar Centre', dest_address: 'Aéroport LSS',
+          price_final: 25000, price_adjusted: null, country: 'senegal' },
+        { id: 'xof-2', scheduled_at: '2026-06-05T16:00:00Z',
+          pickup_address: 'Plateau', dest_address: 'Almadies',
+          price_final: 12000, price_adjusted: 10000, country: 'senegal' },
+      ];
+      const resolved = { data: xofResas, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(revenuesChain)
+        .mockReturnValueOnce(commChain());
+
+      const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
+      // xof-1: 25000, xof-2: price_adjusted=10000 (écrase 12000) → gross=35000
+      expect(result.total_gross).toBe(35000);
+      expect(result.revenue_by_currency.XOF).toBe(35000);
+      expect(result.revenue_by_currency.EUR).toBe(0);
+      expect(result.total_revenue).toBe(35000);
+      expect(result.currency).toBe('XOF');
+    });
+
+    it(' revenue_by_currency.XOF avec commission prélevée', async () => {
+      const xofResas = [
+        { id: 'xof-1', scheduled_at: '2026-06-03T08:00:00Z',
+          pickup_address: 'Dakar Centre', dest_address: 'Aéroport LSS',
+          price_final: 25000, price_adjusted: null, country: 'senegal' },
+      ];
+      const resolved = { data: xofResas, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
+      };
+      // Commission de 12% sur 25000 XOF = 3000 XOF → net = 22000 XOF
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(revenuesChain)
+        .mockReturnValueOnce(commChain([
+          { reservation_id: 'xof-1', commission_amount: 3000, driver_net_amount: 22000 },
+        ]));
+
+      const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
+      expect(result.total_gross).toBe(25000);
+      expect(result.total_commission).toBe(3000);
+      expect(result.total_net).toBe(22000);
+      expect(result.revenue_by_currency.XOF).toBe(22000); // net
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+      await expect(service.getRevenuesAdmin('unknown-driver-id', 'month'))
+        .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // revenue_by_currency — correction du bug XOF exclu (getRevenues self)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getRevenues() — commission avec montant réel', () => {
+    it(' total_net = gross - commission quand commission configurée (EUR)', async () => {
+      const resas = [
+        { id: 'r1', scheduled_at: '2026-06-01T09:00:00Z',
+          pickup_address: 'Paris', dest_address: 'CDG',
+          price_final: 80, price_adjusted: null, country: 'france' },
+        { id: 'r2', scheduled_at: '2026-06-02T10:00:00Z',
+          pickup_address: 'Gare de Lyon', dest_address: 'Orly',
+          price_final: 55, price_adjusted: null, country: 'france' },
+      ];
+      const resolved = { data: resas, error: null } as never;
+      const revenuesChain: Record<string, unknown> = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockReturnThis(),
+        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
+          Promise.resolve(resolved).then(resolve, reject),
+      };
+      // 15% sur r1 = 12€, 15% sur r2 = 8.25€
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(revenuesChain)
+        .mockReturnValueOnce(commChain([
+          { reservation_id: 'r1', commission_amount: 12.00, driver_net_amount: 68.00 },
+          { reservation_id: 'r2', commission_amount:  8.25, driver_net_amount: 46.75 },
+        ]));
+
+      const result = await service.getRevenues(DRIVER_USER_ID, 'all');
+      expect(result.total_gross).toBeCloseTo(135, 2);
+      expect(result.total_commission).toBeCloseTo(20.25, 2);
+      expect(result.total_net).toBeCloseTo(114.75, 2);
+      expect(result.total_revenue).toBeCloseTo(114.75, 2);
+      // revenue_by_currency reflète les montants nets
+      expect(result.revenue_by_currency.EUR).toBeCloseTo(114.75, 2);
+      expect(result.trips[0].commission_amount).toBeCloseTo(12.00, 2);
+      expect(result.trips[0].net_amount).toBeCloseTo(68.00, 2);
     });
   });
 });
