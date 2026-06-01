@@ -64,6 +64,22 @@ export class ReservationsController {
     }
   }
 
+  // ── GET /reservations/driver — Chauffeur : historique de ses courses ──────
+  async listDriverReservations(req: Request, res: Response): Promise<void> {
+    const parsed = reservationListFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const result = await reservationsService.listDriverReservations(req.user!.id, parsed.data);
+      res.status(200).json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // ── GET /reservations/driver/active — Chauffeur : sa course active ────────
   async getDriverActive(req: Request, res: Response): Promise<void> {
     try {
@@ -100,6 +116,17 @@ export class ReservationsController {
         req.user!.role,
       );
       res.status(200).json({ ok: true, data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── GET /reservations/drivers/available — Admin : chauffeurs disponibles ──
+  async getAvailableDrivers(req: Request, res: Response): Promise<void> {
+    try {
+      const drivers = await reservationsService.getAvailableDrivers();
+      res.status(200).json({ ok: true, data: drivers });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
