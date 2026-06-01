@@ -29,6 +29,10 @@ import {
   adminDriverRatingsRouter,
   adminRatingsRouter,
 } from './modules/ratings/ratings.routes.js';
+import {
+  commissionSettingsRouter,
+  commissionsReportingRouter,
+} from './modules/commission-settings/commission-settings.routes.js';
 
 const app = express();
 
@@ -104,6 +108,8 @@ app.use('/reservations',  reservationRatingsRouter);
 app.use('/drivers',       driverSelfRatingsRouter);
 app.use('/admin/drivers', adminDriverRatingsRouter);
 app.use('/admin/ratings', adminRatingsRouter);
+app.use('/admin/commission-settings', commissionSettingsRouter);
+app.use('/admin/commissions',         commissionsReportingRouter);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

@@ -19,6 +19,7 @@ import { notificationsService } from '../notifications/notifications.service.js'
 import { driversService } from '../drivers/drivers.service.js';
 import { ordersService } from '../orders/orders.service.js';
 import { invoicesService } from '../invoices/invoices.service.js';
+import { commissionSettingsService } from '../commission-settings/commission-settings.service.js';
 import type {
   Reservation,
   ReservationWithRelations,
@@ -508,7 +509,7 @@ export class ReservationsService {
       })
       .eq('reservation_id', reservationId);
 
-    // Générer la facture puis notifier avec l'invoice_id (fire-and-forget)
+    // Générer la facture, calculer la commission, puis notifier (fire-and-forget)
     const currency = reservation.country === 'senegal' ? 'XOF' : 'EUR';
     const amount   = dto.price_adjusted ?? price_final;
     void (async () => {
@@ -526,6 +527,20 @@ export class ReservationsService {
         }
       } catch (err) {
         console.error('[Reservations] Erreur génération facture pour reservation', reservationId, err);
+      }
+
+      // Calculer et enregistrer la commission de la plateforme
+      if (reservation.driver_id) {
+        commissionSettingsService.calculateAndRecord({
+          reservation_id: reservationId,
+          driver_id:      reservation.driver_id,
+          gross_amount:   amount,
+          zone:           reservation.country as 'france' | 'senegal',
+          vehicle_type:   reservation.vehicle_type ?? null,
+          currency,
+        }).catch((err) => {
+          console.error('[Reservations] Erreur calcul commission pour reservation', reservationId, err);
+        });
       }
 
       // Notification au client — facture disponible (avec invoice_id si disponible)

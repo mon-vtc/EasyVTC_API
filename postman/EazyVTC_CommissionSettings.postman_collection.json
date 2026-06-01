@@ -1,0 +1,1058 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-commission-settings-sprint6",
+    "name": "EazyVTC API — Commission Settings (Sprint 6)",
+    "description": "# EazyVTC — Module Commission Settings\n\n## Endpoints couverts\n\n### Paramétrage des taux (admin uniquement)\n- `GET    /admin/commission-settings`          → Liste tous les paramètrages\n- `GET    /admin/commission-settings/:id`      → Détail d'un paramétrage\n- `POST   /admin/commission-settings`          → Créer un taux\n- `PATCH  /admin/commission-settings/:id`      → Modifier / activer / désactiver\n- `DELETE /admin/commission-settings/:id`      → Supprimer (refusé si déjà utilisé)\n\n### Reporting revenus plateforme (admin uniquement)\n- `GET /admin/commissions/summary`             → Agrégats par période (EUR + XOF)\n- `GET /admin/commissions`                     → Liste détaillée par course\n\n## Logique métier clé\n\n### Sélection du taux applicable\nPour chaque course terminée, le moteur cherche dans l'ordre :\n1. Taux actif correspondant à `(zone + vehicle_type)` exact\n2. Taux actif `(zone, vehicle_type = null)` = wildcard zone\n3. Aucun taux → commission = 0\n\n### Types de taux\n| rate_type    | Calcul                              | Exemple                      |\n|--------------|-------------------------------------|------------------------------|\n| `percentage` | `gross × (rate_value / 100)`        | 15% sur 80€ = 12€ commission |\n| `flat`       | `rate_value` fixe par course        | 5€ par course France         |\n\n### Unicité\nUn seul taux actif par combinaison `(zone, vehicle_type)`. Activer un deuxième retourne **409**.\n\n### Suppression\n- `DELETE` refusé (409) si le taux a déjà été utilisé sur des courses → préférer `PATCH is_active=false`\n\n## Structures de réponse\n\n### Commission Setting\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"id\": \"uuid\",\n    \"label\": \"Commission standard France\",\n    \"zone\": \"france\",\n    \"vehicle_type\": null,\n    \"rate_type\": \"percentage\",\n    \"rate_value\": 15.00,\n    \"is_active\": true,\n    \"created_by\": \"uuid\",\n    \"created_at\": \"2026-06-01T10:00:00Z\",\n    \"updated_at\": \"2026-06-01T10:00:00Z\"\n  }\n}\n```\n\n### Commission Summary\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"month\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-30T23:59:59.999Z\",\n    \"total_rides\": 24,\n    \"total_gross_eur\": 1920.00,\n    \"total_commission_eur\": 288.00,\n    \"total_net_eur\": 1632.00,\n    \"total_gross_xof\": 450000,\n    \"total_commission_xof\": 54000,\n    \"total_net_xof\": 396000,\n    \"commissions\": [...]\n  }\n}\n```\n\n## Prérequis\n1. Lancer l'API : `npm run dev` (port 4000)\n2. Avoir un compte admin en base\n3. Avoir des courses terminées (`status = completed`) pour tester le reporting\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Token Admin\n2. ⚙️ Paramétrage — CRUD\n3. 📊 Reporting — Revenus plateforme\n4. 🔒 Contrôle d'accès & Cas d'erreur\n\n## Variables sauvegardées automatiquement\n- `admin_token`, `driver_token`, `client_token`\n- `setting_id_fr` (taux France générique créé)\n- `setting_id_fr_berline` (taux France berline créé)\n- `setting_id_sn` (taux Sénégal créé)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",             "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",          "value": "", "type": "string" },
+    { "key": "driver_token",         "value": "", "type": "string" },
+    { "key": "client_token",         "value": "", "type": "string" },
+    { "key": "setting_id_fr",        "value": "", "type": "string" },
+    { "key": "setting_id_fr_berline","value": "", "type": "string" },
+    { "key": "setting_id_sn",        "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Connexion des 3 rôles. Les tokens sont stockés en variables de collection pour les tests d'accès.",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('admin_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('admin_token', data.access_token);",
+            "  console.log('admin_token OK');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('driver_token', data.access_token);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('client_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('client_token', data.access_token);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "⚙️ Paramétrage — CRUD Commission Settings",
+      "description": "Création, lecture, modification et suppression des taux de commission.\nExécuter dans l'ordre pour que les setting_id soient disponibles.",
+      "item": [
+
+        {
+          "name": "① GET /admin/commission-settings — liste initiale",
+          "description": "Liste tous les paramètrages existants (y compris ceux désactivés insérés par la migration).",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Réponse ok + tableau', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.be.an('array');",
+            "  console.log('Paramètrages existants:', data.length);",
+            "  data.forEach(s => console.log(' -', s.zone, s.vehicle_type ?? 'ALL', s.rate_type, s.rate_value, s.is_active ? 'ACTIF' : 'inactif'));",
+            "});",
+            "pm.test('Chaque paramétrage a les champs requis', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.length > 0) {",
+            "    const s = data[0];",
+            "    ['id','label','zone','vehicle_type','rate_type','rate_value','is_active','created_at','updated_at'].forEach(k => {",
+            "      pm.expect(s, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(s.rate_type).to.be.oneOf(['percentage', 'flat']);",
+            "    pm.expect(s.zone).to.be.oneOf(['france', 'senegal']);",
+            "    pm.expect(s.rate_value).to.be.a('number').and.at.least(0);",
+            "  }",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "① GET /admin/commission-settings?is_active=false — filtrer inactifs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings?is_active=false",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"],
+              "query": [{ "key": "is_active", "value": "false" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les résultats sont inactifs', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  data.forEach(s => pm.expect(s.is_active, `${s.label} devrait être inactif`).to.be.false);",
+            "  console.log('Inactifs:', data.length);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "① GET /admin/commission-settings?zone=france — filtrer par zone",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings?zone=france",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"],
+              "query": [{ "key": "zone", "value": "france" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les résultats sont zone france', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  data.forEach(s => pm.expect(s.zone).to.equal('france'));",
+            "  console.log('Taux France:', data.length);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "② POST — Créer taux % France (générique toutes catégories)",
+          "description": "Crée un taux de 15% pour toutes les courses France (vehicle_type = null).\nCe taux est la règle de base — il sera écrasé par un taux spécifique si vehicle_type correspond.",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Commission standard France — 15%\",\n  \"zone\": \"france\",\n  \"vehicle_type\": null,\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 15\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — créé', () => pm.response.to.have.status(201));",
+            "pm.test('Paramétrage France % créé et actif', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.zone).to.equal('france');",
+            "  pm.expect(data.vehicle_type).to.be.null;",
+            "  pm.expect(data.rate_type).to.equal('percentage');",
+            "  pm.expect(data.rate_value).to.equal(15);",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  pm.expect(data.id).to.be.a('string');",
+            "  pm.collectionVariables.set('setting_id_fr', data.id);",
+            "  console.log('setting_id_fr:', data.id, '| 15% France toutes catégories');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "② POST — Créer taux % France berline (premium spécifique)",
+          "description": "Crée un taux de 18% pour les berlines France.\nPriorité sur le taux générique France quand vehicle_type = berline.",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Commission berline France — 18% (premium)\",\n  \"zone\": \"france\",\n  \"vehicle_type\": \"berline\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 18\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — créé', () => pm.response.to.have.status(201));",
+            "pm.test('Taux berline France créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.zone).to.equal('france');",
+            "  pm.expect(data.vehicle_type).to.equal('berline');",
+            "  pm.expect(data.rate_type).to.equal('percentage');",
+            "  pm.expect(data.rate_value).to.equal(18);",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  pm.collectionVariables.set('setting_id_fr_berline', data.id);",
+            "  console.log('setting_id_fr_berline:', data.id, '| 18% France berline');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "② POST — Créer taux fixe Sénégal (flat 2500 XOF/course)",
+          "description": "Crée un taux fixe de 2500 XOF par course pour le Sénégal (toutes catégories).",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Commission fixe Sénégal — 2500 XOF/course\",\n  \"zone\": \"senegal\",\n  \"vehicle_type\": null,\n  \"rate_type\": \"flat\",\n  \"rate_value\": 2500\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — créé', () => pm.response.to.have.status(201));",
+            "pm.test('Taux fixe Sénégal créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.zone).to.equal('senegal');",
+            "  pm.expect(data.vehicle_type).to.be.null;",
+            "  pm.expect(data.rate_type).to.equal('flat');",
+            "  pm.expect(data.rate_value).to.equal(2500);",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  pm.collectionVariables.set('setting_id_sn', data.id);",
+            "  console.log('setting_id_sn:', data.id, '| 2500 XOF flat Sénégal');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "③ GET /admin/commission-settings/:id — détail France générique",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Détail correct', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.id).to.equal(pm.collectionVariables.get('setting_id_fr'));",
+            "  pm.expect(data.zone).to.equal('france');",
+            "  pm.expect(data.rate_value).to.equal(15);",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  console.log('Détail:', data.label, '| taux:', data.rate_value, data.rate_type);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "④ PATCH — Modifier le taux France générique (15% → 12%)",
+          "description": "Ajuste le taux de commission France de 15% à 12% sans changer les autres champs.",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rate_value\": 12,\n  \"label\": \"Commission standard France — 12%\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Taux mis à jour à 12%', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.rate_value).to.equal(12);",
+            "  pm.expect(data.label).to.include('12%');",
+            "  pm.expect(data.zone).to.equal('france');",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  console.log('Taux France mis à jour:', data.rate_value, data.rate_type);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "④ PATCH — Désactiver le taux France berline (is_active=false)",
+          "description": "Désactive le taux spécifique berline. Les courses berline France utiliseront alors le taux générique France.",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr_berline}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr_berline}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": false\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Taux berline désactivé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.is_active).to.be.false;",
+            "  console.log('Berline France:', data.label, '→ is_active:', data.is_active);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "④ PATCH — Réactiver le taux France berline (is_active=true)",
+          "description": "Réactive le taux berline. Le taux générique France étant toujours actif, il y a maintenant deux taux actifs France mais sur des vehicle_type différents — pas de conflit.",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr_berline}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr_berline}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": true\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Taux berline réactivé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  console.log('Berline France réactivée — taux:', data.rate_value, '%');",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "⑤ DELETE — Supprimer le taux Sénégal (jamais utilisé)",
+          "description": "Supprime le taux Sénégal s'il n'a encore été utilisé sur aucune course.\nSi des commissions existent déjà pour ce taux → 409 (désactiver plutôt que supprimer).",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_sn}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_sn}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const status = pm.response.code;",
+            "pm.test('200 (supprimé) ou 409 (déjà utilisé)', () => {",
+            "  pm.expect(status).to.be.oneOf([200, 409]);",
+            "  const body = pm.response.json();",
+            "  if (status === 200) {",
+            "    pm.expect(body.ok).to.be.true;",
+            "    pm.collectionVariables.set('setting_id_sn', '');",
+            "    console.log('Taux Sénégal supprimé');",
+            "  } else {",
+            "    pm.expect(body.ok).to.be.false;",
+            "    console.warn('409 — taux déjà utilisé. Désactiver via PATCH is_active=false');",
+            "  }",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "⑥ GET /admin/commission-settings — état final (3 taux actifs)",
+          "description": "Vérification finale après les opérations CRUD. Doit montrer France générique + France berline actifs.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings?is_active=true",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings"],
+              "query": [{ "key": "is_active", "value": "true" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Uniquement les taux actifs retournés', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  data.forEach(s => pm.expect(s.is_active).to.be.true);",
+            "  console.log('Taux actifs:', data.length);",
+            "  data.forEach(s => console.log(' ✅', s.zone, s.vehicle_type ?? 'ALL', '→', s.rate_value, s.rate_type));",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔴 Cas d'erreur — Paramétrage",
+      "description": "Validation des inputs invalides et des contraintes métier.",
+      "item": [
+
+        {
+          "name": "[400] POST — label manquant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"zone\": \"france\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — label requis', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "pm.test('Erreur sur le champ label', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.errors?.label ?? body.message).to.exist;",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[400] POST — zone invalide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Test zone invalide\",\n  \"zone\": \"maroc\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — zone invalide (france|senegal uniquement)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] POST — rate_type invalide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Test rate_type invalide\",\n  \"zone\": \"france\",\n  \"rate_type\": \"tiered\",\n  \"rate_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — rate_type invalide (percentage|flat uniquement)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] POST — rate_value négatif",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Taux négatif\",\n  \"zone\": \"france\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": -5\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — rate_value ne peut pas être négatif', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] POST — percentage > 100",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Taux impossible\",\n  \"zone\": \"france\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 150\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — pourcentage ne peut pas dépasser 100', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] PATCH — body vide (aucun champ fourni)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            },
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — au moins un champ requis', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[404] GET — setting_id inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — paramétrage introuvable', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] GET — setting_id pas un UUID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/not-a-uuid",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "not-a-uuid"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[409] POST — doublon taux actif (même zone + vehicle_type)",
+          "description": "Tente de créer un deuxième taux actif France générique alors qu'un existe déjà.\nDoit retourner 409.",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Doublon France — doit échouer\",\n  \"zone\": \"france\",\n  \"vehicle_type\": null,\n  \"rate_type\": \"flat\",\n  \"rate_value\": 3\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 409 — taux actif déjà existant pour france/ALL', () => pm.response.to.have.status(409));",
+            "pm.test('ok = false + message explicite', () => {",
+            "  const { ok, message } = pm.response.json();",
+            "  pm.expect(ok).to.be.false;",
+            "  pm.expect(message).to.be.a('string').and.include('actif');",
+            "  console.log('Message 409:', message);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[409] PATCH — activer créerait un doublon",
+          "description": "Si on essaie d'activer un taux inactif France générique alors qu'un autre est déjà actif → 409.\nNécessite d'avoir un deuxième taux France générique inactif en base (par exemple via les seeds de la migration).",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": true\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const status = pm.response.code;",
+            "pm.test('200 (déjà actif) ou 409 (conflit) selon l\\'état en base', () => {",
+            "  pm.expect(status).to.be.oneOf([200, 409]);",
+            "  console.log('Code:', status, '— message:', pm.response.json().message);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "📊 Reporting — Revenus plateforme",
+      "description": "Consultation des commissions perçues par la plateforme.\nNécessite des courses terminées (status = completed) pour avoir des données.",
+      "item": [
+
+        {
+          "name": "GET /admin/commissions/summary — mois courant",
+          "description": "Résumé des revenus plateforme pour le mois en cours.\nRetourne les totaux EUR et XOF séparément.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions/summary?period=month",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"],
+              "query": [{ "key": "period", "value": "month" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure summary correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('month');",
+            "  pm.expect(data.date_from).to.be.a('string');",
+            "  pm.expect(data.date_to).to.be.a('string');",
+            "  pm.expect(data.total_rides).to.be.a('number');",
+            "  ['total_gross_eur','total_commission_eur','total_net_eur',",
+            "   'total_gross_xof','total_commission_xof','total_net_xof'].forEach(k => {",
+            "    pm.expect(data, `champ manquant: ${k}`).to.have.property(k);",
+            "    pm.expect(data[k]).to.be.a('number').and.at.least(0);",
+            "  });",
+            "  pm.expect(data.commissions).to.be.an('array');",
+            "  console.log('Mois courant | Courses:', data.total_rides);",
+            "  console.log(' EUR → brut:', data.total_gross_eur, '| comm:', data.total_commission_eur, '| net chauffeurs:', data.total_net_eur);",
+            "  console.log(' XOF → brut:', data.total_gross_xof, '| comm:', data.total_commission_xof, '| net chauffeurs:', data.total_net_xof);",
+            "});",
+            "pm.test('total_gross >= total_commission (commission <= brut)', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.total_gross_eur).to.be.at.least(data.total_commission_eur);",
+            "  pm.expect(data.total_gross_xof).to.be.at.least(data.total_commission_xof);",
+            "});",
+            "pm.test('net = gross - commission (cohérence)', () => {",
+            "  const { data } = pm.response.json();",
+            "  const netEur = Math.round((data.total_gross_eur - data.total_commission_eur) * 100) / 100;",
+            "  pm.expect(data.total_net_eur).to.be.closeTo(netEur, 0.01);",
+            "  const netXof = Math.round(data.total_gross_xof - data.total_commission_xof);",
+            "  pm.expect(data.total_net_xof).to.equal(netXof);",
+            "});",
+            "pm.test('date_from est le 1er du mois', () => {",
+            "  const { data } = pm.response.json();",
+            "  const d = new Date(data.date_from);",
+            "  pm.expect(d.getUTCDate()).to.equal(1);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions/summary — semaine",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions/summary?period=week&date=2026-06-09",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "2026-06-09" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Semaine 8–14 juin 2026', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  pm.expect(data.date_from).to.include('2026-06-08');",
+            "  pm.expect(data.date_to).to.include('2026-06-14');",
+            "  console.log('Semaine 8–14 juin | Courses:', data.total_rides, '| Comm EUR:', data.total_commission_eur);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions/summary — tout (all time)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions/summary?period=all",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"],
+              "query": [{ "key": "period", "value": "all" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('period=all → date_from et date_to null', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('all');",
+            "  pm.expect(data.date_from).to.be.null;",
+            "  pm.expect(data.date_to).to.be.null;",
+            "  console.log('All time | Total courses:', data.total_rides, '| CA plateforme EUR:', data.total_commission_eur, '| CA plateforme XOF:', data.total_commission_xof);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions — liste page 1 (mois courant)",
+          "description": "Liste détaillée des commissions par course avec informations chauffeur et réservation.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions?period=month&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "20" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.commissions).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "  console.log('Commissions mois courant:', data.total, '| pages:', data.total_pages);",
+            "});",
+            "pm.test('Chaque commission a les champs requis', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.commissions.length > 0) {",
+            "    const c = data.commissions[0];",
+            "    ['id','reservation_id','driver_id','zone','rate_type','rate_value',",
+            "     'gross_amount','commission_amount','driver_net_amount','currency','calculated_at'].forEach(k => {",
+            "      pm.expect(c, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(c.gross_amount).to.be.a('number').and.above(0);",
+            "    pm.expect(c.commission_amount).to.be.a('number').and.at.least(0);",
+            "    pm.expect(c.driver_net_amount).to.be.a('number').and.at.least(0);",
+            "    pm.expect(c.gross_amount).to.be.at.least(c.commission_amount);",
+            "    pm.expect(c.currency).to.be.oneOf(['EUR', 'XOF']);",
+            "    pm.expect(c.zone).to.be.oneOf(['france', 'senegal']);",
+            "    console.log('Commission:', c.gross_amount, c.currency, '→ comm:', c.commission_amount, '| net:', c.driver_net_amount);",
+            "  }",
+            "});",
+            "pm.test('Chauffeur et réservation enrichis', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.commissions.length > 0) {",
+            "    const c = data.commissions[0];",
+            "    pm.expect(c).to.have.property('reservation');",
+            "    pm.expect(c).to.have.property('driver');",
+            "    if (c.driver) {",
+            "      pm.expect(c.driver).to.have.property('first_name');",
+            "      pm.expect(c.driver).to.have.property('last_name');",
+            "    }",
+            "    if (c.reservation) {",
+            "      pm.expect(c.reservation).to.have.property('scheduled_at');",
+            "      pm.expect(c.reservation).to.have.property('pickup_address');",
+            "    }",
+            "  }",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions — filtré par zone france",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions?period=all&zone=france&page=1&limit=50",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions"],
+              "query": [
+                { "key": "period", "value": "all" },
+                { "key": "zone",   "value": "france" },
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "50" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Uniquement des commissions France', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  data.commissions.forEach(c => pm.expect(c.zone).to.equal('france'));",
+            "  console.log('Commissions France all time:', data.total);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions — filtré par zone senegal",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions?period=all&zone=senegal&page=1&limit=50",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions"],
+              "query": [
+                { "key": "period", "value": "all" },
+                { "key": "zone",   "value": "senegal" },
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "50" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Uniquement des commissions Sénégal', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  data.commissions.forEach(c => pm.expect(c.zone).to.equal('senegal'));",
+            "  console.log('Commissions Sénégal all time:', data.total);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "GET /admin/commissions — pagination page 2",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions?period=all&page=2&limit=10",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions"],
+              "query": [
+                { "key": "period", "value": "all" },
+                { "key": "page",   "value": "2" },
+                { "key": "limit",  "value": "10" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Page 2 retournée', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.page).to.equal(2);",
+            "  pm.expect(data.limit).to.equal(10);",
+            "  pm.expect(data.commissions.length).to.be.at.most(10);",
+            "});"
+          ]}}]
+        },
+
+        {
+          "name": "[400] GET /admin/commissions/summary — period invalide",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions/summary?period=quarter",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"],
+              "query": [{ "key": "period", "value": "quarter" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — period invalide (week|month|all)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+
+        {
+          "name": "[400] GET /admin/commissions — date format invalide",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commissions?period=month&date=06-2026",
+              "host": ["{{base_url}}"], "path": ["admin", "commissions"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date",   "value": "06-2026" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — format date invalide (YYYY-MM-DD requis)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "description": "Vérifications 401 (sans token) et 403 (rôle insuffisant).\nTous les endpoints commission-settings et commissions sont réservés aux admins.",
+      "item": [
+
+        {
+          "name": "[401] GET /admin/commission-settings sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+
+        {
+          "name": "[401] POST /admin/commission-settings sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Test\",\n  \"zone\": \"france\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+
+        {
+          "name": "[401] GET /admin/commissions/summary sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/commissions/summary", "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+
+        {
+          "name": "[401] GET /admin/commissions sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/commissions", "host": ["{{base_url}}"], "path": ["admin", "commissions"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Driver — GET /admin/commission-settings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Driver — POST /admin/commission-settings",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Test driver\",\n  \"zone\": \"france\",\n  \"rate_type\": \"percentage\",\n  \"rate_value\": 0\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — un driver ne peut pas créer un taux', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Client — GET /admin/commission-settings",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/commission-settings", "host": ["{{base_url}}"], "path": ["admin", "commission-settings"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Client — GET /admin/commissions/summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/commissions/summary", "host": ["{{base_url}}"], "path": ["admin", "commissions", "summary"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Driver — PATCH /admin/commission-settings/:id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"rate_value\": 0\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — un driver ne peut pas modifier un taux', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+
+        {
+          "name": "[403] Driver — DELETE /admin/commission-settings/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/commission-settings/{{setting_id_fr}}",
+              "host": ["{{base_url}}"], "path": ["admin", "commission-settings", "{{setting_id_fr}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — un driver ne peut pas supprimer un taux', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}
