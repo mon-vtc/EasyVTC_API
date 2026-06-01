@@ -265,15 +265,13 @@ export class DriversService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // GET /drivers/me/planning — planning hebdo ou mensuel
+  // PRIVÉ — Logique commune planning (partagée self + admin)
   // ────────────────────────────────────────────────────────────────────────────
-  async getPlanning(
-    userId:  string,
-    period:  PlanningPeriod,
-    date?:   string,
+  private async _fetchPlanning(
+    driverId: string,
+    period:   PlanningPeriod,
+    date?:    string,
   ): Promise<DriverPlanningResult> {
-    const driverId = await this.resolveDriverId(userId);
-
     const { dateFrom, dateTo } = this._computeDateRange(period, date);
 
     const { data, error } = await supabaseAdmin
@@ -292,7 +290,7 @@ export class DriversService {
       .order('scheduled_at', { ascending: true });
 
     if (error) {
-      console.error('[Drivers] getPlanning error:', error);
+      console.error('[Drivers] _fetchPlanning error:', error);
       throw { status: 500, message: 'Erreur lors de la récupération du planning' };
     }
 
@@ -310,25 +308,17 @@ export class DriversService {
       trip:            Array.isArray(r.trip) ? (r.trip[0] ?? null) : (r.trip ?? null),
     }));
 
-    return {
-      period,
-      date_from:    dateFrom,
-      date_to:      dateTo,
-      reservations,
-      total:        reservations.length,
-    };
+    return { period, date_from: dateFrom, date_to: dateTo, reservations, total: reservations.length };
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // GET /drivers/me/revenues — revenus sur la période
+  // PRIVÉ — Logique commune revenus (partagée self + admin)
   // ────────────────────────────────────────────────────────────────────────────
-  async getRevenues(
-    userId:  string,
-    period:  RevenuesPeriod,
-    date?:   string,
+  private async _fetchRevenues(
+    driverId: string,
+    period:   RevenuesPeriod,
+    date?:    string,
   ): Promise<DriverRevenuesResult> {
-    const driverId = await this.resolveDriverId(userId);
-
     let dateFrom: string | null = null;
     let dateTo:   string | null = null;
 
@@ -338,6 +328,7 @@ export class DriversService {
       dateTo   = range.dateTo;
     }
 
+    // 1. Réservations terminées
     let query = supabaseAdmin
       .from('reservations')
       .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country')
@@ -351,39 +342,144 @@ export class DriversService {
     const { data, error } = await query;
 
     if (error) {
-      console.error('[Drivers] getRevenues error:', error);
+      console.error('[Drivers] _fetchRevenues error:', error);
       throw { status: 500, message: 'Erreur lors de la récupération des revenus' };
     }
 
     const rows = data ?? [];
-
-    // Devise : EUR si tout est France, sinon on indique la pluralité
-    // Pour simplifier, on agrège en EUR (Sénégal reste en XOF séparé si besoin côté client)
-    let totalRevenue = 0;
-    const trips = rows.map((r: any) => {
-      // Montant effectif : price_adjusted s'il existe, sinon price_final
-      const amount   = Number(r.price_adjusted ?? r.price_final ?? 0);
-      const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
-      if (currency === 'EUR') totalRevenue += amount;
+    if (rows.length === 0) {
+      const primaryIsXof = false;
       return {
-        reservation_id: r.id,
-        scheduled_at:   r.scheduled_at,
-        pickup_address: r.pickup_address,
-        dest_address:   r.dest_address,
-        price_final:    amount,
+        period, date_from: dateFrom, date_to: dateTo,
+        total_trips: 0, total_gross: 0, total_commission: 0, total_net: 0,
+        total_revenue: 0, currency: 'EUR',
+        revenue_by_currency: { EUR: 0, XOF: 0 },
+        trips: [],
+      };
+    }
+
+    // 2. Commissions correspondantes (une par reservation_id)
+    const reservationIds = rows.map((r: any) => r.id);
+    const { data: commData } = await supabaseAdmin
+      .from('commissions')
+      .select('reservation_id, commission_amount, driver_net_amount')
+      .in('reservation_id', reservationIds);
+
+    const commMap = new Map<string, { commission_amount: number; driver_net_amount: number }>();
+    for (const c of (commData ?? [])) {
+      commMap.set(c.reservation_id, {
+        commission_amount: Number(c.commission_amount),
+        driver_net_amount: Number(c.driver_net_amount),
+      });
+    }
+
+    let grossEur = 0, grossXof = 0;
+    let commEur  = 0, commXof  = 0;
+    let netEur   = 0, netXof   = 0;
+
+    const trips = rows.map((r: any) => {
+      const gross    = Number(r.price_adjusted ?? r.price_final ?? 0);
+      const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
+      const comm     = commMap.get(r.id);
+      // Si commission calculée → utiliser les valeurs enregistrées, sinon gross = net
+      const commissionAmount = comm ? comm.commission_amount : 0;
+      const netAmount        = comm ? comm.driver_net_amount : gross;
+
+      if (currency === 'XOF') {
+        grossXof += gross;
+        commXof  += commissionAmount;
+        netXof   += netAmount;
+      } else {
+        grossEur += gross;
+        commEur  += commissionAmount;
+        netEur   += netAmount;
+      }
+
+      return {
+        reservation_id:    r.id,
+        scheduled_at:      r.scheduled_at,
+        pickup_address:    r.pickup_address,
+        dest_address:      r.dest_address,
+        price_final:       gross,
+        commission_amount: commissionAmount,
+        net_amount:        netAmount,
         currency,
       };
     });
 
+    const primaryIsXof = grossEur === 0 && grossXof > 0;
+    const round2       = (n: number) => Math.round(n * 100) / 100;
+
+    const totalGross = primaryIsXof ? Math.round(grossXof) : round2(grossEur);
+    const totalComm  = primaryIsXof ? Math.round(commXof)  : round2(commEur);
+    const totalNet   = primaryIsXof ? Math.round(netXof)   : round2(netEur);
+
     return {
       period,
-      date_from:     dateFrom,
-      date_to:       dateTo,
-      total_trips:   trips.length,
-      total_revenue: Math.round(totalRevenue * 100) / 100,
-      currency:      'EUR',
+      date_from:           dateFrom,
+      date_to:             dateTo,
+      total_trips:         trips.length,
+      total_gross:         totalGross,
+      total_commission:    totalComm,
+      total_net:           totalNet,
+      total_revenue:       totalNet,           // alias rétro-compatibilité
+      currency:            primaryIsXof ? 'XOF' : 'EUR',
+      revenue_by_currency: {
+        EUR: round2(netEur),
+        XOF: Math.round(netXof),
+      },
       trips,
     };
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/planning — chauffeur voit son propre planning
+  // ────────────────────────────────────────────────────────────────────────────
+  async getPlanning(userId: string, period: PlanningPeriod, date?: string): Promise<DriverPlanningResult> {
+    const driverId = await this.resolveDriverId(userId);
+    return this._fetchPlanning(driverId, period, date);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/planning — admin voit le planning d'un chauffeur
+  // ────────────────────────────────────────────────────────────────────────────
+  async getPlanningAdmin(driverId: string, period: PlanningPeriod, date?: string): Promise<DriverPlanningResult> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) {
+      throw { status: 404, message: 'Chauffeur non trouvé' };
+    }
+
+    return this._fetchPlanning(driverId, period, date);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/revenues — chauffeur voit ses propres revenus
+  // ────────────────────────────────────────────────────────────────────────────
+  async getRevenues(userId: string, period: RevenuesPeriod, date?: string): Promise<DriverRevenuesResult> {
+    const driverId = await this.resolveDriverId(userId);
+    return this._fetchRevenues(driverId, period, date);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/revenues — admin voit les revenus d'un chauffeur
+  // ────────────────────────────────────────────────────────────────────────────
+  async getRevenuesAdmin(driverId: string, period: RevenuesPeriod, date?: string): Promise<DriverRevenuesResult> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) {
+      throw { status: 404, message: 'Chauffeur non trouvé' };
+    }
+
+    return this._fetchRevenues(driverId, period, date);
   }
 
   // ────────────────────────────────────────────────────────────────────────────

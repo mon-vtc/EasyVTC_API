@@ -118,7 +118,9 @@ export interface RevenueTrip {
   scheduled_at: string;
   pickup_address: string;
   dest_address: string;
-  price_final: number;
+  price_final: number;         // montant brut (ce que le client a payé)
+  commission_amount: number;   // part plateforme (0 si non configuré)
+  net_amount: number;          // ce que le chauffeur perçoit = price_final - commission
   currency: string;
 }
 
@@ -127,7 +129,11 @@ export interface DriverRevenuesResult {
   date_from: string | null;
   date_to: string | null;
   total_trips: number;
-  total_revenue: number;
+  total_gross: number;         // total brut avant commission
+  total_commission: number;    // total prélevé par la plateforme
+  total_net: number;           // ce que le chauffeur perçoit réellement
+  total_revenue: number;       // alias de total_net (rétro-compatibilité)
   currency: string;
+  revenue_by_currency: { EUR: number; XOF: number };
   trips: RevenueTrip[];
 }

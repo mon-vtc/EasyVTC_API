@@ -16,6 +16,7 @@ import {
   revenuesQuerySchema,
 } from './drivers.validator.js';
 
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ENDPOINTS CHAUFFEUR
 // ══════════════════════════════════════════════════════════════════════════════
@@ -155,7 +156,75 @@ export async function getMyRevenues(req: Request, res: Response) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ENDPOINTS ADMIN
+// ENDPOINTS ADMIN — Planning & Revenus par driver ID
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /admin/drivers/:id/planning?period=week&date=2026-06-01
+ * Retourne le planning d'un chauffeur spécifique (admin/manager)
+ */
+export async function getDriverPlanningAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const queryValidation = planningQuerySchema.safeParse(req.query);
+    if (!queryValidation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: queryValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = queryValidation.data;
+    const planning = await driversService.getPlanningAdmin(paramValidation.data.id, period, date);
+
+    return res.json({ ok: true, data: planning });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+/**
+ * GET /admin/drivers/:id/revenues?period=month&date=2026-06-01
+ * Retourne les revenus d'un chauffeur spécifique (admin/manager)
+ */
+export async function getDriverRevenuesAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const queryValidation = revenuesQuerySchema.safeParse(req.query);
+    if (!queryValidation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: queryValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = queryValidation.data;
+    const revenues = await driversService.getRevenuesAdmin(paramValidation.data.id, period, date);
+
+    return res.json({ ok: true, data: revenues });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS ADMIN — Gestion chauffeurs
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**

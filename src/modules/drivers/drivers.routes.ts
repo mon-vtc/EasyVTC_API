@@ -61,6 +61,20 @@ adminDriversRoutes.get(
   (req, res) => controller.listDrivers(req, res)
 );
 
+// Planning d'un chauffeur — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/planning',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverPlanningAdmin(req, res)
+);
+
+// Revenus d'un chauffeur — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/revenues',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverRevenuesAdmin(req, res)
+);
+
 // Détail par ID — lecture : admin + manager avec view_drivers
 adminDriversRoutes.get(
   '/:id',
