@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 export const submitRatingSchema = z.object({
   note: z
-    .number({ invalid_type_error: 'La note doit être un nombre' })
+    .number()
     .int('La note doit être un entier')
     .min(1, 'La note minimale est 1')
     .max(5, 'La note maximale est 5'),
