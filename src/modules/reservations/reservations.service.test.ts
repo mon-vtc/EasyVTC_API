@@ -45,6 +45,21 @@ jest.unstable_mockModule('../invoices/invoices.service.js', () => ({
   },
 }));
 
+// vehicleTypesService — validateCode appelé dans createReservation
+jest.unstable_mockModule('../vehicle-types/vehicle-types.service.js', () => ({
+  vehicleTypesService: {
+    validateCode: jest.fn().mockResolvedValue(undefined as never),
+  },
+}));
+
+// promoCodesService — validateCode appelé si dto.promo_code est fourni
+jest.unstable_mockModule('../promo-codes/promo-codes.service.js', () => ({
+  promoCodesService: {
+    validateCode:    jest.fn().mockResolvedValue({ promo_code_id: 'promo-id', code: 'TEST10', discount_type: 'percent', discount_value: 10, discount_amount: 5, final_price: 45 } as never),
+    incrementUsage:  jest.fn().mockResolvedValue(undefined as never),
+  },
+}));
+
 const { ReservationsService } = await import('./reservations.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -548,10 +563,11 @@ describe('ReservationsService', () => {
       mockComputePrice.mockResolvedValue({ ...mockPriceResult, final_price: 48.00 } as never);
 
       mockFrom
-        .mockReturnValueOnce(chain(mockInProgressReservation))  // _getReservationOrThrow
-        .mockReturnValueOnce(chain({ id: DRIVER_ID }))           // _assertDriverOwnsReservation
-        .mockReturnValueOnce(chain(completedResa))               // update réservation
-        .mockReturnValueOnce(chain(null));                       // update trips
+        .mockReturnValueOnce(chain(mockInProgressReservation))              // _getReservationOrThrow
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))                      // _assertDriverOwnsReservation
+        .mockReturnValueOnce(chain({ started_at: '2026-06-05T09:00:00Z' })) // select started_at depuis trips
+        .mockReturnValueOnce(chain(completedResa))                          // update réservation
+        .mockReturnValueOnce(chain(null));                                  // update trips
 
       const result = await service.completeTrip(RESA_ID, DRIVER_USER_ID, {
         actual_distance_km:  32,
@@ -571,6 +587,7 @@ describe('ReservationsService', () => {
       mockFrom
         .mockReturnValueOnce(chain(flatRateInProgress))
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ started_at: '2026-06-05T09:00:00Z' })) // select started_at depuis trips
         .mockReturnValueOnce(chain(completedResa))
         .mockReturnValueOnce(chain(null));
 
