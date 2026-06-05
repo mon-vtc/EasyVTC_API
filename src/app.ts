@@ -3,7 +3,10 @@ import type { Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import swaggerUi from 'swagger-ui-express';
+import { globalLimiter } from './config/rate-limit.js';
 import { supabaseAdmin } from './database/supabase/client.js';
+import { swaggerSpec } from './docs/swagger.js';
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 import authRoutes          from './modules/auth/auth.routes.js';
@@ -33,6 +36,13 @@ import {
   commissionSettingsRouter,
   commissionsReportingRouter,
 } from './modules/commission-settings/commission-settings.routes.js';
+import {
+  adminPromoCodesRouter,
+  promoCodesPublicRouter,
+} from './modules/promo-codes/promo-codes.routes.js';
+import { favoritesRouter } from './modules/favorites/favorites.routes.js';
+import { rgpdRouter }      from './modules/rgpd/rgpd.routes.js';
+import auditLogsRoutes    from './modules/audit-logs/audit-logs.routes.js';
 
 const app = express();
 
@@ -41,6 +51,17 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
+app.use(globalLimiter);
+
+// ── Documentation OpenAPI ────────────────────────────────────────────────────
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+  customSiteTitle: 'EazyVTC API Docs',
+  swaggerOptions: { persistAuthorization: true },
+}));
+app.get('/api-docs.json', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // ── Health checks ────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
@@ -110,6 +131,11 @@ app.use('/admin/drivers', adminDriverRatingsRouter);
 app.use('/admin/ratings', adminRatingsRouter);
 app.use('/admin/commission-settings', commissionSettingsRouter);
 app.use('/admin/commissions',         commissionsReportingRouter);
+app.use('/admin/promo-codes',         adminPromoCodesRouter);
+app.use('/promo-codes',               promoCodesPublicRouter);
+app.use('/users',                     favoritesRouter);
+app.use('/users',                     rgpdRouter);
+app.use('/admin/audit-logs',          auditLogsRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
