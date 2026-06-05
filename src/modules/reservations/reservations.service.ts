@@ -20,6 +20,7 @@ import { driversService } from '../drivers/drivers.service.js';
 import { ordersService } from '../orders/orders.service.js';
 import { invoicesService } from '../invoices/invoices.service.js';
 import { commissionSettingsService } from '../commission-settings/commission-settings.service.js';
+import { promoCodesService } from '../promo-codes/promo-codes.service.js';
 import type {
   Reservation,
   ReservationWithRelations,
@@ -82,6 +83,18 @@ export class ReservationsService {
 
     const pricing_type = dto.flat_rate_id ? 'flat_rate' : 'formula';
 
+    // Appliquer le code promo si fourni (validation stricte côté serveur)
+    let priceAfterPromo = final_price;
+    let promoCodeId: string | null = null;
+    let discountAmount: number | null = null;
+
+    if (dto.promo_code) {
+      const promoResult = await promoCodesService.validateCode(dto.promo_code, final_price);
+      priceAfterPromo = promoResult.final_price;
+      promoCodeId     = promoResult.promo_code_id;
+      discountAmount  = promoResult.discount_amount;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('reservations')
       .insert({
@@ -100,10 +113,12 @@ export class ReservationsService {
         comment:         dto.comment ?? null,
         pricing_type,
         flat_rate_id:    dto.flat_rate_id ?? null,
-        price_estimated: final_price,
+        price_estimated: priceAfterPromo,
         price_breakdown: breakdown,
         distance_km:     dto.distance_km ?? null,
         duration_min:    dto.duration_min ?? null,
+        promo_code_id:   promoCodeId,
+        discount_amount: discountAmount,
       })
       .select(RESERVATION_SELECT)
       .single();
@@ -115,12 +130,17 @@ export class ReservationsService {
 
     const reservation = this._mapReservation(data);
 
+    // Incrémenter le compteur d'utilisation du code promo (fire-and-forget)
+    if (promoCodeId) {
+      promoCodesService.incrementUsage(promoCodeId);
+    }
+
     // Notification de confirmation au client (fire-and-forget)
     notificationsService.sendToUser(
       clientId,
       'reservation_confirmed',
       'Réservation confirmée',
-      `Votre course du ${this._formatDate(dto.scheduled_at)} est enregistrée. Prix estimé : ${final_price} ${currency}.`,
+      `Votre course du ${this._formatDate(dto.scheduled_at)} est enregistrée. Prix estimé : ${priceAfterPromo} ${currency}.`,
       { reservation_id: reservation.id, status: 'pending' },
     );
 
@@ -455,24 +475,36 @@ export class ReservationsService {
       };
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    // Récupérer le trip pour calculer la durée réelle depuis les timestamps
+    const { data: currentTrip } = await supabaseAdmin
+      .from('trips')
+      .select('started_at')
+      .eq('reservation_id', reservationId)
+      .single();
+
+    // Durée réelle = écart started_at → now (toujours disponible, indépendant du GPS)
+    const autoActualDurationMin = currentTrip?.started_at
+      ? Math.round((now.getTime() - new Date(currentTrip.started_at).getTime()) / 60000)
+      : null;
+
+    // Priorité : saisie chauffeur > calcul auto timestamps > estimation initiale
+    const finalDurationMin = dto.actual_duration_min ?? autoActualDurationMin ?? reservation.duration_min ?? null;
+    const finalDistanceKm  = dto.actual_distance_km  ?? reservation.distance_km ?? null;
 
     // Recalculer le prix final si les métriques réelles sont fournies (mode formule uniquement)
     let price_final = reservation.price_estimated;
-    if (
-      dto.actual_distance_km &&
-      dto.actual_duration_min &&
-      reservation.pricing_type === 'formula'
-    ) {
+    if (finalDistanceKm && finalDurationMin && reservation.pricing_type === 'formula') {
       try {
         const recalc = await pricingService.computePrice({
           country:      reservation.country as 'france' | 'senegal',
-          distance_km:  dto.actual_distance_km,
-          duration_min: dto.actual_duration_min,
+          distance_km:  finalDistanceKm,
+          duration_min: finalDurationMin,
         });
         price_final = recalc.final_price;
       } catch {
-        // Si le recalcul échoue, conserver le prix estimé
         price_final = reservation.price_estimated;
       }
     }
@@ -481,11 +513,11 @@ export class ReservationsService {
     const { data, error } = await supabaseAdmin
       .from('reservations')
       .update({
-        status:        'completed',
-        price_final:   dto.price_adjusted ?? price_final,
+        status:         'completed',
+        price_final:    dto.price_adjusted ?? price_final,
         price_adjusted: dto.price_adjusted ?? null,
-        distance_km:   dto.actual_distance_km ?? reservation.distance_km,
-        duration_min:  dto.actual_duration_min ?? reservation.duration_min,
+        distance_km:    finalDistanceKm,
+        duration_min:   finalDurationMin,
       })
       .eq('id', reservationId)
       .select(RESERVATION_SELECT)
@@ -498,13 +530,13 @@ export class ReservationsService {
       console.error('[Reservations] Erreur setOnTripStatus(false) après completeTrip pour driver', reservation.driver_id, err);
     });
 
-    // Mettre à jour le trip
+    // Mettre à jour le trip avec les valeurs réelles
     await supabaseAdmin
       .from('trips')
       .update({
-        ended_at:            now,
-        actual_distance_km:  dto.actual_distance_km ?? null,
-        actual_duration_min: dto.actual_duration_min ?? null,
+        ended_at:            nowIso,
+        actual_distance_km:  finalDistanceKm,
+        actual_duration_min: finalDurationMin,
         driver_notes:        dto.driver_notes ?? null,
       })
       .eq('reservation_id', reservationId);
