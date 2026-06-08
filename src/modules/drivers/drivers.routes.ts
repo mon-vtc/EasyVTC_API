@@ -46,6 +46,26 @@ driversSelfRoutes.get(
   (req, res) => controller.getMyRevenues(req, res)
 );
 
+// Disponibilité (réservations + indisponibilités fusionnées)
+driversSelfRoutes.get(
+  '/me/availability',
+  (req, res) => controller.getMyAvailability(req, res)
+);
+
+// Indisponibilités
+driversSelfRoutes.get(
+  '/me/unavailability',
+  (req, res) => controller.getMyUnavailability(req, res)
+);
+driversSelfRoutes.post(
+  '/me/unavailability',
+  (req, res) => controller.createMyUnavailability(req, res)
+);
+driversSelfRoutes.delete(
+  '/me/unavailability/:unavailId',
+  (req, res) => controller.deleteMyUnavailability(req, res)
+);
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES ADMIN — /admin/drivers
 // ══════════════════════════════════════════════════════════════════════════════
@@ -94,4 +114,28 @@ adminDriversRoutes.patch(
   '/:id/status',
   requireAdmin,
   (req, res) => controller.changeDriverStatus(req, res)
+);
+
+// Disponibilité — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/availability',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverAvailabilityAdmin(req, res)
+);
+
+// Indisponibilités admin
+adminDriversRoutes.get(
+  '/:id/unavailability',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverUnavailabilityAdmin(req, res)
+);
+adminDriversRoutes.post(
+  '/:id/unavailability',
+  requireAdmin,
+  (req, res) => controller.createDriverUnavailabilityAdmin(req, res)
+);
+adminDriversRoutes.delete(
+  '/:id/unavailability/:unavailId',
+  requireAdmin,
+  (req, res) => controller.deleteDriverUnavailabilityAdmin(req, res)
 );

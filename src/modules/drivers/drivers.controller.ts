@@ -14,6 +14,9 @@ import {
   driverIdParamSchema,
   planningQuerySchema,
   revenuesQuerySchema,
+  availabilityQuerySchema,
+  createUnavailabilitySchema,
+  unavailabilityIdParamSchema,
 } from './drivers.validator.js';
 
 
@@ -220,6 +223,190 @@ export async function getDriverRevenuesAdmin(req: Request, res: Response) {
       ok: false,
       message: err.message || 'Erreur serveur',
     });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DISPONIBILITÉ — Chauffeur
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /drivers/me/availability?period=week&date=YYYY-MM-DD
+ * Vue disponibilité complète : réservations + indisponibilités
+ */
+export async function getMyAvailability(req: Request, res: Response) {
+  try {
+    const validation = availabilityQuerySchema.safeParse(req.query);
+    if (!validation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = validation.data;
+    const result = await driversService.getAvailability(req.user!.id, period, date);
+
+    return res.json({ ok: true, data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * GET /drivers/me/unavailability
+ * Lister toutes ses indisponibilités
+ */
+export async function getMyUnavailability(req: Request, res: Response) {
+  try {
+    const list = await driversService.listUnavailability(req.user!.id);
+    return res.json({ ok: true, data: list });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * POST /drivers/me/unavailability
+ * Créer une indisponibilité
+ */
+export async function createMyUnavailability(req: Request, res: Response) {
+  try {
+    const validation = createUnavailabilitySchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const result = await driversService.createUnavailability(req.user!.id, validation.data);
+    return res.status(201).json({ ok: true, message: 'Indisponibilité créée', data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * DELETE /drivers/me/unavailability/:unavailId
+ * Supprimer une indisponibilité (seulement si future)
+ */
+export async function deleteMyUnavailability(req: Request, res: Response) {
+  try {
+    const validation = unavailabilityIdParamSchema.safeParse(req.params);
+    if (!validation.success) {
+      return res.status(400).json({ ok: false, message: 'ID indisponibilité invalide' });
+    }
+
+    await driversService.deleteUnavailability(req.user!.id, validation.data.unavailId);
+    return res.json({ ok: true, message: 'Indisponibilité supprimée' });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DISPONIBILITÉ — Admin
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /admin/drivers/:id/availability?period=week&date=YYYY-MM-DD
+ */
+export async function getDriverAvailabilityAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const queryValidation = availabilityQuerySchema.safeParse(req.query);
+    if (!queryValidation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Paramètres invalides',
+        errors: queryValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const { period, date } = queryValidation.data;
+    const result = await driversService.getAvailabilityAdmin(paramValidation.data.id, period, date);
+    return res.json({ ok: true, data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * GET /admin/drivers/:id/unavailability
+ */
+export async function getDriverUnavailabilityAdmin(req: Request, res: Response) {
+  try {
+    const validation = driverIdParamSchema.safeParse(req.params);
+    if (!validation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const list = await driversService.listUnavailabilityAdmin(validation.data.id);
+    return res.json({ ok: true, data: list });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * POST /admin/drivers/:id/unavailability
+ */
+export async function createDriverUnavailabilityAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const bodyValidation = createUnavailabilitySchema.safeParse(req.body);
+    if (!bodyValidation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: bodyValidation.error.flatten().fieldErrors,
+      });
+    }
+
+    const result = await driversService.createUnavailabilityAdmin(
+      paramValidation.data.id,
+      bodyValidation.data,
+      req.user!.id,
+    );
+    return res.status(201).json({ ok: true, message: 'Indisponibilité créée', data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * DELETE /admin/drivers/:id/unavailability/:unavailId
+ */
+export async function deleteDriverUnavailabilityAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const unavailValidation = unavailabilityIdParamSchema.safeParse(req.params);
+    if (!unavailValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID indisponibilité invalide' });
+    }
+
+    await driversService.deleteUnavailabilityAdmin(
+      paramValidation.data.id,
+      unavailValidation.data.unavailId,
+    );
+    return res.json({ ok: true, message: 'Indisponibilité supprimée' });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
   }
 }
 

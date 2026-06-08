@@ -6,6 +6,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { pricingService } from './pricing.service.js';
+import { auditLog } from '../../utils/audit.service.js';
 import {
   createPricingGridSchema,
   updatePricingGridSchema,
@@ -72,6 +73,14 @@ export class PricingController {
     }
     try {
       const grid = await pricingService.createGrid(req.user!.id, parsed.data);
+
+      void auditLog(req, {
+        action:     'PRICING_GRID_CREATED',
+        entityType: 'pricing_grid',
+        entityId:   grid.id,
+        newValue:   { country: grid.country, currency: grid.currency },
+      });
+
       res.status(201).json({ ok: true, message: 'Grille tarifaire créée', data: grid });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -93,6 +102,14 @@ export class PricingController {
     }
     try {
       const grid = await pricingService.updateGrid(paramParsed.data.id, bodyParsed.data);
+
+      void auditLog(req, {
+        action:     'PRICING_GRID_UPDATED',
+        entityType: 'pricing_grid',
+        entityId:   paramParsed.data.id,
+        newValue:   bodyParsed.data,
+      });
+
       res.status(200).json({ ok: true, message: 'Grille tarifaire mise à jour', data: grid });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

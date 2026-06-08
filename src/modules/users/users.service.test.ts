@@ -80,6 +80,7 @@ function setupFromMock(returnData: unknown, returnError: unknown = null) {
     insert: jest.fn().mockReturnThis(),
     update: jest.fn().mockReturnThis(),
     eq:     jest.fn().mockReturnThis(),
+    neq:    jest.fn().mockReturnThis(),
     or:     jest.fn().mockReturnThis(),
     order:  jest.fn().mockReturnThis(),
     range:  jest.fn().mockReturnThis(),
@@ -96,7 +97,9 @@ function setupListMock(returnData: unknown[], count: number, returnError: unknow
   const chain = {
     select: jest.fn().mockReturnThis(),
     eq:     jest.fn().mockReturnThis(),
+    neq:    jest.fn().mockReturnThis(),
     or:     jest.fn().mockReturnThis(),
+    ilike:  jest.fn().mockReturnThis(),
     order:  jest.fn().mockReturnThis(),
     range:  jest.fn().mockResolvedValue({ data: returnData, error: returnError, count } as never),
   };
@@ -331,6 +334,7 @@ describe('UsersService', () => {
       const chain = {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
+        neq:    jest.fn().mockReturnThis(),
         or:     jest.fn().mockReturnThis(),
         order:  jest.fn().mockReturnThis(),
         range:  jest.fn().mockResolvedValue({ data: null, error: { message: 'DB error' }, count: null } as never),

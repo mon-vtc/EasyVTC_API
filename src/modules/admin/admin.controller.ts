@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { adminService } from './admin.service.js';
 import { reservationsService } from '../reservations/reservations.service.js';
+import { auditLog } from '../../utils/audit.service.js';
 import { reservationListFiltersSchema, assignDriverSchema, reservationIdParamSchema } from '../reservations/reservations.validator.js';
 import {
   createManagerSchema,
@@ -26,6 +27,14 @@ export class AdminController {
 
     try {
       const manager = await adminService.createManager(parsed.data);
+
+      void auditLog(req, {
+        action:     'MANAGER_CREATED',
+        entityType: 'user',
+        entityId:   manager.id,
+        newValue:   { email: manager.email, first_name: manager.first_name, last_name: manager.last_name },
+      });
+
       res.status(201).json({
         ok: true,
         message: 'Compte gestionnaire créé avec succès',
@@ -97,11 +106,16 @@ export class AdminController {
       return;
     }
     try {
-      const manager = await adminService.changeManagerStatus(
-        req.params['id'] as string,
-        parsed.data,
-        req.user!.id,
-      );
+      const managerId = req.params['id'] as string;
+      const manager = await adminService.changeManagerStatus(managerId, parsed.data, req.user!.id);
+
+      void auditLog(req, {
+        action:     'MANAGER_STATUS_CHANGED',
+        entityType: 'user',
+        entityId:   managerId,
+        newValue:   { status: parsed.data.status },
+      });
+
       res.json({ ok: true, data: manager });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -132,11 +146,16 @@ export class AdminController {
       return;
     }
     try {
-      const result = await adminService.setManagerPermissions(
-        req.params['id'] as string,
-        parsed.data as any,
-        req.user!.id,
-      );
+      const managerId = req.params['id'] as string;
+      const result = await adminService.setManagerPermissions(managerId, parsed.data as any, req.user!.id);
+
+      void auditLog(req, {
+        action:     'MANAGER_PERMISSIONS_UPDATED',
+        entityType: 'user',
+        entityId:   managerId,
+        newValue:   { permissions: parsed.data },
+      });
+
       res.json({ ok: true, message: 'Permissions mises à jour', data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -147,7 +166,15 @@ export class AdminController {
   // DELETE /admin/managers/:id
   async deleteManager(req: Request, res: Response): Promise<void> {
     try {
-      await adminService.deleteManager(req.params['id'] as string);
+      const managerId = req.params['id'] as string;
+      await adminService.deleteManager(managerId);
+
+      void auditLog(req, {
+        action:     'MANAGER_DELETED',
+        entityType: 'user',
+        entityId:   managerId,
+      });
+
       res.json({ ok: true, message: 'Gestionnaire supprimé' });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -234,6 +261,14 @@ export class AdminController {
         bodyParsed.data,
         req.user!.id,
       );
+
+      void auditLog(req, {
+        action:     'RESERVATION_ASSIGNED',
+        entityType: 'reservation',
+        entityId:   paramParsed.data.id,
+        newValue:   { driver_id: bodyParsed.data.driver_id },
+      });
+
       res.json({ ok: true, message: 'Chauffeur assigné avec succès', data: reservation });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

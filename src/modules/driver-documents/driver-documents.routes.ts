@@ -7,6 +7,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireRole, requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
+import { requireCronSecret } from '../../middlewares/cron.middleware.js';
 import * as controller from './driver-documents.controller.js';
 
 // ── Configuration Multer (stockage mémoire) ──────────────────────────────────
@@ -110,8 +111,8 @@ adminDocumentsRoutes.patch(
 
 export const cronDocumentsRoutes = Router();
 
-// Endpoint appelé par le job cron (protégé par header secret)
 cronDocumentsRoutes.post(
   '/check-expiry',
+  requireCronSecret,
   (req, res) => controller.checkDocumentExpiry(req, res)
 );

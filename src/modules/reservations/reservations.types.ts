@@ -57,6 +57,7 @@ export interface Reservation {
   comment: string | null;
 
   promo_code_id: string | null;
+  discount_amount: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -92,6 +93,8 @@ export interface CreateReservationDto {
   distance_km?: number;           // Distance estimée (côté client via maps)
   duration_min?: number;          // Durée estimée
   flat_rate_id?: string;          // Prioritaire sur distance/durée si fourni
+
+  promo_code?: string;            // Code promo optionnel (appliqué au prix estimé)
 }
 
 // ── DTOs — Actions ────────────────────────────────────────────────────────────

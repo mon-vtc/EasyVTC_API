@@ -30,6 +30,10 @@ const envSchema = z
     MAILTRAP_USER: z.string(),
     MAILTRAP_PASS: z.string(),
     MAIL_FROM:     z.string().email().default('noreply@easyvtc.com'),
+
+    // ── Cron jobs ────────────────────────────────────────────────────────────
+    // Transmis dans le header X-Cron-Secret par le scheduler (Railway Cron, etc.)
+    CRON_SECRET:   z.string().min(32, 'CRON_SECRET doit faire au moins 32 caractères').optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.SUPABASE_SECRET_KEY && !data.SUPABASE_SERVICE_ROLE_KEY) {

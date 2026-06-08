@@ -15,6 +15,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
 import { requireStaff } from '../../middlewares/role.middleware.js';
+import { requireCronSecret } from '../../middlewares/cron.middleware.js';
 import { notificationsController } from './notifications.controller.js';
 
 const router = Router();
@@ -39,4 +40,4 @@ export default router;
 // ── Route cron (montée sur /cron/notifications dans app.ts) ──────────────────
 import { Router as CronRouter } from 'express';
 export const cronNotificationsRouter = CronRouter();
-cronNotificationsRouter.post('/reminders', (req, res) => notificationsController.sendTripReminders(req, res));
+cronNotificationsRouter.post('/reminders', requireCronSecret, (req, res) => notificationsController.sendTripReminders(req, res));

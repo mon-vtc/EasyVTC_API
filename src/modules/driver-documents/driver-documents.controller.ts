@@ -12,6 +12,7 @@ import {
   documentIdParamSchema,
 } from './driver-documents.validator.js';
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from './driver-documents.types.js';
+import { auditLog } from '../../utils/audit.service.js';
 
 const service = new DriverDocumentsService();
 
@@ -144,6 +145,12 @@ export async function deleteMyDocument(req: Request, res: Response) {
 
     await service.deleteMyDocument(userId, paramValidation.data.id);
 
+    void auditLog(req, {
+      action:     'DOCUMENT_DELETED',
+      entityType: 'driver_document',
+      entityId:   paramValidation.data.id,
+    });
+
     return res.json({
       ok: true,
       message: 'Document supprimé avec succès',
@@ -265,6 +272,14 @@ export async function validateDocument(req: Request, res: Response) {
 
     const document = await service.validateDocument(paramValidation.data.id, adminId);
 
+    void auditLog(req, {
+      action:     'DOCUMENT_VALIDATED',
+      entityType: 'driver_document',
+      entityId:   document.id,
+      oldValue:   { status: 'pending' },
+      newValue:   { status: 'validated', doc_type: document.doc_type },
+    });
+
     return res.json({
       ok: true,
       message: `Document "${DOCUMENT_TYPE_LABELS[document.doc_type]}" validé avec succès`,
@@ -307,8 +322,16 @@ export async function rejectDocument(req: Request, res: Response) {
     const document = await service.rejectDocument(
       paramValidation.data.id,
       adminId,
-      bodyValidation.data
+      bodyValidation.data,
     );
+
+    void auditLog(req, {
+      action:     'DOCUMENT_REJECTED',
+      entityType: 'driver_document',
+      entityId:   document.id,
+      oldValue:   { status: 'pending' },
+      newValue:   { status: 'rejected', doc_type: document.doc_type, reason: bodyValidation.data.reason },
+    });
 
     return res.json({
       ok: true,

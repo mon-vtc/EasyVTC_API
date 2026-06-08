@@ -53,6 +53,8 @@ export const createReservationSchema = z.object({
   duration_min:   z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:   z.string().uuid('ID de forfait invalide').optional(),
 
+  promo_code:     z.string().min(1).max(50).optional(),
+
 }).refine(
   (d) => d.flat_rate_id || (d.distance_km !== undefined && d.duration_min !== undefined),
   {
