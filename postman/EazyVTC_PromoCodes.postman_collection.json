@@ -1,0 +1,464 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-promo-codes-sprint6",
+    "name": "EazyVTC API — Codes Promo (Sprint 6)",
+    "description": "# EazyVTC — Module Codes Promo\n\n## Endpoints couverts\n\n### Admin (CRUD)\n- `GET    /admin/promo-codes`          → Liste paginée (filtres : is_active)\n- `GET    /admin/promo-codes/:id`      → Détail d'un code\n- `POST   /admin/promo-codes`          → Créer un code\n- `PATCH  /admin/promo-codes/:id`      → Modifier / activer / désactiver\n- `DELETE /admin/promo-codes/:id`      → Supprimer\n\n### Client (validation avant réservation)\n- `POST /promo-codes/validate`         → Vérifier un code et calculer la remise\n\n## Logique métier clé\n\n### Types de remise\n| discount_type | Calcul | Exemple |\n|---|---|---|\n| `percent` | `order_amount × (discount_value / 100)` | 10% sur 80€ = 8€ |\n| `fixed` | `discount_value` déduit du montant | 5€ de remise |\n\n### Contraintes\n- `discount_type = percent` → `discount_value` ≤ 100\n- `valid_until` doit être postérieur à `valid_from`\n- `max_uses` null = utilisations illimitées\n- Le code est automatiquement mis en majuscules\n- Limite de débit : 5 req/min sur `/promo-codes/validate` (rate limiter)\n\n## Variables sauvegardées automatiquement\n- `admin_token`, `client_token`, `driver_token`\n- `promo_id_percent` (code % créé)\n- `promo_id_fixed` (code fixe créé)\n- `client_user_id` (pour les tests de contrôle d'accès)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",        "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",     "value": "", "type": "string" },
+    { "key": "client_token",    "value": "", "type": "string" },
+    { "key": "driver_token",    "value": "", "type": "string" },
+    { "key": "promo_id_percent","value": "", "type": "string" },
+    { "key": "promo_id_fixed",  "value": "", "type": "string" },
+    { "key": "client_user_id",  "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('admin_token', data.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('client_token', data.access_token);",
+            "pm.collectionVariables.set('client_user_id', data.user?.id ?? '');"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('driver_token', data.access_token);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "⚙️ Admin — CRUD Codes Promo",
+      "item": [
+        {
+          "name": "① GET /admin/promo-codes — liste initiale",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.promo_codes).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  console.log('Codes existants:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "① GET /admin/promo-codes?is_active=true — filtrer actifs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes?is_active=true&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes"],
+              "query": [{ "key": "is_active", "value": "true" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les codes retournés sont actifs', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.promo_codes.forEach(c => pm.expect(c.is_active).to.be.true);",
+            "  console.log('Codes actifs:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② POST — Créer code % (10% sans limite)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"BIENVENUE10\",\n  \"discount_type\": \"percent\",\n  \"discount_value\": 10,\n  \"valid_from\": \"2026-01-01T00:00:00.000Z\",\n  \"valid_until\": \"2026-12-31T23:59:59.000Z\",\n  \"max_uses\": null,\n  \"min_order_amount\": 20\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Code % créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.code).to.equal('BIENVENUE10');",
+            "  pm.expect(data.discount_type).to.equal('percent');",
+            "  pm.expect(data.discount_value).to.equal(10);",
+            "  pm.expect(data.is_active).to.be.true;",
+            "  pm.collectionVariables.set('promo_id_percent', data.id);",
+            "  console.log('promo_id_percent:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② POST — Créer code fixe (5€, max 100 utilisations)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"REDUC5EUR\",\n  \"discount_type\": \"fixed\",\n  \"discount_value\": 5,\n  \"valid_from\": \"2026-06-01T00:00:00.000Z\",\n  \"valid_until\": \"2026-08-31T23:59:59.000Z\",\n  \"max_uses\": 100\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Code fixe créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.code).to.equal('REDUC5EUR');",
+            "  pm.expect(data.discount_type).to.equal('fixed');",
+            "  pm.expect(data.discount_value).to.equal(5);",
+            "  pm.expect(data.max_uses).to.equal(100);",
+            "  pm.collectionVariables.set('promo_id_fixed', data.id);",
+            "  console.log('promo_id_fixed:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "③ GET /admin/promo-codes/:id — détail BIENVENUE10",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes/{{promo_id_percent}}",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes","{{promo_id_percent}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Champs requis présents', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  ['id','code','discount_type','discount_value','is_active','uses_count','created_at'].forEach(k => {",
+            "    pm.expect(data, `champ manquant: ${k}`).to.have.property(k);",
+            "  });",
+            "  pm.expect(data.id).to.equal(pm.collectionVariables.get('promo_id_percent'));",
+            "  console.log('Code:', data.code, '| utilisations:', data.uses_count, '/', data.max_uses ?? '∞');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ PATCH — Modifier valeur remise (10% → 15%)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes/{{promo_id_percent}}",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes","{{promo_id_percent}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"discount_value\": 15\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Valeur mise à jour à 15%', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.discount_value).to.equal(15);",
+            "  console.log('Remise mise à jour:', data.discount_value, data.discount_type);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ PATCH — Désactiver le code fixe (is_active=false)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes/{{promo_id_fixed}}",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes","{{promo_id_fixed}}"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"is_active\": false\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Code désactivé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.is_active).to.be.false;",
+            "  console.log(data.code, '→ is_active:', data.is_active);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "⑤ DELETE — Supprimer le code fixe",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes/{{promo_id_fixed}}",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes","{{promo_id_fixed}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — supprimé', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "pm.collectionVariables.set('promo_id_fixed', '');"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🎟️ Client — Valider un code avant réservation",
+      "item": [
+        {
+          "name": "POST /promo-codes/validate — code valide (BIENVENUE10 → 15%)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/promo-codes/validate", "host": ["{{base_url}}"], "path": ["promo-codes","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"BIENVENUE10\",\n  \"order_amount\": 80\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Remise calculée correctement', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.code).to.equal('BIENVENUE10');",
+            "  pm.expect(data.discount_type).to.equal('percent');",
+            "  pm.expect(data.discount_value).to.equal(15);",
+            "  pm.expect(data.discount_amount).to.be.a('number').and.above(0);",
+            "  pm.expect(data.final_price).to.be.a('number').and.below(80);",
+            "  pm.expect(data.final_price).to.be.closeTo(80 - data.discount_amount, 0.01);",
+            "  console.log('Montant initial: 80 | Remise:', data.discount_amount, '| Prix final:', data.final_price);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "POST /promo-codes/validate — montant sous min_order_amount",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/promo-codes/validate", "host": ["{{base_url}}"], "path": ["promo-codes","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"BIENVENUE10\",\n  \"order_amount\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 422 — montant insuffisant (min 20€)', () => pm.response.to.have.status(422));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "console.log('Message:', pm.response.json().message);"
+          ]}}]
+        },
+        {
+          "name": "[422] POST — code inexistant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/promo-codes/validate", "host": ["{{base_url}}"], "path": ["promo-codes","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"CODEINVALIDE\",\n  \"order_amount\": 80\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 ou 422 — code introuvable ou inactif', () => {",
+            "  pm.expect(pm.response.code).to.be.oneOf([404, 422]);",
+            "});",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔴 Cas d'erreur — Validation",
+      "item": [
+        {
+          "name": "[400] POST — code trop court",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"AB\",\n  \"discount_type\": \"percent\",\n  \"discount_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — code trop court (min 3)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] POST — pourcentage > 100",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"TEST150\",\n  \"discount_type\": \"percent\",\n  \"discount_value\": 150\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — pourcentage > 100 refusé', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] POST — valid_until avant valid_from",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"MAUVAISEDATES\",\n  \"discount_type\": \"fixed\",\n  \"discount_value\": 5,\n  \"valid_from\": \"2026-12-01T00:00:00.000Z\",\n  \"valid_until\": \"2026-01-01T00:00:00.000Z\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — valid_until doit être après valid_from', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] GET /admin/promo-codes/:id — ID inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/promo-codes/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin","promo-codes","00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "item": [
+        {
+          "name": "[401] GET /admin/promo-codes sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver — POST /admin/promo-codes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"TEST\",\n  \"discount_type\": \"percent\",\n  \"discount_value\": 10\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client — GET /admin/promo-codes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/promo-codes", "host": ["{{base_url}}"], "path": ["admin","promo-codes"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[401] POST /promo-codes/validate sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/promo-codes/validate", "host": ["{{base_url}}"], "path": ["promo-codes","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"BIENVENUE10\",\n  \"order_amount\": 80\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401 — token requis', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver — POST /promo-codes/validate",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/promo-codes/validate", "host": ["{{base_url}}"], "path": ["promo-codes","validate"] },
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"BIENVENUE10\",\n  \"order_amount\": 80\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux clients', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

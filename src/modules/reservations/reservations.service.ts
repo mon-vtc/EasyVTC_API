@@ -128,7 +128,7 @@ export class ReservationsService {
       throw { status: 500, message: 'Erreur lors de la création de la réservation' };
     }
 
-    const reservation = this._mapReservation(data);
+    const reservation = await this._mapReservation(data);
 
     // Incrémenter le compteur d'utilisation du code promo (fire-and-forget)
     if (promoCodeId) {
@@ -176,7 +176,7 @@ export class ReservationsService {
     const total = count ?? 0;
 
     return {
-      reservations: (data ?? []).map((r: any) => this._mapReservation(r)),
+      reservations: await Promise.all((data ?? []).map((r: any) => this._mapReservation(r))),
       total,
       page,
       limit,
@@ -210,7 +210,7 @@ export class ReservationsService {
       .limit(1)
       .maybeSingle();
 
-    return data ? this._mapReservation(data) : null;
+    return data ? await this._mapReservation(data) : null;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -230,7 +230,7 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 404, message: 'Réservation introuvable' };
 
-    const r = this._mapReservation(data);
+    const r = await this._mapReservation(data);
 
     // Un client ne peut voir que ses propres réservations
     if (requesterRole === 'client' && r.client_id !== requesterId) {
@@ -311,7 +311,7 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 500, message: "Erreur lors de l'assignation du chauffeur" };
 
-    const updated = this._mapReservation(data);
+    const updated = await this._mapReservation(data);
     const driverUserData = (driver as any).users;
     const driverName = driverUserData
       ? `${driverUserData.first_name} ${driverUserData.last_name}`
@@ -449,7 +449,7 @@ export class ReservationsService {
       { reservation_id: reservationId },
     );
 
-    return this._mapReservation(data);
+    return await this._mapReservation(data);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -588,7 +588,7 @@ export class ReservationsService {
       );
     })();
 
-    return this._mapReservation(data);
+    return await this._mapReservation(data);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -629,7 +629,7 @@ export class ReservationsService {
 
     if (error || !data) throw { status: 500, message: "Erreur lors de l'annulation" };
 
-    const updated = this._mapReservation(data);
+    const updated = await this._mapReservation(data);
 
     // Remettre le chauffeur en 'active' seulement s'il était physiquement en route.
     // Pour 'assigned' et 'driver_arrived', driver.status est encore 'active' — rien à faire.
@@ -792,10 +792,14 @@ export class ReservationsService {
     };
   }
 
-  private _mapReservation(raw: any): ReservationWithRelations {
+  private async _mapReservation(raw: any): Promise<ReservationWithRelations> {
+    let driverRating: number | null = null;
+    if (raw.driver) {
+      driverRating = await ratingsService.computeAvgForDriver(raw.driver.id);
+    }
     return {
       ...raw,
-      driver: raw.driver !== undefined ? this._mapDriver(raw.driver) : undefined,
+      driver: raw.driver !== undefined ? this._mapDriver(raw.driver, driverRating) : undefined,
     } as ReservationWithRelations;
   }
 
