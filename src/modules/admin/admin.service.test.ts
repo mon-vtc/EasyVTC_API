@@ -21,7 +21,7 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 }));
 
 jest.unstable_mockModule('../../utils/email.service.js', () => ({
-  sendManagerCredentialsEmail: jest.fn().mockResolvedValue(undefined as never),
+  sendManagerAccessEmail: jest.fn().mockResolvedValue(undefined as never),
 }));
 
 const mockChangeUserStatus = jest.fn();
@@ -124,7 +124,8 @@ describe('AdminService', () => {
 
   beforeEach(() => {
     service = new AdminService();
-    jest.clearAllMocks();
+    // mockReset sur mockFrom uniquement : vide la queue Once sans perturber les autres mocks
+    mockFrom.mockReset();
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -341,20 +342,25 @@ describe('AdminService', () => {
   // ══════════════════════════════════════════════════════════════════════════
 
   describe('changeManagerStatus()', () => {
-    it(' change le statut et délègue à usersService.changeUserStatus', async () => {
-      // getManagerById réussit
-      setupFromMock(mockManagerProfile);
-
+    it(' change le statut du gestionnaire via mise à jour directe Supabase', async () => {
       const updatedProfile = { ...mockManagerProfile, status: 'inactive' };
-      mockChangeUserStatus.mockResolvedValue(updatedProfile as never);
+
+      // 1er appel from() : getManagerById → select.eq.eq.is.single
+      mockFrom.mockReturnValueOnce({
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        is:     jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: mockManagerProfile, error: null } as never),
+      });
+      // 2e appel from() : update status
+      mockFrom.mockReturnValueOnce({
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue({ data: updatedProfile, error: null } as never),
+      });
 
       const result = await service.changeManagerStatus(MANAGER_ID, mockChangeStatusDto, ADMIN_ID);
-
-      expect(mockChangeUserStatus).toHaveBeenCalledWith(
-        MANAGER_ID,
-        mockChangeStatusDto,
-        ADMIN_ID,
-      );
       expect(result.status).toBe('inactive');
     });
 

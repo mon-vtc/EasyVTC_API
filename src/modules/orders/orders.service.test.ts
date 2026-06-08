@@ -184,7 +184,15 @@ describe('OrdersService', () => {
 
   beforeEach(() => {
     service = new OrdersService();
-    jest.clearAllMocks();
+    // mockReset sur mockFrom uniquement : vide la queue Once sans toucher le mock PDFKit
+    mockFrom.mockReset();
+    mockStorage.from.mockReset();
+    mockStorage.from.mockReturnValue({
+      upload:          jest.fn().mockResolvedValue({ error: null } as never),
+      createSignedUrl: jest.fn().mockResolvedValue({
+        data: { signedUrl: 'https://storage.supabase.co/orders-pdfs/signed' }, error: null,
+      } as never),
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -394,12 +402,16 @@ describe('OrdersService', () => {
       expect(mockStorage.from).toHaveBeenCalledWith('orders-pdfs');
     });
 
-    it(' lève 404 si le PDF n\'est pas encore généré', async () => {
-      const orderNoPdf = { ...mockOrderWithReservation, pdf_url: null };
-      mockFrom.mockReturnValueOnce(chain(orderNoPdf));
+    it(' génère le PDF automatiquement si pdf_url est null', async () => {
+      const orderNoPdf    = { ...mockOrderWithReservation, pdf_url: null };
+      const orderWithPdf  = { ...mockOrderWithReservation, pdf_url: `2026/${ORDER_NUMBER}.pdf` };
 
-      await expect(service.getPdfSignedUrl(ORDER_ID, ADMIN_ID, 'admin'))
-        .rejects.toMatchObject({ status: 404 });
+      mockFrom
+        .mockReturnValueOnce(chain(orderNoPdf))    // getById
+        .mockReturnValueOnce(chain(orderWithPdf)); // update après upload
+
+      const url = await service.getPdfSignedUrl(ORDER_ID, ADMIN_ID, 'admin');
+      expect(url).toContain('signed');
     });
 
     it(' lève 500 si Supabase Storage échoue', async () => {

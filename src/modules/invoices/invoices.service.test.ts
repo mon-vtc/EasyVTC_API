@@ -21,6 +21,7 @@ jest.unstable_mockModule('pdfkit', () => {
       const handlers: Record<string, ((...args: unknown[]) => void)[]> = {};
       const emitter = {
         page:        { width: 595, height: 842 },
+        y:           200,
         fontSize:    jest.fn().mockReturnThis(),
         fillColor:   jest.fn().mockReturnThis(),
         font:        jest.fn().mockReturnThis(),
@@ -30,6 +31,10 @@ jest.unstable_mockModule('pdfkit', () => {
         strokeColor: jest.fn().mockReturnThis(),
         lineWidth:   jest.fn().mockReturnThis(),
         stroke:      jest.fn().mockReturnThis(),
+        rect:        jest.fn().mockReturnThis(),
+        circle:      jest.fn().mockReturnThis(),
+        fill:        jest.fn().mockReturnThis(),
+        image:       jest.fn().mockReturnThis(),
         on(event: string, handler: (...args: unknown[]) => void) {
           if (!handlers[event]) handlers[event] = [];
           handlers[event].push(handler);
@@ -164,7 +169,15 @@ describe('InvoicesService', () => {
 
   beforeEach(() => {
     service = new InvoicesService();
-    jest.clearAllMocks();
+    // mockReset sur mockFrom uniquement : vide la queue Once sans toucher le mock PDFKit
+    mockFrom.mockReset();
+    mockStorage.from.mockReset();
+    mockStorage.from.mockReturnValue({
+      upload:          jest.fn().mockResolvedValue({ error: null } as never),
+      createSignedUrl: jest.fn().mockResolvedValue({
+        data: { signedUrl: 'https://storage.supabase.co/invoices-pdfs/signed' }, error: null,
+      } as never),
+    });
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -297,12 +310,16 @@ describe('InvoicesService', () => {
       expect(storageBucket.createSignedUrl).toHaveBeenCalled();
     });
 
-    it(' lève 404 si pdf_url est null', async () => {
-      const invoiceNoPdf = { ...mockInvoice, pdf_url: null, trip: { id: TRIP_ID, reservation_id: RESA_ID } };
-      mockFrom.mockReturnValueOnce(chain(invoiceNoPdf));
+    it(' génère le PDF automatiquement si pdf_url est null', async () => {
+      const invoiceNoPdf    = { ...mockInvoice, pdf_url: null, trip: { id: TRIP_ID, reservation_id: RESA_ID } };
+      const invoiceWithPdf  = { ...mockInvoice, pdf_url: `2026/${INVOICE_NUMBER}.pdf` };
 
-      await expect(service.getPdfSignedUrl(INVOICE_ID, ADMIN_ID, 'admin'))
-        .rejects.toMatchObject({ status: 404 });
+      mockFrom
+        .mockReturnValueOnce(chain(invoiceNoPdf))    // getById
+        .mockReturnValueOnce(chain(invoiceWithPdf)); // update après upload
+
+      const url = await service.getPdfSignedUrl(INVOICE_ID, ADMIN_ID, 'admin');
+      expect(url).toContain('https://');
     });
   });
 

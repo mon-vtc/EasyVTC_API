@@ -1,10 +1,11 @@
 import type { Request, Response } from 'express';
 import { usersService } from './users.service.js';
-import { 
-  updateProfileSchema, 
-  changeUserStatusSchema, 
+import {
+  updateProfileSchema,
+  changeUserStatusSchema,
   userListFiltersSchema,
 } from './users.validator.js';
+import { auditLog } from '../../utils/audit.service.js';
 
 export class UsersController {
 
@@ -138,15 +139,22 @@ export class UsersController {
 
     try {
       const user = await usersService.changeUserStatus(id, parsed.data, req.user!.id);
-      
+
+      void auditLog(req, {
+        action:     'USER_STATUS_CHANGED',
+        entityType: 'user',
+        entityId:   id,
+        newValue:   { status: parsed.data.status, reason: parsed.data.reason },
+      });
+
       const statusLabels: Record<string, string> = {
         active: 'activé',
         inactive: 'désactivé',
         locked: 'verrouillé',
       };
-      
-      res.status(200).json({ 
-        ok: true, 
+
+      res.status(200).json({
+        ok: true,
         message: `Compte ${statusLabels[parsed.data.status]} avec succès`,
         data: user,
       });

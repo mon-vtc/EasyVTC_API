@@ -16,6 +16,9 @@ import type {
   DriverPlanningResult,
   RevenuesPeriod,
   DriverRevenuesResult,
+  DriverUnavailability,
+  CreateUnavailabilityDto,
+  DriverAvailabilityResult,
 } from './drivers.types.js';
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
@@ -517,6 +520,235 @@ export class DriversService {
       dateFrom: firstDay.toISOString(),
       dateTo:   lastDay.toISOString(),
     };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // DISPONIBILITÉ — Vue planning étendue (réservations + indisponibilités)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/availability — chauffeur voit sa disponibilité
+  // ────────────────────────────────────────────────────────────────────────────
+  async getAvailability(userId: string, period: PlanningPeriod, date?: string): Promise<DriverAvailabilityResult> {
+    const driverId = await this.resolveDriverId(userId);
+    return this._fetchAvailability(driverId, period, date);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/availability — admin voit la disponibilité d'un chauffeur
+  // ────────────────────────────────────────────────────────────────────────────
+  async getAvailabilityAdmin(driverId: string, period: PlanningPeriod, date?: string): Promise<DriverAvailabilityResult> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) throw { status: 404, message: 'Chauffeur non trouvé' };
+
+    return this._fetchAvailability(driverId, period, date);
+  }
+
+  // ── PRIVÉ — merge planning + indisponibilités ─────────────────────────────
+  private async _fetchAvailability(
+    driverId: string,
+    period:   PlanningPeriod,
+    date?:    string,
+  ): Promise<DriverAvailabilityResult> {
+    const planning = await this._fetchPlanning(driverId, period, date);
+
+    const { data: unavailData, error: unavailError } = await supabaseAdmin
+      .from('driver_unavailability')
+      .select('id, driver_id, reason, label, starts_at, ends_at, created_by, created_at, updated_at')
+      .eq('driver_id', driverId)
+      .lte('starts_at', planning.date_to)
+      .gte('ends_at',   planning.date_from)
+      .order('starts_at', { ascending: true });
+
+    if (unavailError) {
+      console.error('[Drivers] _fetchAvailability unavailability error:', unavailError);
+      throw { status: 500, message: 'Erreur lors de la récupération des indisponibilités' };
+    }
+
+    const unavailabilities = (unavailData ?? []) as DriverUnavailability[];
+
+    return {
+      period,
+      date_from:              planning.date_from,
+      date_to:                planning.date_to,
+      reservations:           planning.reservations,
+      unavailabilities,
+      total_reservations:     planning.total,
+      total_unavailabilities: unavailabilities.length,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // INDISPONIBILITÉS — CRUD
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /drivers/me/unavailability
+  // ────────────────────────────────────────────────────────────────────────────
+  async createUnavailability(
+    userId:    string,
+    dto:       CreateUnavailabilityDto,
+  ): Promise<DriverUnavailability> {
+    const driverId = await this.resolveDriverId(userId);
+    return this._insertUnavailability(driverId, dto, userId);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // POST /admin/drivers/:id/unavailability
+  // ────────────────────────────────────────────────────────────────────────────
+  async createUnavailabilityAdmin(
+    driverId:  string,
+    dto:       CreateUnavailabilityDto,
+    createdBy: string,
+  ): Promise<DriverUnavailability> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) throw { status: 404, message: 'Chauffeur non trouvé' };
+
+    return this._insertUnavailability(driverId, dto, createdBy);
+  }
+
+  // ── PRIVÉ — insertion avec vérification de chevauchement ─────────────────
+  private async _insertUnavailability(
+    driverId:  string,
+    dto:       CreateUnavailabilityDto,
+    createdBy: string,
+  ): Promise<DriverUnavailability> {
+    // Avertissement chevauchement avec réservation confirmée
+    const { data: overlap } = await supabaseAdmin
+      .from('reservations')
+      .select('id, scheduled_at')
+      .eq('driver_id', driverId)
+      .in('status', ['confirmed', 'assigned', 'arriving', 'in_progress'])
+      .lte('scheduled_at', dto.ends_at)
+      .gte('scheduled_at', dto.starts_at)
+      .limit(1)
+      .maybeSingle();
+
+    if (overlap) {
+      throw {
+        status: 409,
+        message: `Ce créneau chevauche une réservation confirmée (${overlap.id}). Annulez d'abord la réservation ou choisissez un autre créneau.`,
+      };
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('driver_unavailability')
+      .insert({
+        driver_id:  driverId,
+        reason:     dto.reason,
+        label:      dto.label ?? null,
+        starts_at:  dto.starts_at,
+        ends_at:    dto.ends_at,
+        created_by: createdBy,
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      console.error('[Drivers] createUnavailability error:', error);
+      throw { status: 500, message: 'Erreur lors de la création de l\'indisponibilité' };
+    }
+
+    return data as DriverUnavailability;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /drivers/me/unavailability — lister ses propres indisponibilités
+  // ────────────────────────────────────────────────────────────────────────────
+  async listUnavailability(userId: string): Promise<DriverUnavailability[]> {
+    const driverId = await this.resolveDriverId(userId);
+    return this._queryUnavailability(driverId);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/unavailability
+  // ────────────────────────────────────────────────────────────────────────────
+  async listUnavailabilityAdmin(driverId: string): Promise<DriverUnavailability[]> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) throw { status: 404, message: 'Chauffeur non trouvé' };
+
+    return this._queryUnavailability(driverId);
+  }
+
+  private async _queryUnavailability(driverId: string): Promise<DriverUnavailability[]> {
+    const { data, error } = await supabaseAdmin
+      .from('driver_unavailability')
+      .select('*')
+      .eq('driver_id', driverId)
+      .order('starts_at', { ascending: true });
+
+    if (error) {
+      console.error('[Drivers] listUnavailability error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération des indisponibilités' };
+    }
+
+    return (data ?? []) as DriverUnavailability[];
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE /drivers/me/unavailability/:unavailId
+  // ────────────────────────────────────────────────────────────────────────────
+  async deleteUnavailability(userId: string, unavailId: string): Promise<void> {
+    const driverId = await this.resolveDriverId(userId);
+    await this._removeUnavailability(unavailId, driverId);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // DELETE /admin/drivers/:id/unavailability/:unavailId
+  // ────────────────────────────────────────────────────────────────────────────
+  async deleteUnavailabilityAdmin(driverId: string, unavailId: string): Promise<void> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) throw { status: 404, message: 'Chauffeur non trouvé' };
+
+    await this._removeUnavailability(unavailId, driverId);
+  }
+
+  private async _removeUnavailability(unavailId: string, driverId: string): Promise<void> {
+    const { data: existing, error: fetchError } = await supabaseAdmin
+      .from('driver_unavailability')
+      .select('id, starts_at, driver_id')
+      .eq('id', unavailId)
+      .single();
+
+    if (fetchError || !existing) throw { status: 404, message: 'Indisponibilité introuvable' };
+
+    if (existing.driver_id !== driverId) {
+      throw { status: 403, message: 'Cette indisponibilité n\'appartient pas à ce chauffeur' };
+    }
+
+    if (new Date(existing.starts_at) <= new Date()) {
+      throw { status: 400, message: 'Impossible de supprimer une indisponibilité déjà commencée ou passée' };
+    }
+
+    const { error } = await supabaseAdmin
+      .from('driver_unavailability')
+      .delete()
+      .eq('id', unavailId);
+
+    if (error) {
+      console.error('[Drivers] deleteUnavailability error:', error);
+      throw { status: 500, message: 'Erreur lors de la suppression de l\'indisponibilité' };
+    }
   }
 
   // ────────────────────────────────────────────────────────────────────────────

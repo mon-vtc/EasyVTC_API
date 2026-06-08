@@ -109,6 +109,46 @@ export interface DriverPlanningResult {
   total: number;
 }
 
+// ── Indisponibilités ──────────────────────────────────────────────────────────
+
+export type UnavailabilityReason =
+  | 'conge'
+  | 'visite_medicale'
+  | 'formation'
+  | 'panne_vehicule'
+  | 'autre';
+
+export interface DriverUnavailability {
+  id:         string;
+  driver_id:  string;
+  reason:     UnavailabilityReason;
+  label:      string | null;
+  starts_at:  string;
+  ends_at:    string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateUnavailabilityDto {
+  reason:    UnavailabilityReason;
+  label?:    string;
+  starts_at: string;
+  ends_at:   string;
+}
+
+// ── Vue disponibilité (planning étendu) ───────────────────────────────────────
+
+export interface DriverAvailabilityResult {
+  period:                  PlanningPeriod;
+  date_from:               string;
+  date_to:                 string;
+  reservations:            PlanningReservation[];
+  unavailabilities:        DriverUnavailability[];
+  total_reservations:      number;
+  total_unavailabilities:  number;
+}
+
 // ── Revenus ───────────────────────────────────────────────────────────────────
 
 export type RevenuesPeriod = 'week' | 'month' | 'all';

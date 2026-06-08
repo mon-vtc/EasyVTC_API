@@ -5,6 +5,7 @@
 
 import { Request, Response } from 'express';
 import { commissionSettingsService } from './commission-settings.service.js';
+import { auditLog } from '../../utils/audit.service.js';
 import {
   createCommissionSettingSchema,
   updateCommissionSettingSchema,
@@ -50,6 +51,14 @@ export async function createSetting(req: Request, res: Response) {
     }
 
     const setting = await commissionSettingsService.createSetting(validation.data, req.user!.id);
+
+    void auditLog(req, {
+      action:     'COMMISSION_SETTING_CREATED',
+      entityType: 'commission_setting',
+      entityId:   setting.id,
+      newValue:   { zone: setting.zone, vehicle_type: setting.vehicle_type, rate_value: setting.rate_value },
+    });
+
     return res.status(201).json({ ok: true, message: 'Paramétrage de commission créé', data: setting });
   } catch (err: any) {
     return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
@@ -79,6 +88,13 @@ export async function deleteSetting(req: Request, res: Response) {
     if (!param.success) return res.status(400).json({ ok: false, message: 'ID invalide' });
 
     await commissionSettingsService.deleteSetting(param.data.id);
+
+    void auditLog(req, {
+      action:     'COMMISSION_SETTING_DELETED',
+      entityType: 'commission_setting',
+      entityId:   param.data.id,
+    });
+
     return res.json({ ok: true, message: 'Paramétrage de commission supprimé' });
   } catch (err: any) {
     return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });

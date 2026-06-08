@@ -10,6 +10,7 @@ import {
   invoiceListFiltersSchema,
   adjustPriceSchema,
 } from './invoices.validator.js';
+import { auditLog } from '../../utils/audit.service.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ENDPOINTS — Lecture (tous rôles, accès filtré)
@@ -135,6 +136,14 @@ export async function adjustInvoicePrice(req: Request, res: Response): Promise<v
 
   try {
     const invoice = await invoicesService.adjustPrice(param.data.id, req.user!.id, body.data);
+
+    void auditLog(req, {
+      action:     'INVOICE_PRICE_ADJUSTED',
+      entityType: 'invoice',
+      entityId:   param.data.id,
+      newValue:   { new_amount_ttc: body.data.new_amount_ttc, reason: body.data.reason },
+    });
+
     res.status(200).json({
       ok:      true,
       message: 'Prix de la facture ajusté avec succès',

@@ -5,6 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { reservationsService } from './reservations.service.js';
+import { auditLog } from '../../utils/audit.service.js';
 import {
   createReservationSchema,
   assignDriverSchema,
@@ -151,6 +152,14 @@ export class ReservationsController {
         bodyParsed.data,
         req.user!.id,
       );
+
+      void auditLog(req, {
+        action:     'RESERVATION_ASSIGNED',
+        entityType: 'reservation',
+        entityId:   paramParsed.data.id,
+        newValue:   { driver_id: bodyParsed.data.driver_id },
+      });
+
       res.status(200).json({ ok: true, message: 'Chauffeur assigné avec succès', data: reservation });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -286,6 +295,14 @@ export class ReservationsController {
         req.user!.role,
         reason,
       );
+
+      void auditLog(req, {
+        action:     'RESERVATION_CANCELLED',
+        entityType: 'reservation',
+        entityId:   paramParsed.data.id,
+        newValue:   { status: 'cancelled', reason },
+      });
+
       res.status(200).json({ ok: true, message: 'Réservation annulée', data: reservation });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

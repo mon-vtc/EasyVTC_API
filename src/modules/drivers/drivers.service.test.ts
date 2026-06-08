@@ -55,12 +55,14 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     select:      jest.fn().mockReturnThis(),
     insert:      jest.fn().mockReturnThis(),
     update:      jest.fn().mockReturnThis(),
+    delete:      jest.fn().mockReturnThis(),
     eq:          jest.fn().mockReturnThis(),
     neq:         jest.fn().mockReturnThis(),
     or:          jest.fn().mockReturnThis(),
     in:          jest.fn().mockReturnThis(),
     gte:         jest.fn().mockReturnThis(),
     lte:         jest.fn().mockReturnThis(),
+    limit:       jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
     range:       jest.fn().mockReturnThis(),
     single:      jest.fn().mockResolvedValue(resolved),
@@ -671,6 +673,464 @@ describe('DriversService', () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
       await expect(service.getRevenuesAdmin('unknown-driver-id', 'month'))
         .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getAvailability (chauffeur)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getAvailability()', () => {
+    const mockReservation = {
+      id: 'resa-1', status: 'assigned',
+      scheduled_at: '2026-08-05T09:00:00Z',
+      pickup_address: '1 rue de la Paix', dest_address: 'CDG',
+      vehicle_type: 'berline', price_estimated: 45, price_final: null,
+      country: 'france', client: null, trip: null,
+    };
+
+    const mockUnavail = {
+      id: 'unavail-uuid-001', driver_id: DRIVER_ID,
+      reason: 'conge', label: 'Vacances été',
+      starts_at: '2026-08-01T00:00:00.000Z',
+      ends_at:   '2026-08-15T23:59:59.000Z',
+      created_by: DRIVER_USER_ID,
+      created_at: '2026-06-03T10:00:00Z',
+      updated_at: '2026-06-03T10:00:00Z',
+    };
+
+    function planningChain(reservations: unknown[] = []) {
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        neq:    jest.fn().mockReturnThis(),
+        gte:    jest.fn().mockReturnThis(),
+        lte:    jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: reservations, error: null } as never),
+      };
+    }
+
+    function unavailChain(items: unknown[] = [], error: unknown = null) {
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        lte:    jest.fn().mockReturnThis(),
+        gte:    jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: items, error } as never),
+      };
+    }
+
+    it(' retourne réservations et indisponibilités fusionnées', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))              // resolveDriverId
+        .mockReturnValueOnce(planningChain([mockReservation]))     // _fetchPlanning
+        .mockReturnValueOnce(unavailChain([mockUnavail]));         // driver_unavailability
+
+      const result = await service.getAvailability(DRIVER_USER_ID, 'week', '2026-08-04');
+
+      expect(result.period).toBe('week');
+      expect(result.reservations).toHaveLength(1);
+      expect(result.unavailabilities).toHaveLength(1);
+      expect(result.total_reservations).toBe(1);
+      expect(result.total_unavailabilities).toBe(1);
+      expect(result.unavailabilities[0].reason).toBe('conge');
+    });
+
+    it(' retourne des listes vides si aucun événement sur la période', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(planningChain([]))
+        .mockReturnValueOnce(unavailChain([]));
+
+      const result = await service.getAvailability(DRIVER_USER_ID, 'week');
+
+      expect(result.reservations).toHaveLength(0);
+      expect(result.unavailabilities).toHaveLength(0);
+      expect(result.total_reservations).toBe(0);
+      expect(result.total_unavailabilities).toBe(0);
+    });
+
+    it(' date_from et date_to sont bien calculées pour la semaine', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(planningChain([]))
+        .mockReturnValueOnce(unavailChain([]));
+
+      // 4 août 2026 = mardi → semaine lundi 3 → dimanche 9 août
+      const result = await service.getAvailability(DRIVER_USER_ID, 'week', '2026-08-04');
+
+      expect(result.date_from).toContain('2026-08-03');
+      expect(result.date_to).toContain('2026-08-09');
+    });
+
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.getAvailability(DRIVER_USER_ID, 'week'))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' lève 500 si la requête driver_unavailability échoue', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(planningChain([]))
+        .mockReturnValueOnce(unavailChain([], { message: 'db error' }));
+
+      await expect(service.getAvailability(DRIVER_USER_ID, 'week'))
+        .rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getAvailabilityAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getAvailabilityAdmin()', () => {
+    function planningChain(reservations: unknown[] = []) {
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        neq:    jest.fn().mockReturnThis(),
+        gte:    jest.fn().mockReturnThis(),
+        lte:    jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: reservations, error: null } as never),
+      };
+    }
+
+    function unavailChain(items: unknown[] = []) {
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        lte:    jest.fn().mockReturnThis(),
+        gte:    jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: items, error: null } as never),
+      };
+    }
+
+    it(' retourne la disponibilité d\'un chauffeur par driver_id', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))   // vérif existence
+        .mockReturnValueOnce(planningChain([]))           // réservations
+        .mockReturnValueOnce(unavailChain([]));           // indisponibilités
+
+      const result = await service.getAvailabilityAdmin(DRIVER_ID, 'month', '2026-08-01');
+
+      expect(result.period).toBe('month');
+      expect(result.date_from).toContain('2026-08-01');
+      expect(result.reservations).toHaveLength(0);
+      expect(result.unavailabilities).toHaveLength(0);
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.getAvailabilityAdmin('unknown-driver-id', 'week'))
+        .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // createUnavailability (chauffeur)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('createUnavailability()', () => {
+    const futureStart = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const futureEnd   = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+
+    const dto = { reason: 'conge' as const, label: 'Vacances', starts_at: futureStart, ends_at: futureEnd };
+
+    const insertedRecord = {
+      id: 'unavail-uuid-001', driver_id: DRIVER_ID,
+      reason: 'conge', label: 'Vacances',
+      starts_at: futureStart, ends_at: futureEnd,
+      created_by: DRIVER_USER_ID,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it(' crée une indisponibilité sans chevauchement', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))   // resolveDriverId
+        .mockReturnValueOnce(chain(null))               // vérif overlap → null = pas de conflit
+        .mockReturnValueOnce(chain(insertedRecord));    // insert → single()
+
+      const result = await service.createUnavailability(DRIVER_USER_ID, dto);
+
+      expect(result.id).toBe('unavail-uuid-001');
+      expect(result.reason).toBe('conge');
+      expect(result.driver_id).toBe(DRIVER_ID);
+    });
+
+    it(' lève 409 si une réservation confirmée chevauche le créneau', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain({ id: 'resa-conflict', scheduled_at: futureStart }));  // overlap trouvé
+
+      await expect(service.createUnavailability(DRIVER_USER_ID, dto))
+        .rejects.toMatchObject({ status: 409 });
+    });
+
+    it(' lève 500 si l\'insert échoue', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain(null, { message: 'insert failed' }));
+
+      await expect(service.createUnavailability(DRIVER_USER_ID, dto))
+        .rejects.toMatchObject({ status: 500 });
+    });
+
+    it(' lève 404 si le profil chauffeur est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.createUnavailability(DRIVER_USER_ID, dto))
+        .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // createUnavailabilityAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('createUnavailabilityAdmin()', () => {
+    const futureStart = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+    const futureEnd   = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+
+    const dto = { reason: 'visite_medicale' as const, starts_at: futureStart, ends_at: futureEnd };
+
+    it(' crée une indisponibilité pour un chauffeur (admin)', async () => {
+      const inserted = {
+        id: 'unavail-uuid-002', driver_id: DRIVER_ID,
+        reason: 'visite_medicale', label: null,
+        starts_at: futureStart, ends_at: futureEnd,
+        created_by: ADMIN_ID,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // vérif chauffeur
+        .mockReturnValueOnce(chain(null))               // overlap → aucun conflit
+        .mockReturnValueOnce(chain(inserted));          // insert
+
+      const result = await service.createUnavailabilityAdmin(DRIVER_ID, dto, ADMIN_ID);
+
+      expect(result.reason).toBe('visite_medicale');
+      expect(result.created_by).toBe(ADMIN_ID);
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.createUnavailabilityAdmin('unknown-id', dto, ADMIN_ID))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' lève 409 si chevauchement avec une réservation confirmée', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ id: 'resa-conflict', scheduled_at: futureStart }));
+
+      await expect(service.createUnavailabilityAdmin(DRIVER_ID, dto, ADMIN_ID))
+        .rejects.toMatchObject({ status: 409 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // listUnavailability (chauffeur)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('listUnavailability()', () => {
+    const mockItems = [
+      { id: 'u1', driver_id: DRIVER_ID, reason: 'conge',    starts_at: '2026-08-01T00:00:00Z', ends_at: '2026-08-15T00:00:00Z' },
+      { id: 'u2', driver_id: DRIVER_ID, reason: 'panne_vehicule', starts_at: '2026-09-10T08:00:00Z', ends_at: '2026-09-10T18:00:00Z' },
+    ];
+
+    it(' retourne la liste triée des indisponibilités du chauffeur', async () => {
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: mockItems, error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))  // resolveDriverId
+        .mockReturnValueOnce(listChain);
+
+      const result = await service.listUnavailability(DRIVER_USER_ID);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].reason).toBe('conge');
+      expect(result[1].reason).toBe('panne_vehicule');
+    });
+
+    it(' retourne un tableau vide si aucune indisponibilité', async () => {
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: [], error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(listChain);
+
+      const result = await service.listUnavailability(DRIVER_USER_ID);
+      expect(result).toHaveLength(0);
+    });
+
+    it(' lève 500 si la requête échoue', async () => {
+      const errChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: null, error: { message: 'db error' } } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(errChain);
+
+      await expect(service.listUnavailability(DRIVER_USER_ID))
+        .rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // listUnavailabilityAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('listUnavailabilityAdmin()', () => {
+    it(' retourne les indisponibilités d\'un chauffeur (admin)', async () => {
+      const item = { id: 'u1', driver_id: DRIVER_ID, reason: 'formation', starts_at: '2026-07-10T00:00:00Z', ends_at: '2026-07-12T00:00:00Z' };
+      const listChain = {
+        select: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        order:  jest.fn().mockResolvedValue({ data: [item], error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))   // vérif existence
+        .mockReturnValueOnce(listChain);
+
+      const result = await service.listUnavailabilityAdmin(DRIVER_ID);
+      expect(result).toHaveLength(1);
+      expect(result[0].reason).toBe('formation');
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.listUnavailabilityAdmin('unknown-id'))
+        .rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // deleteUnavailability (chauffeur)
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('deleteUnavailability()', () => {
+    const futureDate  = new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString();
+    const pastDate    = new Date(Date.now() - 1 * 3600 * 1000).toISOString();
+    const UNAVAIL_ID  = 'unavail-uuid-001';
+
+    it(' supprime une indisponibilité future', async () => {
+      const existing = { id: UNAVAIL_ID, driver_id: DRIVER_ID, starts_at: futureDate };
+      const deleteChain = {
+        delete: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockResolvedValue({ error: null } as never),
+      };
+
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))    // resolveDriverId
+        .mockReturnValueOnce(chain(existing))            // fetch existing
+        .mockReturnValueOnce(deleteChain);               // delete
+
+      await expect(service.deleteUnavailability(DRIVER_USER_ID, UNAVAIL_ID))
+        .resolves.toBeUndefined();
+    });
+
+    it(' lève 400 si l\'indisponibilité est déjà commencée (starts_at <= now)', async () => {
+      const existing = { id: UNAVAIL_ID, driver_id: DRIVER_ID, starts_at: pastDate };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain(existing));
+
+      await expect(service.deleteUnavailability(DRIVER_USER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 400 });
+    });
+
+    it(' lève 404 si l\'indisponibilité est introuvable', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.deleteUnavailability(DRIVER_USER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' lève 403 si l\'indisponibilité appartient à un autre chauffeur', async () => {
+      const belonging_to_other = { id: UNAVAIL_ID, driver_id: 'other-driver-uuid', starts_at: futureDate };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain(belonging_to_other));
+
+      await expect(service.deleteUnavailability(DRIVER_USER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 403 });
+    });
+
+    it(' lève 500 si la suppression DB échoue', async () => {
+      const existing = { id: UNAVAIL_ID, driver_id: DRIVER_ID, starts_at: futureDate };
+      const deleteChain = {
+        delete: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockResolvedValue({ error: { message: 'db error' } } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain(existing))
+        .mockReturnValueOnce(deleteChain);
+
+      await expect(service.deleteUnavailability(DRIVER_USER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // deleteUnavailabilityAdmin
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('deleteUnavailabilityAdmin()', () => {
+    const futureDate = new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString();
+    const UNAVAIL_ID = 'unavail-uuid-001';
+
+    it(' supprime une indisponibilité future (admin)', async () => {
+      const existing = { id: UNAVAIL_ID, driver_id: DRIVER_ID, starts_at: futureDate };
+      const deleteChain = {
+        delete: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockResolvedValue({ error: null } as never),
+      };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))   // vérif chauffeur
+        .mockReturnValueOnce(chain(existing))             // fetch existing
+        .mockReturnValueOnce(deleteChain);                // delete
+
+      await expect(service.deleteUnavailabilityAdmin(DRIVER_ID, UNAVAIL_ID))
+        .resolves.toBeUndefined();
+    });
+
+    it(' lève 404 si le driver_id est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.deleteUnavailabilityAdmin('unknown-id', UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' lève 404 si l\'indisponibilité est introuvable', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.deleteUnavailabilityAdmin(DRIVER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' lève 400 si l\'indisponibilité est déjà commencée (admin)', async () => {
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      const existing = { id: UNAVAIL_ID, driver_id: DRIVER_ID, starts_at: pastDate };
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain(existing));
+
+      await expect(service.deleteUnavailabilityAdmin(DRIVER_ID, UNAVAIL_ID))
+        .rejects.toMatchObject({ status: 400 });
     });
   });
 

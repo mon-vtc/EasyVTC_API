@@ -14,6 +14,14 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   },
 }));
 
+// vehicleTypesService.validateCode est appelé dans createVehicle — mock pour éviter
+// qu'il consomme un appel mockFrom inattendu
+jest.unstable_mockModule('../vehicle-types/vehicle-types.service.js', () => ({
+  vehicleTypesService: {
+    validateCode: jest.fn().mockResolvedValue(undefined as never),
+  },
+}));
+
 const { VehiclesService } = await import('./vehicles.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════

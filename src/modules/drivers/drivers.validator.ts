@@ -108,11 +108,48 @@ export const revenuesQuerySchema = z.object({
     .optional(),
 });
 
+// ── Availability query ────────────────────────────────────────────────────────
+export const availabilityQuerySchema = planningQuerySchema; // même params : period + date
+
+// ── Indisponibilité — création ─────────────────────────────────────────────────
+const UNAVAILABILITY_REASONS = [
+  'conge',
+  'visite_medicale',
+  'formation',
+  'panne_vehicule',
+  'autre',
+] as const;
+
+export const createUnavailabilitySchema = z.object({
+  reason: z.enum(UNAVAILABILITY_REASONS, {
+    error: 'Raison invalide. Valeurs : conge, visite_medicale, formation, panne_vehicule, autre',
+  }),
+  label: z.string().max(100, 'Le libellé ne peut pas dépasser 100 caractères').optional(),
+  starts_at: z
+    .string()
+    .datetime({ offset: true, message: 'starts_at doit être une date ISO 8601' }),
+  ends_at: z
+    .string()
+    .datetime({ offset: true, message: 'ends_at doit être une date ISO 8601' }),
+}).refine(
+  (d) => new Date(d.ends_at) > new Date(d.starts_at),
+  { message: 'ends_at doit être postérieure à starts_at', path: ['ends_at'] },
+).refine(
+  (d) => new Date(d.starts_at) > new Date(Date.now() - 5 * 60 * 1000),
+  { message: 'Impossible de créer une indisponibilité dans le passé', path: ['starts_at'] },
+);
+
+// ── Indisponibilité — param UUID ───────────────────────────────────────────────
+export const unavailabilityIdParamSchema = z.object({
+  unavailId: z.string().uuid('ID indisponibilité invalide'),
+});
+
 // ── Types exportés ────────────────────────────────────────────────────────────
-export type UpdateDriverInput        = z.infer<typeof updateDriverSchema>;
-export type ToggleOnlineInput        = z.infer<typeof toggleOnlineSchema>;
-export type ChangeDriverStatusInput  = z.infer<typeof changeDriverStatusSchema>;
-export type AdminUpdateDriverInput   = z.infer<typeof adminUpdateDriverSchema>;
-export type DriverListFiltersInput   = z.infer<typeof driverListFiltersSchema>;
-export type PlanningQueryInput       = z.infer<typeof planningQuerySchema>;
-export type RevenuesQueryInput       = z.infer<typeof revenuesQuerySchema>;
+export type UpdateDriverInput           = z.infer<typeof updateDriverSchema>;
+export type ToggleOnlineInput           = z.infer<typeof toggleOnlineSchema>;
+export type ChangeDriverStatusInput     = z.infer<typeof changeDriverStatusSchema>;
+export type AdminUpdateDriverInput      = z.infer<typeof adminUpdateDriverSchema>;
+export type DriverListFiltersInput      = z.infer<typeof driverListFiltersSchema>;
+export type PlanningQueryInput          = z.infer<typeof planningQuerySchema>;
+export type RevenuesQueryInput          = z.infer<typeof revenuesQuerySchema>;
+export type CreateUnavailabilityInput   = z.infer<typeof createUnavailabilitySchema>;
