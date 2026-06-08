@@ -11,6 +11,7 @@ export interface Rating {
   client_id:      string;
   driver_id:      string;
   note:           number; // 1–5
+  comment:        string | null;
   created_at:     string;
 }
 
@@ -32,7 +33,8 @@ export interface RatingAdmin extends RatingWithClient {
 // ── DTO soumission ────────────────────────────────────────────────────────────
 
 export interface SubmitRatingDto {
-  note: number; // entier 1–5
+  note:     number;          // entier 1–5
+  comment?: string | null;   // commentaire facultatif (max 500 chars)
 }
 
 // ── Filtres liste ─────────────────────────────────────────────────────────────

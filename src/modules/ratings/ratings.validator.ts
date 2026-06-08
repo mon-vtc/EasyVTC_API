@@ -13,6 +13,12 @@ export const submitRatingSchema = z.object({
     .int('La note doit être un entier')
     .min(1, 'La note minimale est 1')
     .max(5, 'La note maximale est 5'),
+  comment: z
+    .string()
+    .trim()
+    .max(500, 'Le commentaire ne peut pas dépasser 500 caractères')
+    .optional()
+    .nullable(),
 });
 
 // ── Params UUID ───────────────────────────────────────────────────────────────
