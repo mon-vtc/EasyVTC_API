@@ -58,6 +58,7 @@ export class RatingsService {
         client_id:      clientId,
         driver_id:      reservation.driver_id,
         note:           dto.note,
+        comment:        dto.comment ?? null,
       })
       .select()
       .single();
@@ -91,7 +92,7 @@ export class RatingsService {
     const { data, error, count } = await supabaseAdmin
       .from('ratings')
       .select(
-        `id, reservation_id, client_id, driver_id, note, created_at,
+        `id, reservation_id, client_id, driver_id, note, comment, created_at,
          client:users!fk_ratings_client(first_name, last_name),
          reservation:reservations!fk_ratings_reservation(scheduled_at)`,
         { count: 'exact' },
@@ -110,6 +111,7 @@ export class RatingsService {
       client_id:                r.client_id,
       driver_id:                r.driver_id,
       note:                     r.note,
+      comment:                  r.comment ?? null,
       created_at:               r.created_at,
       client_first_name:        r.client?.first_name  ?? null,
       client_last_name:         r.client?.last_name   ?? null,
@@ -132,7 +134,7 @@ export class RatingsService {
     const { data, error, count } = await supabaseAdmin
       .from('ratings')
       .select(
-        `id, reservation_id, client_id, driver_id, note, created_at,
+        `id, reservation_id, client_id, driver_id, note, comment, created_at,
          client:users!fk_ratings_client(first_name, last_name),
          reservation:reservations!fk_ratings_reservation(scheduled_at)`,
         { count: 'exact' },
@@ -168,6 +170,7 @@ export class RatingsService {
         client_id:                r.client_id,
         driver_id:                r.driver_id,
         note:                     r.note,
+        comment:                  r.comment ?? null,
         created_at:               r.created_at,
         client_first_name:        r.client?.first_name  ?? null,
         client_last_name:         r.client?.last_name   ?? null,

@@ -331,10 +331,10 @@ export class DriversService {
       dateTo   = range.dateTo;
     }
 
-    // 1. Réservations terminées
+    // 1. Réservations terminées avec infos client
     let query = supabaseAdmin
       .from('reservations')
-      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country')
+      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)')
       .eq('driver_id', driverId)
       .eq('status', 'completed')
       .order('scheduled_at', { ascending: false });
@@ -351,7 +351,6 @@ export class DriversService {
 
     const rows = data ?? [];
     if (rows.length === 0) {
-      const primaryIsXof = false;
       return {
         period, date_from: dateFrom, date_to: dateTo,
         total_trips: 0, total_gross: 0, total_commission: 0, total_net: 0,
@@ -361,12 +360,18 @@ export class DriversService {
       };
     }
 
-    // 2. Commissions correspondantes (une par reservation_id)
+    // 2. Commissions + ratings en parallèle
     const reservationIds = rows.map((r: any) => r.id);
-    const { data: commData } = await supabaseAdmin
-      .from('commissions')
-      .select('reservation_id, commission_amount, driver_net_amount')
-      .in('reservation_id', reservationIds);
+    const [{ data: commData }, { data: ratingsData }] = await Promise.all([
+      supabaseAdmin
+        .from('commissions')
+        .select('reservation_id, commission_amount, driver_net_amount')
+        .in('reservation_id', reservationIds),
+      supabaseAdmin
+        .from('ratings')
+        .select('reservation_id, note')
+        .in('reservation_id', reservationIds),
+    ]);
 
     const commMap = new Map<string, { commission_amount: number; driver_net_amount: number }>();
     for (const c of (commData ?? [])) {
@@ -374,6 +379,11 @@ export class DriversService {
         commission_amount: Number(c.commission_amount),
         driver_net_amount: Number(c.driver_net_amount),
       });
+    }
+
+    const ratingMap = new Map<string, number>();
+    for (const rt of (ratingsData ?? [])) {
+      ratingMap.set(rt.reservation_id, rt.note);
     }
 
     let grossEur = 0, grossXof = 0;
@@ -384,7 +394,6 @@ export class DriversService {
       const gross    = Number(r.price_adjusted ?? r.price_final ?? 0);
       const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
       const comm     = commMap.get(r.id);
-      // Si commission calculée → utiliser les valeurs enregistrées, sinon gross = net
       const commissionAmount = comm ? comm.commission_amount : 0;
       const netAmount        = comm ? comm.driver_net_amount : gross;
 
@@ -407,6 +416,9 @@ export class DriversService {
         commission_amount: commissionAmount,
         net_amount:        netAmount,
         currency,
+        client_first_name: (r.client as any)?.first_name ?? null,
+        client_last_name:  (r.client as any)?.last_name  ?? null,
+        rating:            ratingMap.get(r.id) ?? null,
       };
     });
 
