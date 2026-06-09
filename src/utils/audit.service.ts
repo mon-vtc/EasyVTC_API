@@ -49,7 +49,12 @@ export type AuditAction =
   | 'PROMO_CODE_CREATED'
   | 'PROMO_CODE_DELETED'
   | 'COMMISSION_SETTING_CREATED'
-  | 'COMMISSION_SETTING_DELETED';
+  | 'COMMISSION_SETTING_DELETED'
+
+  // Campagnes marketing
+  | 'CAMPAIGN_CREATED'
+  | 'CAMPAIGN_DELETED'
+  | 'CAMPAIGN_SENT';
 
 // ── Paramètres de la fonction ─────────────────────────────────────────────────
 export interface AuditParams {

@@ -181,8 +181,14 @@ export class PromoCodesService {
   // POST /promo-codes/validate
   // Vérifie la validité d'un code et retourne le détail de la remise.
   // Ne modifie pas la base (pas d'incrémentation ici).
+  // pickup_lat / pickup_lng : requis si le code a une condition géographique.
   // ────────────────────────────────────────────────────────────────────────────
-  async validateCode(code: string, orderAmount: number): Promise<PromoCodeValidationResult> {
+  async validateCode(
+    code: string,
+    orderAmount: number,
+    pickupLat?: number,
+    pickupLng?: number,
+  ): Promise<PromoCodeValidationResult> {
     const { data, error } = await supabaseAdmin
       .from('promo_codes')
       .select('*')
@@ -220,6 +226,31 @@ export class PromoCodesService {
       };
     }
 
+    // Vérification de la condition géographique
+    if (promo.condition_type === 'pickup_location') {
+      if (pickupLat == null || pickupLng == null) {
+        throw {
+          status: 422,
+          message: 'Les coordonnées du point de départ sont requises pour ce code promo',
+        };
+      }
+      if (
+        promo.pickup_lat != null &&
+        promo.pickup_lng != null &&
+        promo.pickup_radius_meters != null
+      ) {
+        const distanceM = this._haversineMeters(pickupLat, pickupLng, promo.pickup_lat, promo.pickup_lng);
+        if (distanceM > promo.pickup_radius_meters) {
+          throw {
+            status: 422,
+            message: promo.condition_label
+              ? `Ce code promo n'est valable qu'au départ de : ${promo.condition_label}`
+              : 'Votre point de départ ne correspond pas à la condition de ce code promo',
+          };
+        }
+      }
+    }
+
     const discountAmount = this._computeDiscount(promo, orderAmount);
     const finalPrice = Math.max(0, Math.round((orderAmount - discountAmount) * 100) / 100);
 
@@ -238,22 +269,11 @@ export class PromoCodesService {
   // ══════════════════════════════════════════════════════════════════════════
 
   // ────────────────────────────────────────────────────────────────────────────
-  // Incrémente uses_count. Fire-and-forget : ne bloque jamais la réservation.
+  // Incrémente uses_count de manière atomique via une fonction SQL.
+  // Fire-and-forget : ne bloque jamais la réservation.
   // ────────────────────────────────────────────────────────────────────────────
   async incrementUsage(promoCodeId: string): Promise<void> {
-    const { data: promo } = await supabaseAdmin
-      .from('promo_codes')
-      .select('uses_count')
-      .eq('id', promoCodeId)
-      .single();
-
-    if (!promo) return;
-
-    const { error } = await supabaseAdmin
-      .from('promo_codes')
-      .update({ uses_count: (promo as any).uses_count + 1 })
-      .eq('id', promoCodeId);
-
+    const { error } = await supabaseAdmin.rpc('increment_promo_uses', { p_id: promoCodeId });
     if (error) {
       console.error('[PromoCodes] incrementUsage error:', error);
     }
@@ -265,11 +285,21 @@ export class PromoCodesService {
 
   private _computeDiscount(promo: PromoCode, orderAmount: number): number {
     if (promo.discount_type === 'percent') {
-      // Arrondi à 2 décimales
       return Math.round((orderAmount * promo.discount_value / 100) * 100) / 100;
     }
-    // Remise fixe — plafonnée au montant de la commande
     return Math.min(promo.discount_value, orderAmount);
+  }
+
+  // Distance en mètres entre deux coordonnées GPS (formule de Haversine)
+  private _haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const R = 6_371_000;
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 }
 

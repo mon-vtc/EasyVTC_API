@@ -4,10 +4,13 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // MOCKS — unstable_mockModule AVANT les imports (obligatoire ESM)
 // ══════════════════════════════════════════════════════════════════════════════
 
-const mockFrom = jest.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockFrom = jest.fn<any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockRpc  = jest.fn<any>();
 
 jest.unstable_mockModule('../../database/supabase/client.js', () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
 const { PromoCodesService } = await import('./promo-codes.service.js');
@@ -17,6 +20,15 @@ const { PromoCodesService } = await import('./promo-codes.service.js');
 // ══════════════════════════════════════════════════════════════════════════════
 
 const PROMO_ID = 'promo-uuid-001';
+
+// Champs geo par défaut (condition_type = 'none')
+const GEO_NONE = {
+  condition_type:        'none',
+  condition_label:       null,
+  pickup_lat:            null,
+  pickup_lng:            null,
+  pickup_radius_meters:  null,
+};
 
 const mockPromoPercent = {
   id:               PROMO_ID,
@@ -29,6 +41,7 @@ const mockPromoPercent = {
   uses_count:       0,
   min_order_amount: null,
   is_active:        true,
+  ...GEO_NONE,
   created_at:       '2026-06-01T00:00:00.000Z',
   updated_at:       '2026-06-01T00:00:00.000Z',
 };
@@ -44,8 +57,30 @@ const mockPromoFixed = {
   uses_count:       0,
   min_order_amount: 15,
   is_active:        true,
+  ...GEO_NONE,
   created_at:       '2026-06-01T00:00:00.000Z',
   updated_at:       '2026-06-01T00:00:00.000Z',
+};
+
+// Promo avec condition géographique — rayon 300m autour de (48.890, 2.251)
+const mockPromoGeo = {
+  id:               'promo-uuid-003',
+  code:             'HOTELPARIS10',
+  discount_type:    'fixed',
+  discount_value:   10,
+  valid_from:       null,
+  valid_until:      null,
+  max_uses:         200,
+  uses_count:       12,
+  min_order_amount: null,
+  is_active:        true,
+  condition_type:        'pickup_location',
+  condition_label:       'Hôtel Pullman (300m)',
+  pickup_lat:            48.890,
+  pickup_lng:            2.251,
+  pickup_radius_meters:  300,
+  created_at:            '2026-06-01T00:00:00.000Z',
+  updated_at:            '2026-06-01T00:00:00.000Z',
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -219,6 +254,29 @@ describe('PromoCodesService', () => {
       expect(result.max_uses).toBe(50);
       expect(result.min_order_amount).toBe(20);
     });
+
+    it('crée un code promo avec condition géographique', async () => {
+      const geoDto = {
+        code:                 'HOTELPARIS10',
+        discount_type:        'fixed' as const,
+        discount_value:       10,
+        condition_type:       'pickup_location' as const,
+        condition_label:      'Hôtel Pullman (300m)',
+        pickup_lat:           48.890,
+        pickup_lng:           2.251,
+        pickup_radius_meters: 300,
+      };
+      const created = { ...mockPromoGeo };
+
+      mockFrom
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain(created));
+
+      const result = await service.create(geoDto);
+
+      expect(result.condition_type).toBe('pickup_location');
+      expect(result.pickup_radius_meters).toBe(300);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -331,9 +389,9 @@ describe('PromoCodesService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // validateCode
+  // validateCode — cas de base (sans condition géo)
   // ──────────────────────────────────────────────────────────────────────────
-  describe('validateCode()', () => {
+  describe('validateCode() — sans condition géographique', () => {
 
     it('retourne la remise en pourcentage : 20% × 50 EUR = 10 EUR', async () => {
       mockFrom.mockReturnValueOnce(chain(mockPromoPercent));
@@ -415,7 +473,6 @@ describe('PromoCodesService', () => {
     });
 
     it('plafonne la remise fixe au montant de la commande (ne peut pas donner un final < 0)', async () => {
-      // remise fixe de 50 EUR sur une commande de 30 EUR → discount_amount = 30, final = 0
       mockFrom.mockReturnValueOnce(chain({
         ...mockPromoFixed,
         discount_value: 50,
@@ -454,39 +511,109 @@ describe('PromoCodesService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // incrementUsage
+  // validateCode — condition géographique
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('validateCode() — condition géographique (pickup_location)', () => {
+
+    // Coordonnées de référence : (48.890, 2.251) rayon 300m
+    // ~111m par degré de lat → 0.001° ≈ 111m
+    const PROMO_LAT = 48.890;
+    const PROMO_LNG = 2.251;
+    const RADIUS    = 300; // mètres
+
+    it('accepte le code si le pickup est dans le rayon (< 300m)', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoGeo));
+
+      // 0.001° de lat ≈ 111m — bien dans le rayon
+      const result = await service.validateCode(
+        'HOTELPARIS10', 50,
+        PROMO_LAT + 0.001,  // ~111m au nord
+        PROMO_LNG,
+      );
+
+      expect(result.code).toBe('HOTELPARIS10');
+      expect(result.discount_amount).toBe(10);
+    });
+
+    it('lève 422 si le pickup est hors du rayon (> 300m)', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoGeo));
+
+      // 0.004° de lat ≈ 444m — hors rayon
+      await expect(
+        service.validateCode(
+          'HOTELPARIS10', 50,
+          PROMO_LAT + 0.004,  // ~444m au nord
+          PROMO_LNG,
+        ),
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('Hôtel Pullman (300m)'),
+      });
+    });
+
+    it('lève 422 si aucune coordonnée n\'est fournie et que le code exige un pickup_location', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoGeo));
+
+      await expect(
+        service.validateCode('HOTELPARIS10', 50),  // pas de coords
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('coordonnées'),
+      });
+    });
+
+    it('ignore la condition géo si condition_type=none (comportement standard)', async () => {
+      // Un promo sans condition — les coordonnées passées ne doivent pas poser problème
+      mockFrom.mockReturnValueOnce(chain(mockPromoPercent)); // condition_type = 'none'
+
+      const result = await service.validateCode(
+        'BIENVENUE20', 50,
+        99.0,  // coords farfelues
+        99.0,
+      );
+
+      expect(result.code).toBe('BIENVENUE20');
+    });
+
+    it('lève 422 avec un message générique si condition_label est null', async () => {
+      const promoNoLabel = { ...mockPromoGeo, condition_label: null };
+      mockFrom.mockReturnValueOnce(chain(promoNoLabel));
+
+      await expect(
+        service.validateCode('HOTELPARIS10', 50, PROMO_LAT + 0.004, PROMO_LNG),
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('point de départ'),
+      });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // incrementUsage — version atomique via RPC
   // ──────────────────────────────────────────────────────────────────────────
   describe('incrementUsage()', () => {
 
-    it('incrémente uses_count de 1', async () => {
-      let updatedData: unknown;
-      const updateChain = chain(null);
-      (updateChain.update as ReturnType<typeof jest.fn>).mockImplementation((data: unknown) => {
-        updatedData = data;
-        return updateChain;
-      });
-
-      mockFrom
-        .mockReturnValueOnce(chain({ uses_count: 4 })) // select uses_count
-        .mockReturnValueOnce(updateChain);              // update
+    it('appelle rpc increment_promo_uses avec le bon id', async () => {
+      mockRpc.mockResolvedValueOnce({ error: null });
 
       await service.incrementUsage(PROMO_ID);
 
-      expect(updatedData).toMatchObject({ uses_count: 5 });
+      expect(mockRpc).toHaveBeenCalledWith('increment_promo_uses', { p_id: PROMO_ID });
     });
 
-    it('ne lève pas d\'exception si le code promo est introuvable', async () => {
-      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' })); // single() → data null
-
-      await expect(service.incrementUsage('inexistant')).resolves.toBeUndefined();
-    });
-
-    it('logue l\'erreur mais ne bloque pas si l\'update DB échoue', async () => {
-      mockFrom
-        .mockReturnValueOnce(chain({ uses_count: 2 }))                    // select
-        .mockReturnValueOnce(chain(null, { message: 'update failed' }));   // update → erreur
+    it('ne lève pas d\'exception si la RPC retourne une erreur (fire-and-forget)', async () => {
+      mockRpc.mockResolvedValueOnce({ error: { message: 'connexion perdue' } });
 
       await expect(service.incrementUsage(PROMO_ID)).resolves.toBeUndefined();
+    });
+
+    it('ne lit plus uses_count avant d\'incrémenter (atomicité — pas d\'appel à from())', async () => {
+      mockRpc.mockResolvedValueOnce({ error: null });
+
+      await service.incrementUsage(PROMO_ID);
+
+      // Aucun appel à from() — uniquement rpc()
+      expect(mockFrom).not.toHaveBeenCalled();
     });
   });
 });

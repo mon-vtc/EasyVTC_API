@@ -131,7 +131,12 @@ export class PromoCodesController {
     }
 
     try {
-      const result = await promoCodesService.validateCode(parsed.data.code, parsed.data.order_amount);
+      const result = await promoCodesService.validateCode(
+        parsed.data.code,
+        parsed.data.order_amount,
+        parsed.data.pickup_lat,
+        parsed.data.pickup_lng,
+      );
       res.status(200).json({ ok: true, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

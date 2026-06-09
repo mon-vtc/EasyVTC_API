@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 export type DiscountType = 'percent' | 'fixed';
+export type ConditionType = 'none' | 'pickup_location';
 
 // ── Entité BDD ────────────────────────────────────────────────────────────────
 export interface PromoCode {
@@ -17,6 +18,12 @@ export interface PromoCode {
   uses_count: number;
   min_order_amount: number | null;
   is_active: boolean;
+  // Condition géographique optionnelle (ex : départ dans un rayon autour d'un lieu)
+  condition_type: ConditionType;
+  condition_label: string | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  pickup_radius_meters: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,6 +37,11 @@ export interface CreatePromoCodeDto {
   valid_until?: string;
   max_uses?: number;
   min_order_amount?: number;
+  condition_type?: ConditionType;
+  condition_label?: string;
+  pickup_lat?: number;
+  pickup_lng?: number;
+  pickup_radius_meters?: number;
 }
 
 export interface UpdatePromoCodeDto {
@@ -41,6 +53,11 @@ export interface UpdatePromoCodeDto {
   max_uses?: number | null;
   min_order_amount?: number | null;
   is_active?: boolean;
+  condition_type?: ConditionType;
+  condition_label?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  pickup_radius_meters?: number | null;
 }
 
 // ── Résultat de validation (endpoint client) ──────────────────────────────────

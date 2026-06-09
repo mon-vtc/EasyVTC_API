@@ -43,6 +43,10 @@ import {
 import { favoritesRouter } from './modules/favorites/favorites.routes.js';
 import { rgpdRouter }      from './modules/rgpd/rgpd.routes.js';
 import auditLogsRoutes    from './modules/audit-logs/audit-logs.routes.js';
+import {
+  adminMarketingRouter,
+  userMarketingRouter,
+} from './modules/marketing/marketing.routes.js';
 
 const app = express();
 
@@ -133,6 +137,8 @@ app.use('/admin/commission-settings', commissionSettingsRouter);
 app.use('/admin/commissions',         commissionsReportingRouter);
 app.use('/admin/promo-codes',         adminPromoCodesRouter);
 app.use('/promo-codes',               promoCodesPublicRouter);
+app.use('/admin/marketing',           adminMarketingRouter);
+app.use('/users',                     userMarketingRouter);
 app.use('/users',                     favoritesRouter);
 app.use('/users',                     rgpdRouter);
 app.use('/admin/audit-logs',          auditLogsRoutes);

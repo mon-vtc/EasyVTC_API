@@ -5,7 +5,22 @@
 
 import { z } from 'zod';
 
-const discountTypes = ['percent', 'fixed'] as const;
+const discountTypes   = ['percent', 'fixed'] as const;
+const conditionTypes  = ['none', 'pickup_location'] as const;
+
+// ── Schéma de condition géographique (pickup_location) ────────────────────────
+const geoConditionRefinement = (d: {
+  condition_type?: string;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  pickup_radius_meters?: number | null;
+  condition_label?: string | null;
+}) => {
+  if (d.condition_type === 'pickup_location') {
+    if (d.pickup_lat == null || d.pickup_lng == null || d.pickup_radius_meters == null) return false;
+  }
+  return true;
+};
 
 // ── Création ──────────────────────────────────────────────────────────────────
 export const createPromoCodeSchema = z.object({
@@ -45,12 +60,22 @@ export const createPromoCodeSchema = z.object({
     .positive('Le montant minimum doit être positif')
     .optional(),
 
+  // Condition géographique
+  condition_type: z.enum(conditionTypes).default('none'),
+  condition_label: z.string().max(200).optional(),
+  pickup_lat:  z.number().min(-90).max(90).optional(),
+  pickup_lng:  z.number().min(-180).max(180).optional(),
+  pickup_radius_meters: z.number().int().positive().max(50000).optional(),
+
 }).refine(
   (d) => d.discount_type !== 'percent' || d.discount_value <= 100,
   { message: 'Un pourcentage ne peut pas dépasser 100 %', path: ['discount_value'] },
 ).refine(
   (d) => !d.valid_from || !d.valid_until || new Date(d.valid_from) < new Date(d.valid_until),
   { message: 'valid_until doit être postérieur à valid_from', path: ['valid_until'] },
+).refine(
+  geoConditionRefinement,
+  { message: 'pickup_lat, pickup_lng et pickup_radius_meters sont requis pour condition_type=pickup_location', path: ['condition_type'] },
 );
 
 // ── Mise à jour partielle ─────────────────────────────────────────────────────
@@ -73,6 +98,13 @@ export const updatePromoCodeSchema = z.object({
   min_order_amount:  z.number().positive().nullable().optional(),
   is_active:         z.boolean().optional(),
 
+  // Condition géographique
+  condition_type:          z.enum(conditionTypes).optional(),
+  condition_label:         z.string().max(200).nullable().optional(),
+  pickup_lat:              z.number().min(-90).max(90).nullable().optional(),
+  pickup_lng:              z.number().min(-180).max(180).nullable().optional(),
+  pickup_radius_meters:    z.number().int().positive().max(50000).nullable().optional(),
+
 }).refine(
   (d) => Object.keys(d).length > 0,
   { message: 'Au moins un champ doit être fourni pour la mise à jour' },
@@ -89,6 +121,9 @@ export const validatePromoCodeSchema = z.object({
   order_amount: z
     .number({ error: 'order_amount doit être un nombre positif' })
     .positive('Le montant de la commande doit être positif'),
+  // Coordonnées du point de départ — requis si le code a une condition géographique
+  pickup_lat: z.number().min(-90).max(90).optional(),
+  pickup_lng: z.number().min(-180).max(180).optional(),
 });
 
 // ── Filtres liste admin ───────────────────────────────────────────────────────
@@ -114,3 +149,4 @@ export type CreatePromoCodeInput       = z.infer<typeof createPromoCodeSchema>;
 export type UpdatePromoCodeInput       = z.infer<typeof updatePromoCodeSchema>;
 export type ValidatePromoCodeInput     = z.infer<typeof validatePromoCodeSchema>;
 export type PromoCodeListFiltersInput  = z.infer<typeof promoCodeListFiltersSchema>;
+export type PromoCodeListFilters       = PromoCodeListFiltersInput;
