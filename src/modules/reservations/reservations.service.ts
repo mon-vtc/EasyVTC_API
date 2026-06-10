@@ -89,7 +89,13 @@ export class ReservationsService {
     let discountAmount: number | null = null;
 
     if (dto.promo_code) {
-      const promoResult = await promoCodesService.validateCode(dto.promo_code, final_price);
+      const promoResult = await promoCodesService.validateCode(
+        dto.promo_code,
+        final_price,
+        dto.pickup_lat,
+        dto.pickup_lng,
+        clientId,   // vérifie que le code assigné appartient bien à ce client
+      );
       priceAfterPromo = promoResult.final_price;
       promoCodeId     = promoResult.promo_code_id;
       discountAmount  = promoResult.discount_amount;

@@ -496,3 +496,28 @@ export async function sendManagerWelcomeEmail(
 
   await sendMail(to, '🔑 Vos accès gestionnaire EazyVTC', html);
 }
+
+// =============================================================================
+// 7. Email marketing générique (campagnes)
+// =============================================================================
+export async function sendMarketingEmail(
+  to: string,
+  firstName: string,
+  subject: string,
+  body: string,
+): Promise<void> {
+  const escaped = body.replace(/\n/g, '<br/>');
+
+  const html = layout(`
+    <h2 style="margin:0 0 20px;color:${C.bordeaux};font-size:22px;font-weight:bold;">
+      Bonjour ${firstName},</h2>
+    ${hr()}
+    <p style="color:#333;font-size:15px;line-height:1.8;margin:0 0 24px;">${escaped}</p>
+    ${hr()}
+    <p style="color:${C.gray};font-size:12px;line-height:1.5;margin:0;">
+      Vous recevez cet email car vous avez accepté nos communications marketing.
+      Pour vous désabonner, modifiez vos préférences dans l'application EazyVTC.</p>
+  `, `${firstName} — ${subject}`);
+
+  await sendMail(to, subject, html);
+}

@@ -12,6 +12,7 @@ import {
   promoCodeIdParamSchema,
   validatePromoCodeSchema,
   promoCodeListFiltersSchema,
+  bulkAssignSchema,
 } from './promo-codes.validator.js';
 
 export class PromoCodesController {
@@ -65,10 +66,51 @@ export class PromoCodesController {
         action:     'PROMO_CODE_CREATED',
         entityType: 'promo_code',
         entityId:   promoCode.id,
-        newValue:   { code: promoCode.code, discount_type: promoCode.discount_type, discount_value: promoCode.discount_value },
+        newValue:   {
+          code:             promoCode.code,
+          code_radical:     promoCode.code_radical,
+          assigned_user_id: promoCode.assigned_user_id,
+          discount_type:    promoCode.discount_type,
+          discount_value:   promoCode.discount_value,
+        },
       });
 
       res.status(201).json({ ok: true, message: 'Code promo créé avec succès', data: promoCode });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── POST /admin/promo-codes/:id/bulk-assign ───────────────────────────────
+  async bulkAssign(req: Request, res: Response): Promise<void> {
+    const paramParsed = promoCodeIdParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID de code promo invalide' });
+      return;
+    }
+
+    const bodyParsed = bulkAssignSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: bodyParsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    try {
+      const result = await promoCodesService.bulkAssign(paramParsed.data.id, bodyParsed.data);
+
+      void auditLog(req, {
+        action:     'PROMO_CODE_BULK_ASSIGNED',
+        entityType: 'promo_code',
+        entityId:   paramParsed.data.id,
+        newValue:   { created: result.created, user_count: bodyParsed.data.user_ids.length },
+      });
+
+      res.status(201).json({
+        ok: true,
+        message: `${result.created} code(s) générés et assignés avec succès`,
+        data: result,
+      });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
@@ -131,7 +173,13 @@ export class PromoCodesController {
     }
 
     try {
-      const result = await promoCodesService.validateCode(parsed.data.code, parsed.data.order_amount);
+      const result = await promoCodesService.validateCode(
+        parsed.data.code,
+        parsed.data.order_amount,
+        parsed.data.pickup_lat,
+        parsed.data.pickup_lng,
+        req.user?.id,   // transmet l'ID de l'utilisateur connecté pour vérifier l'assignation
+      );
       res.status(200).json({ ok: true, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
