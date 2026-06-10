@@ -94,6 +94,7 @@ export class ReservationsService {
         final_price,
         dto.pickup_lat,
         dto.pickup_lng,
+        clientId,   // vérifie que le code assigné appartient bien à ce client
       );
       priceAfterPromo = promoResult.final_price;
       promoCodeId     = promoResult.promo_code_id;

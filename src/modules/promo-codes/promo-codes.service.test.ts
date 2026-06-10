@@ -19,7 +19,9 @@ const { PromoCodesService } = await import('./promo-codes.service.js');
 // DONNÉES DE TEST
 // ══════════════════════════════════════════════════════════════════════════════
 
-const PROMO_ID = 'promo-uuid-001';
+const PROMO_ID   = 'promo-uuid-001';
+const USER_ID    = 'user-uuid-clientA';
+const USER_ID_B  = 'user-uuid-clientB';
 
 // Champs geo par défaut (condition_type = 'none')
 const GEO_NONE = {
@@ -31,32 +33,58 @@ const GEO_NONE = {
 };
 
 const mockPromoPercent = {
-  id:               PROMO_ID,
-  code:             'BIENVENUE20',
-  discount_type:    'percent',
-  discount_value:   20,
-  valid_from:       null,
-  valid_until:      null,
-  max_uses:         null,
-  uses_count:       0,
-  min_order_amount: null,
-  is_active:        true,
+  id:                PROMO_ID,
+  code:              'BIENVENUE20',
+  code_radical:      null,
+  assigned_user_id:  null,
+  discount_type:     'percent',
+  discount_value:    20,
+  valid_from:        null,
+  valid_until:       null,
+  max_uses:          null,
+  max_uses_per_user: null,
+  uses_count:        0,
+  min_order_amount:  null,
+  is_active:         true,
+  ...GEO_NONE,
+  created_at:       '2026-06-01T00:00:00.000Z',
+  updated_at:       '2026-06-01T00:00:00.000Z',
+};
+
+// Code assigné à un utilisateur spécifique
+const mockPromoAssigned = {
+  id:                'promo-uuid-assigned-01',
+  code:              'VIP-A3X9K2',
+  code_radical:      'VIP',
+  assigned_user_id:  USER_ID,
+  discount_type:     'percent' as const,
+  discount_value:    15,
+  valid_from:        null,
+  valid_until:       null,
+  max_uses:          1,
+  max_uses_per_user: null,
+  uses_count:        0,
+  min_order_amount:  null,
+  is_active:         true,
   ...GEO_NONE,
   created_at:       '2026-06-01T00:00:00.000Z',
   updated_at:       '2026-06-01T00:00:00.000Z',
 };
 
 const mockPromoFixed = {
-  id:               'promo-uuid-002',
-  code:             'REMBOURSE5',
-  discount_type:    'fixed',
-  discount_value:   5,
-  valid_from:       null,
-  valid_until:      null,
-  max_uses:         100,
-  uses_count:       0,
-  min_order_amount: 15,
-  is_active:        true,
+  id:                'promo-uuid-002',
+  code:              'REMBOURSE5',
+  code_radical:      null,
+  assigned_user_id:  null,
+  discount_type:     'fixed',
+  discount_value:    5,
+  valid_from:        null,
+  valid_until:       null,
+  max_uses:          100,
+  max_uses_per_user: null,
+  uses_count:        0,
+  min_order_amount:  15,
+  is_active:         true,
   ...GEO_NONE,
   created_at:       '2026-06-01T00:00:00.000Z',
   updated_at:       '2026-06-01T00:00:00.000Z',
@@ -64,7 +92,10 @@ const mockPromoFixed = {
 
 // Promo avec condition géographique — rayon 300m autour de (48.890, 2.251)
 const mockPromoGeo = {
-  id:               'promo-uuid-003',
+  id:                'promo-uuid-003',
+  code_radical:      null,
+  assigned_user_id:  null,
+  max_uses_per_user: null,
   code:             'HOTELPARIS10',
   discount_type:    'fixed',
   discount_value:   10,
@@ -96,6 +127,8 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     delete:      jest.fn().mockReturnThis(),
     eq:          jest.fn().mockReturnThis(),
     neq:         jest.fn().mockReturnThis(),
+    in:          jest.fn().mockReturnThis(),
+    is:          jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
     range:       jest.fn().mockReturnThis(),
     single:      jest.fn().mockResolvedValue(resolved),
@@ -589,6 +622,127 @@ describe('PromoCodesService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // validateCode() — max_uses_per_user (codes publics)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('validateCode() — max_uses_per_user', () => {
+
+    const promoWithPerUserLimit = {
+      ...mockPromoPercent,
+      max_uses_per_user: 2,  // chaque client peut l'utiliser 2 fois max
+    };
+
+    it('accepte le code si le client est sous la limite (1 usage sur 2 autorisés)', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(promoWithPerUserLimit))  // récupération du promo
+        .mockReturnValueOnce(chain(null, null, 1));          // 1 usage existant → < 2
+
+      const result = await service.validateCode('BIENVENUE20', 50, undefined, undefined, USER_ID);
+
+      expect(result.discount_amount).toBe(10);
+    });
+
+    it('lève 422 si le client a atteint la limite (2 usages sur 2 autorisés)', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(promoWithPerUserLimit))
+        .mockReturnValueOnce(chain(null, null, 2));  // déjà 2 usages
+
+      await expect(
+        service.validateCode('BIENVENUE20', 50, undefined, undefined, USER_ID),
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('votre compte'),
+      });
+    });
+
+    it('lève 422 avec max_uses_per_user=1 et message "une fois"', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ ...mockPromoPercent, max_uses_per_user: 1 }))
+        .mockReturnValueOnce(chain(null, null, 1));  // 1 usage existant
+
+      await expect(
+        service.validateCode('BIENVENUE20', 50, undefined, undefined, USER_ID),
+      ).rejects.toMatchObject({
+        status: 422,
+        message: expect.stringContaining('une fois'),
+      });
+    });
+
+    it('ignore la limite par user si userId n\'est pas fourni (appel sans session)', async () => {
+      // Sans userId, la vérification per-user est ignorée — le code reste validable
+      mockFrom.mockReturnValueOnce(chain(promoWithPerUserLimit));
+
+      const result = await service.validateCode('BIENVENUE20', 50);
+
+      expect(result.code).toBe('BIENVENUE20');
+    });
+
+    it('ignore la limite si max_uses_per_user est null (pas de restriction)', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoPercent)); // max_uses_per_user = null
+
+      const result = await service.validateCode('BIENVENUE20', 50, undefined, undefined, USER_ID);
+
+      expect(result.discount_amount).toBe(10);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // bulkAssign() — valid_until override et validity_days
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('bulkAssign() — validité par assignation', () => {
+
+    const templateWithRadical = { ...mockPromoPercent, code_radical: 'NOEL2026' };
+    const generatedCode = { ...mockPromoAssigned, code: 'NOEL2026-XXXXXX', assigned_user_id: USER_ID };
+
+    it('applique valid_until du dto à la place de celui du template', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical))
+        .mockReturnValueOnce(chain([]))
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain([{ ...generatedCode, valid_until: '2026-12-31T23:59:59.000Z' }]));
+
+      const result = await service.bulkAssign(PROMO_ID, {
+        user_ids:    [USER_ID],
+        valid_until: '2026-12-31T23:59:59.000Z',
+      });
+
+      expect(result.codes[0].valid_until).toBe('2026-12-31T23:59:59.000Z');
+    });
+
+    it('calcule valid_until depuis validity_days (ex: 30 jours)', async () => {
+      const spy = jest.spyOn(Date.prototype, 'toISOString');
+
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical))
+        .mockReturnValueOnce(chain([]))
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain([generatedCode]));
+
+      // Ne plante pas — la date calculée est insérée dans les rows
+      const result = await service.bulkAssign(PROMO_ID, {
+        user_ids:      [USER_ID],
+        validity_days: 30,
+      });
+
+      expect(result.created).toBe(1);
+      spy.mockRestore();
+    });
+
+    it('utilise valid_until du template si aucun override n\'est fourni', async () => {
+      const templateWithExpiry = { ...templateWithRadical, valid_until: '2027-06-01T00:00:00.000Z' };
+
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithExpiry))
+        .mockReturnValueOnce(chain([]))
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain([{ ...generatedCode, valid_until: '2027-06-01T00:00:00.000Z' }]));
+
+      const result = await service.bulkAssign(PROMO_ID, { user_ids: [USER_ID] });
+
+      expect(result.codes[0].valid_until).toBe('2027-06-01T00:00:00.000Z');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // incrementUsage — version atomique via RPC
   // ──────────────────────────────────────────────────────────────────────────
   describe('incrementUsage()', () => {
@@ -614,6 +768,196 @@ describe('PromoCodesService', () => {
 
       // Aucun appel à from() — uniquement rpc()
       expect(mockFrom).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // create() — code assigné à un utilisateur
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('create() — code assigné (code_radical + assigned_user_id)', () => {
+
+    it('génère un code unique RADICAL-XXXXXX et le crée avec max_uses=1 par défaut', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(null))              // _generateUniqueCode : pas de collision
+        .mockReturnValueOnce(chain(mockPromoAssigned)); // insert
+
+      const result = await service.create({
+        code_radical:     'VIP',
+        assigned_user_id: USER_ID,
+        discount_type:    'percent',
+        discount_value:   15,
+      });
+
+      expect(result.code).toMatch(/^VIP-[A-Z0-9]{6}$/);
+      expect(result.assigned_user_id).toBe(USER_ID);
+      expect(result.code_radical).toBe('VIP');
+      expect(result.max_uses).toBe(1);
+    });
+
+    it('retente si le premier suffixe est en collision (max 5 essais)', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ id: 'collision' })) // 1er essai : collision
+        .mockReturnValueOnce(chain(null))                 // 2e essai : libre
+        .mockReturnValueOnce(chain(mockPromoAssigned));   // insert
+
+      const result = await service.create({
+        code_radical:     'VIP',
+        assigned_user_id: USER_ID,
+        discount_type:    'percent',
+        discount_value:   15,
+      });
+
+      expect(result.code).toMatch(/^VIP-/);
+    });
+
+    it('lève 500 si toutes les tentatives de génération ont une collision', async () => {
+      // 5 collisions consécutives
+      for (let i = 0; i < 5; i++) {
+        mockFrom.mockReturnValueOnce(chain({ id: `collision-${i}` }));
+      }
+
+      await expect(
+        service.create({
+          code_radical:     'VIP',
+          assigned_user_id: USER_ID,
+          discount_type:    'percent',
+          discount_value:   15,
+        }),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // bulkAssign()
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('bulkAssign()', () => {
+
+    const templateWithRadical = { ...mockPromoPercent, code_radical: 'NOEL2026' };
+
+    it('génère un code par utilisateur et les insère en batch', async () => {
+      const generatedCodes = [
+        { ...mockPromoAssigned, id: 'new-1', code: 'NOEL2026-AAA111', assigned_user_id: USER_ID   },
+        { ...mockPromoAssigned, id: 'new-2', code: 'NOEL2026-BBB222', assigned_user_id: USER_ID_B },
+      ];
+
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical)) // getById
+        .mockReturnValueOnce(chain([]))                  // vérif existing assignments → aucun
+        .mockReturnValueOnce(chain(null))                // _generateUniqueCode user A : libre
+        .mockReturnValueOnce(chain(null))                // _generateUniqueCode user B : libre
+        .mockReturnValueOnce(chain(generatedCodes));     // insert batch
+
+      const result = await service.bulkAssign(PROMO_ID, { user_ids: [USER_ID, USER_ID_B] });
+
+      expect(result.created).toBe(2);
+      expect(result.codes).toHaveLength(2);
+    });
+
+    it('lève 422 si le template n\'a pas de code_radical', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoPercent)); // pas de code_radical
+
+      await expect(
+        service.bulkAssign(PROMO_ID, { user_ids: [USER_ID] }),
+      ).rejects.toMatchObject({ status: 422 });
+    });
+
+    it('lève 409 si tous les utilisateurs ont déjà un code pour ce radical', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical))
+        .mockReturnValueOnce(chain([{ assigned_user_id: USER_ID }])); // déjà assigné
+
+      await expect(
+        service.bulkAssign(PROMO_ID, { user_ids: [USER_ID] }),
+      ).rejects.toMatchObject({ status: 409 });
+    });
+
+    it('ignore les doublons dans user_ids (dédoublonnage)', async () => {
+      const generatedCodes = [
+        { ...mockPromoAssigned, id: 'new-1', code: 'NOEL2026-AAA111', assigned_user_id: USER_ID },
+      ];
+
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical))
+        .mockReturnValueOnce(chain([]))              // aucune assignation existante
+        .mockReturnValueOnce(chain(null))            // _generateUniqueCode : libre
+        .mockReturnValueOnce(chain(generatedCodes)); // insert
+
+      // USER_ID passé 3 fois → dédoublonné → 1 seul code créé
+      const result = await service.bulkAssign(PROMO_ID, {
+        user_ids: [USER_ID, USER_ID, USER_ID],
+      });
+
+      expect(result.created).toBe(1);
+    });
+
+    it('lève 404 si le template est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(
+        service.bulkAssign('inexistant', { user_ids: [USER_ID] }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('lève 500 si l\'insert batch échoue', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(templateWithRadical))
+        .mockReturnValueOnce(chain([]))
+        .mockReturnValueOnce(chain(null))                           // génération OK
+        .mockReturnValueOnce(chain(null, { message: 'DB error' })); // insert KO
+
+      await expect(
+        service.bulkAssign(PROMO_ID, { user_ids: [USER_ID] }),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // validateCode() — assignation utilisateur
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('validateCode() — assignation utilisateur', () => {
+
+    it('accepte le code si le userId correspond à assigned_user_id', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoAssigned));
+
+      const result = await service.validateCode('VIP-A3X9K2', 50, undefined, undefined, USER_ID);
+
+      expect(result.discount_amount).toBe(7.5); // 15% de 50
+      expect(result.promo_code_id).toBe(mockPromoAssigned.id);
+    });
+
+    it('lève 403 si le userId ne correspond pas (code appartient à un autre)', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoAssigned)); // assigned à USER_ID
+
+      await expect(
+        service.validateCode('VIP-A3X9K2', 50, undefined, undefined, USER_ID_B), // mauvais user
+      ).rejects.toMatchObject({
+        status:  403,
+        message: expect.stringContaining('votre compte'),
+      });
+    });
+
+    it('lève 403 si aucun userId n\'est fourni pour un code assigné', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoAssigned));
+
+      await expect(
+        service.validateCode('VIP-A3X9K2', 50), // pas de userId
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('accepte un code public (assigned_user_id null) sans userId', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoPercent)); // code public
+
+      const result = await service.validateCode('BIENVENUE20', 50);
+
+      expect(result.code).toBe('BIENVENUE20');
+    });
+
+    it('accepte un code public même avec un userId fourni', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockPromoPercent));
+
+      const result = await service.validateCode('BIENVENUE20', 50, undefined, undefined, USER_ID);
+
+      expect(result.final_price).toBe(40);
     });
   });
 });

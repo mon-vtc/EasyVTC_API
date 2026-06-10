@@ -7,12 +7,13 @@
 //   app.use('/promo-codes',       promoCodesPublicRouter)
 //
 // Endpoints résultants :
-//   GET    /admin/promo-codes          Admin : liste paginée
-//   GET    /admin/promo-codes/:id      Admin : détail d'un code
-//   POST   /admin/promo-codes          Admin : créer un code
-//   PATCH  /admin/promo-codes/:id      Admin : modifier un code
-//   DELETE /admin/promo-codes/:id      Admin : supprimer un code
-//   POST   /promo-codes/validate       Client (auth) : vérifier un code avant réservation
+//   GET    /admin/promo-codes                Admin : liste paginée
+//   GET    /admin/promo-codes/:id            Admin : détail d'un code
+//   POST   /admin/promo-codes                Admin : créer un code (public ou assigné)
+//   POST   /admin/promo-codes/:id/bulk-assign  Admin : générer N codes depuis un radical
+//   PATCH  /admin/promo-codes/:id            Admin : modifier un code
+//   DELETE /admin/promo-codes/:id            Admin : supprimer un code
+//   POST   /promo-codes/validate             Client (auth) : vérifier un code avant réservation
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
@@ -39,6 +40,11 @@ adminPromoCodesRouter.get(
 adminPromoCodesRouter.post(
   '/',
   (req, res) => promoCodesController.create(req, res),
+);
+
+adminPromoCodesRouter.post(
+  '/:id/bulk-assign',
+  (req, res) => promoCodesController.bulkAssign(req, res),
 );
 
 adminPromoCodesRouter.patch(
