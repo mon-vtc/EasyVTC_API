@@ -31,6 +31,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
     { name: 'Ratings', description: 'Évaluations des chauffeurs' },
     { name: 'Promo Codes', description: 'Codes de réduction' },
     { name: 'Favorites', description: 'Destinations favorites' },
+    { name: 'Marketing', description: 'Base clients opt-in et campagnes email/SMS/push' },
     { name: 'Commission Settings', description: 'Paramétrage et reporting des commissions' },
     { name: 'RGPD', description: 'Export et anonymisation des données personnelles' },
     { name: 'Admin', description: 'Administration — utilisateurs, gestionnaires, stats' },
@@ -194,37 +195,151 @@ export const swaggerSpec: OpenAPIV3.Document = {
       PricingGrid: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' },
-          country: { type: 'string', enum: ['france', 'senegal'] },
-          vehicle_type: { type: 'string' },
-          base_price: { type: 'number', example: 3.5 },
-          price_per_km: { type: 'number', example: 1.8 },
-          price_per_min: { type: 'number', example: 0.4 },
-          pickup_supplement: { type: 'number', example: 0 },
-          is_active: { type: 'boolean' },
+          id:                    { type: 'string', format: 'uuid' },
+          country:               { type: 'string', enum: ['france', 'senegal'] },
+          currency:              { type: 'string', example: 'EUR' },
+          base_price:            { type: 'number', example: 3.5 },
+          price_per_km:          { type: 'number', example: 1.73 },
+          price_per_min:         { type: 'number', example: 0.35 },
+          minimum_price:         { type: 'number', example: 10 },
+          tva_rate:              { type: 'number', example: 0.1, description: '0.1 = 10 %, 0 = pas de TVA' },
+          airport_supplement:    { type: 'number', example: 5, description: 'Supplément fixe aéroport (en devise locale)' },
+          night_supplement_rate: { type: 'number', example: 0.15, description: '0.15 = +15 % sur le montant HT' },
+          night_start:           { type: 'string', example: '19:00:00', description: 'Début plage nocturne (HH:MM:SS)' },
+          night_end:             { type: 'string', example: '07:00:00', description: 'Fin plage nocturne (HH:MM:SS)' },
+          is_active:             { type: 'boolean' },
+          created_at:            { type: 'string', format: 'date-time' },
+          updated_at:            { type: 'string', format: 'date-time' },
+        },
+      },
+      CreatePricingGridBody: {
+        type: 'object',
+        required: ['country', 'base_price', 'price_per_km', 'price_per_min', 'minimum_price', 'currency'],
+        properties: {
+          country:               { type: 'string', enum: ['france', 'senegal'] },
+          currency:              { type: 'string', enum: ['EUR', 'XOF'] },
+          base_price:            { type: 'number', example: 3.5 },
+          price_per_km:          { type: 'number', example: 1.73 },
+          price_per_min:         { type: 'number', example: 0.35 },
+          minimum_price:         { type: 'number', example: 10 },
+          tva_rate:              { type: 'number', example: 0.1 },
+          airport_supplement:    { type: 'number', example: 5 },
+          night_supplement_rate: { type: 'number', example: 0.15 },
+          night_start:           { type: 'string', example: '19:00' },
+          night_end:             { type: 'string', example: '07:00' },
+        },
+      },
+      UpdatePricingGridBody: {
+        type: 'object',
+        properties: {
+          base_price:            { type: 'number' },
+          price_per_km:          { type: 'number' },
+          price_per_min:         { type: 'number' },
+          minimum_price:         { type: 'number' },
+          is_active:             { type: 'boolean' },
+          tva_rate:              { type: 'number' },
+          airport_supplement:    { type: 'number' },
+          night_supplement_rate: { type: 'number' },
+          night_start:           { type: 'string', example: '19:00' },
+          night_end:             { type: 'string', example: '07:00' },
         },
       },
       FlatRate: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' },
-          name: { type: 'string', example: 'Massy → Orly' },
-          origin: { type: 'string' },
-          destination: { type: 'string' },
-          price: { type: 'number', example: 37 },
-          country: { type: 'string', enum: ['france', 'senegal'] },
-          vehicle_type: { type: 'string' },
-          is_active: { type: 'boolean' },
+          id:                { type: 'string', format: 'uuid' },
+          country:           { type: 'string', enum: ['france', 'senegal'] },
+          label:             { type: 'string', example: 'Massy → Orly' },
+          origin_label:      { type: 'string' },
+          destination_label: { type: 'string' },
+          price:             { type: 'number', example: 37 },
+          currency:          { type: 'string', example: 'EUR' },
+          is_active:         { type: 'boolean' },
         },
       },
-      PriceEstimate: {
+      PriceEstimateRequest: {
+        type: 'object',
+        required: ['country'],
+        properties: {
+          country:       { type: 'string', enum: ['france', 'senegal'] },
+          distance_km:   { type: 'number', example: 15 },
+          duration_min:  { type: 'number', example: 25 },
+          flat_rate_id:  { type: 'string', format: 'uuid' },
+          nb_passengers: { type: 'integer', example: 1 },
+          vehicle_type:  { type: 'string', example: 'berline' },
+          is_airport:    { type: 'boolean', description: 'true → applique le supplément aéroport' },
+          scheduled_at:  { type: 'string', format: 'date-time', description: 'Heure de la course pour déterminer le supplément nocturne' },
+        },
+      },
+      PriceEstimateResponse: {
         type: 'object',
         properties: {
-          estimated_price: { type: 'number' },
-          distance_km: { type: 'number' },
-          duration_min: { type: 'number' },
-          flat_rate_applied: { type: 'boolean' },
-          currency: { type: 'string', example: 'EUR' },
+          pricing_type: { type: 'string', enum: ['formula', 'flat_rate'] },
+          country:      { type: 'string', enum: ['france', 'senegal'] },
+          currency:     { type: 'string', example: 'EUR' },
+          amount_ht:    { type: 'number', example: 36.45 },
+          tva_amount:   { type: 'number', example: 3.65 },
+          amount_ttc:   { type: 'number', example: 40.10 },
+          final_price:  { type: 'number', example: 40.10, description: '= amount_ttc (rétrocompatibilité)' },
+        },
+      },
+      PricingConfigExample: {
+        type: 'object',
+        description: 'Simulation sur un trajet exemple (15 km / 25 min)',
+        properties: {
+          distance_km:           { type: 'number', example: 15 },
+          duration_min:          { type: 'number', example: 25 },
+          base_price:            { type: 'number' },
+          km_cost:               { type: 'number' },
+          min_cost:              { type: 'number' },
+          subtotal_ht:           { type: 'number' },
+          tva_rate:              { type: 'number' },
+          tva_amount:            { type: 'number' },
+          amount_ttc:            { type: 'number' },
+          commission_rate:       { type: 'number' },
+          commission_ht:         { type: 'number' },
+          commission_tva_rate:   { type: 'number' },
+          commission_tva_amount: { type: 'number' },
+          commission_ttc:        { type: 'number' },
+          driver_net_ttc:        { type: 'number' },
+        },
+      },
+      PricingConfig: {
+        type: 'object',
+        properties: {
+          country:    { type: 'string', enum: ['france', 'senegal'] },
+          grid:       { $ref: '#/components/schemas/PricingGrid' },
+          commission: {
+            nullable: true,
+            type: 'object',
+            properties: {
+              id:        { type: 'string', format: 'uuid' },
+              label:     { type: 'string' },
+              rate_type: { type: 'string', enum: ['percentage', 'flat'] },
+              rate_value:{ type: 'number', example: 15 },
+              tva_rate:  { type: 'number', example: 0.2 },
+              is_active: { type: 'boolean' },
+            },
+          },
+          example: { $ref: '#/components/schemas/PricingConfigExample' },
+        },
+      },
+      UpdatePricingConfigBody: {
+        type: 'object',
+        required: ['country'],
+        properties: {
+          country:               { type: 'string', enum: ['france', 'senegal'] },
+          base_price:            { type: 'number' },
+          price_per_km:          { type: 'number' },
+          price_per_min:         { type: 'number' },
+          minimum_price:         { type: 'number' },
+          tva_rate:              { type: 'number', description: 'Taux TVA course (0–1)' },
+          airport_supplement:    { type: 'number', description: 'Montant fixe supplément aéroport' },
+          night_supplement_rate: { type: 'number', description: 'Taux supplément nocturne (0–1)' },
+          night_start:           { type: 'string', example: '19:00' },
+          night_end:             { type: 'string', example: '07:00' },
+          commission_rate:       { type: 'number', description: 'Taux commission plateforme (%)' },
+          commission_tva_rate:   { type: 'number', description: 'Taux TVA sur commission (0–1)' },
         },
       },
       // ── Reservation ──────────────────────────────────────────────────────────
@@ -331,15 +446,140 @@ export const swaggerSpec: OpenAPIV3.Document = {
       PromoCode: {
         type: 'object',
         properties: {
-          id: { type: 'string', format: 'uuid' },
-          code: { type: 'string' },
-          type: { type: 'string', enum: ['percent', 'fixed'] },
-          value: { type: 'number' },
-          valid_from: { type: 'string', format: 'date-time' },
-          valid_until: { type: 'string', format: 'date-time' },
-          max_uses: { type: 'integer', nullable: true },
-          uses_count: { type: 'integer' },
-          is_active: { type: 'boolean' },
+          id:                   { type: 'string', format: 'uuid' },
+          code:                 { type: 'string', example: 'BIENVENUE20' },
+          name:                 { type: 'string', nullable: true, example: 'Bienvenue', description: 'Titre affiché sur la carte promo côté client' },
+          description:          { type: 'string', nullable: true, example: '20% de réduction sur votre première course' },
+          code_radical:         { type: 'string', nullable: true, example: 'BIENVENUE', description: 'Radical pour les codes assignés (code = radical-XXXXXX)' },
+          assigned_user_id:     { type: 'string', format: 'uuid', nullable: true, description: 'Si renseigné, code réservé exclusivement à cet utilisateur' },
+          discount_type:        { type: 'string', enum: ['percent', 'fixed'] },
+          discount_value:       { type: 'number', example: 20 },
+          valid_from:           { type: 'string', format: 'date-time', nullable: true },
+          valid_until:          { type: 'string', format: 'date-time', nullable: true },
+          max_uses:             { type: 'integer', nullable: true },
+          max_uses_per_user:    { type: 'integer', nullable: true, description: 'Limit par utilisateur distinct (codes publics uniquement)' },
+          uses_count:           { type: 'integer' },
+          min_order_amount:     { type: 'number', nullable: true },
+          is_active:            { type: 'boolean' },
+          condition_type:       { type: 'string', enum: ['none', 'pickup_location'], default: 'none' },
+          condition_label:      { type: 'string', nullable: true, description: 'Libellé humain de la condition géo (ex: "Hôtel Pullman")' },
+          pickup_lat:           { type: 'number', nullable: true },
+          pickup_lng:           { type: 'number', nullable: true },
+          pickup_radius_meters: { type: 'integer', nullable: true },
+          created_at:           { type: 'string', format: 'date-time' },
+          updated_at:           { type: 'string', format: 'date-time' },
+        },
+      },
+      CreatePromoCodeBody: {
+        type: 'object',
+        description: 'Deux modes : code public (fournir `code`) ou code assigné (fournir `code_radical` + `assigned_user_id`)',
+        properties: {
+          code:                 { type: 'string', minLength: 3, maxLength: 50, example: 'BIENVENUE20', description: 'Requis pour un code public. Mis en majuscule automatiquement.' },
+          name:                 { type: 'string', maxLength: 100, example: 'Bienvenue' },
+          description:          { type: 'string', maxLength: 300, example: '20% de réduction sur votre première course' },
+          code_radical:         { type: 'string', minLength: 2, maxLength: 40, example: 'BIENVENUE', description: 'Requis pour un code assigné. Le code final sera BIENVENUE-XXXXXX.' },
+          assigned_user_id:     { type: 'string', format: 'uuid', description: 'Si fourni, génère un code assigné à cet utilisateur (code_radical requis).' },
+          discount_type:        { type: 'string', enum: ['percent', 'fixed'] },
+          discount_value:       { type: 'number', example: 20 },
+          valid_from:           { type: 'string', format: 'date-time' },
+          valid_until:          { type: 'string', format: 'date-time' },
+          max_uses:             { type: 'integer', minimum: 1 },
+          max_uses_per_user:    { type: 'integer', minimum: 1, description: 'Limite d\'utilisation par utilisateur distinct (codes publics)' },
+          min_order_amount:     { type: 'number', minimum: 0 },
+          condition_type:       { type: 'string', enum: ['none', 'pickup_location'], default: 'none' },
+          condition_label:      { type: 'string', maxLength: 200 },
+          pickup_lat:           { type: 'number', minimum: -90, maximum: 90, description: 'Requis si condition_type=pickup_location' },
+          pickup_lng:           { type: 'number', minimum: -180, maximum: 180 },
+          pickup_radius_meters: { type: 'integer', minimum: 1, maximum: 50000 },
+        },
+        required: ['discount_type', 'discount_value'],
+      },
+      UpdatePromoCodeBody: {
+        type: 'object',
+        description: 'Mise à jour partielle — au moins un champ requis',
+        properties: {
+          code:                 { type: 'string', minLength: 3, maxLength: 50 },
+          name:                 { type: 'string', maxLength: 100, nullable: true },
+          description:          { type: 'string', maxLength: 300, nullable: true },
+          discount_type:        { type: 'string', enum: ['percent', 'fixed'] },
+          discount_value:       { type: 'number' },
+          valid_from:           { type: 'string', format: 'date-time', nullable: true },
+          valid_until:          { type: 'string', format: 'date-time', nullable: true },
+          max_uses:             { type: 'integer', minimum: 1, nullable: true },
+          max_uses_per_user:    { type: 'integer', minimum: 1, nullable: true },
+          min_order_amount:     { type: 'number', nullable: true },
+          is_active:            { type: 'boolean' },
+          condition_type:       { type: 'string', enum: ['none', 'pickup_location'] },
+          condition_label:      { type: 'string', nullable: true },
+          pickup_lat:           { type: 'number', nullable: true },
+          pickup_lng:           { type: 'number', nullable: true },
+          pickup_radius_meters: { type: 'integer', nullable: true },
+        },
+      },
+      BulkAssignBody: {
+        type: 'object',
+        required: ['user_ids'],
+        description: 'Génère un code unique (radical + suffixe) pour chaque utilisateur à partir du template',
+        properties: {
+          user_ids:      { type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1, maxItems: 500 },
+          valid_until:   { type: 'string', format: 'date-time', description: 'Surcharge la valid_until du template (exclusif avec validity_days)' },
+          validity_days: { type: 'integer', minimum: 1, maximum: 3650, description: 'Durée en jours depuis maintenant (exclusif avec valid_until)' },
+        },
+      },
+      BulkAssignResult: {
+        type: 'object',
+        properties: {
+          created: { type: 'integer', description: 'Nombre de codes générés' },
+          codes:   { type: 'array', items: { $ref: '#/components/schemas/PromoCode' } },
+        },
+      },
+      ValidatePromoCodeBody: {
+        type: 'object',
+        required: ['code', 'order_amount'],
+        properties: {
+          code:         { type: 'string', example: 'BIENVENUE20' },
+          order_amount: { type: 'number', minimum: 0, example: 45.50 },
+          pickup_lat:   { type: 'number', description: 'Requis si le code a une condition géographique' },
+          pickup_lng:   { type: 'number' },
+        },
+      },
+      PromoCodeValidationResult: {
+        type: 'object',
+        properties: {
+          promo_code_id:  { type: 'string', format: 'uuid' },
+          code:           { type: 'string' },
+          discount_type:  { type: 'string', enum: ['percent', 'fixed'] },
+          discount_value: { type: 'number' },
+          discount_amount:{ type: 'number', description: 'Montant de la remise calculé sur order_amount' },
+          final_price:    { type: 'number', description: 'Prix final après remise' },
+        },
+      },
+      UserPromoCodeItem: {
+        type: 'object',
+        properties: {
+          id:             { type: 'string', format: 'uuid' },
+          code:           { type: 'string', example: 'BIENVENUE20' },
+          name:           { type: 'string', nullable: true, example: 'Bienvenue' },
+          description:    { type: 'string', nullable: true, example: '20% de réduction sur votre première course' },
+          discount_type:  { type: 'string', enum: ['percent', 'fixed'] },
+          discount_value: { type: 'number', example: 20 },
+          valid_until:    { type: 'string', format: 'date-time', nullable: true },
+          is_active:      { type: 'boolean' },
+          is_expired:     { type: 'boolean' },
+        },
+      },
+      UserPromoCodesResult: {
+        type: 'object',
+        properties: {
+          stats: {
+            type: 'object',
+            properties: {
+              active_count:  { type: 'integer', example: 3, description: 'Nombre de codes encore actifs' },
+              total_savings: { type: 'number', example: 127.0, description: 'Économies totales réalisées depuis l\'inscription (somme des discount_amount)' },
+            },
+          },
+          active:  { type: 'array', items: { $ref: '#/components/schemas/UserPromoCodeItem' } },
+          expired: { type: 'array', items: { $ref: '#/components/schemas/UserPromoCodeItem' } },
         },
       },
       // ── Manager ──────────────────────────────────────────────────────────────
@@ -372,6 +612,87 @@ export const swaggerSpec: OpenAPIV3.Document = {
           vehicle_type: { type: 'string', nullable: true },
           rate_percent: { type: 'number', example: 15 },
           is_active: { type: 'boolean' },
+        },
+      },
+      // ── Marketing ────────────────────────────────────────────────────────────
+      MarketingCampaign: {
+        type: 'object',
+        properties: {
+          id:         { type: 'string', format: 'uuid' },
+          name:       { type: 'string', example: 'Offre été 2026' },
+          type:       { type: 'string', enum: ['email', 'sms', 'push'] },
+          status:     { type: 'string', enum: ['draft', 'sent'] },
+          subject:    { type: 'string', nullable: true, example: 'Profitez de -15% cet été !' },
+          body:       { type: 'string', example: 'Bonjour {{first_name}}, votre code promo : ...' },
+          sent_at:    { type: 'string', format: 'date-time', nullable: true },
+          sent_count: { type: 'integer', example: 342 },
+          open_rate:  { type: 'number', example: 0.47, description: 'Taux d\'ouverture (0-1)' },
+          click_rate: { type: 'number', example: 0.12, description: 'Taux de clic (0-1)' },
+          created_by: { type: 'string', format: 'uuid', nullable: true },
+          created_at: { type: 'string', format: 'date-time' },
+          updated_at: { type: 'string', format: 'date-time' },
+        },
+      },
+      CreateCampaignBody: {
+        type: 'object',
+        required: ['name', 'type', 'body'],
+        properties: {
+          name:    { type: 'string', minLength: 2, maxLength: 200 },
+          type:    { type: 'string', enum: ['email', 'sms', 'push'] },
+          subject: { type: 'string', maxLength: 500, description: 'Requis pour type=email' },
+          body:    { type: 'string', minLength: 1, maxLength: 5000 },
+        },
+      },
+      UpdateCampaignBody: {
+        type: 'object',
+        description: 'Mise à jour partielle — au moins un champ requis. Brouillons uniquement.',
+        properties: {
+          name:    { type: 'string', minLength: 2, maxLength: 200 },
+          subject: { type: 'string', maxLength: 500, nullable: true },
+          body:    { type: 'string', minLength: 1, maxLength: 5000 },
+        },
+      },
+      ClientSummary: {
+        type: 'object',
+        properties: {
+          id:                      { type: 'string', format: 'uuid' },
+          first_name:              { type: 'string' },
+          last_name:               { type: 'string' },
+          email:                   { type: 'string', format: 'email' },
+          total_rides:             { type: 'integer' },
+          total_spent:             { type: 'number' },
+          last_ride_date:          { type: 'string', format: 'date-time', nullable: true },
+          marketing_email_opt_in:  { type: 'boolean' },
+          marketing_sms_opt_in:    { type: 'boolean' },
+          marketing_push_opt_in:   { type: 'boolean' },
+        },
+      },
+      ClientBaseResult: {
+        type: 'object',
+        properties: {
+          stats: {
+            type: 'object',
+            properties: {
+              total_clients: { type: 'integer' },
+              opt_in_email:  { type: 'integer' },
+              opt_in_sms:    { type: 'integer' },
+              opt_in_push:   { type: 'integer' },
+            },
+          },
+          clients:     { type: 'array', items: { $ref: '#/components/schemas/ClientSummary' } },
+          total:       { type: 'integer' },
+          page:        { type: 'integer' },
+          limit:       { type: 'integer' },
+          total_pages: { type: 'integer' },
+        },
+      },
+      MarketingConsentsBody: {
+        type: 'object',
+        description: 'Au moins un consentement requis',
+        properties: {
+          marketing_email_opt_in: { type: 'boolean' },
+          marketing_sms_opt_in:   { type: 'boolean' },
+          marketing_push_opt_in:  { type: 'boolean' },
         },
       },
       // ── Audit Log ────────────────────────────────────────────────────────────
@@ -1152,12 +1473,98 @@ export const swaggerSpec: OpenAPIV3.Document = {
     // ════════════════════════════════════════════════════════════════════════════
     // PRICING
     // ════════════════════════════════════════════════════════════════════════════
+    '/pricing/config': {
+      get: {
+        tags: ['Pricing'],
+        summary: 'Config tarifaire unifiée d\'un pays (admin + manager)',
+        description: 'Retourne la grille active, la commission générique et un exemple de calcul (15 km / 25 min).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'country', in: 'query', required: true,
+            schema: { type: 'string', enum: ['france', 'senegal'] },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Config tarifaire complète',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok:   { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/PricingConfig' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+      patch: {
+        tags: ['Pricing'],
+        summary: 'Mettre à jour la config tarifaire d\'un pays (admin)',
+        description: 'Met à jour la grille active et/ou la commission générique en une seule opération. Retourne la config mise à jour.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UpdatePricingConfigBody' },
+              example: {
+                country: 'france',
+                base_price: 3.50,
+                price_per_km: 1.73,
+                price_per_min: 0.35,
+                minimum_price: 10.00,
+                tva_rate: 0.10,
+                airport_supplement: 5.00,
+                night_supplement_rate: 0.15,
+                night_start: '19:00',
+                night_end: '07:00',
+                commission_rate: 15,
+                commission_tva_rate: 0.20,
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Config mise à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok:      { type: 'boolean', example: true },
+                    message: { type: 'string', example: 'Configuration tarifaire mise à jour' },
+                    data:    { $ref: '#/components/schemas/PricingConfig' },
+                  },
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/pricing/grids/active/{country}': {
       get: {
         tags: ['Pricing'],
         summary: 'Grille tarifaire active d\'un pays (public)',
         parameters: [{ name: 'country', in: 'path', required: true, schema: { type: 'string', enum: ['france', 'senegal'] } }],
-        responses: { '200': { description: 'Grille active' } },
+        responses: {
+          '200': {
+            description: 'Grille active',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/PricingGrid' } } },
+          },
+        },
       },
     },
     '/pricing/grids': {
@@ -1165,6 +1572,9 @@ export const swaggerSpec: OpenAPIV3.Document = {
         tags: ['Pricing'],
         summary: 'Toutes les grilles tarifaires (admin + manager view_pricing)',
         security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'country', in: 'query', schema: { type: 'string', enum: ['france', 'senegal'] } },
+        ],
         responses: { '200': { description: 'Liste des grilles' } },
       },
       post: {
@@ -1173,7 +1583,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/PricingGrid' } } },
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreatePricingGridBody' } } },
         },
         responses: { '201': { description: 'Grille créée' }, '403': { $ref: '#/components/responses/Forbidden' } },
       },
@@ -1185,7 +1595,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         requestBody: {
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/PricingGrid' } } },
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdatePricingGridBody' } } },
         },
         responses: { '200': { description: 'Grille mise à jour' } },
       },
@@ -1194,7 +1604,13 @@ export const swaggerSpec: OpenAPIV3.Document = {
       get: {
         tags: ['Pricing'],
         summary: 'Forfaits actifs (public)',
-        responses: { '200': { description: 'Liste des forfaits actifs' } },
+        parameters: [
+          { name: 'country',   in: 'query', schema: { type: 'string', enum: ['france', 'senegal'] } },
+          { name: 'is_active', in: 'query', schema: { type: 'boolean' } },
+          { name: 'page',      in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit',     in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { '200': { description: 'Liste des forfaits' } },
       },
       post: {
         tags: ['Pricing'],
@@ -1241,26 +1657,47 @@ export const swaggerSpec: OpenAPIV3.Document = {
           required: true,
           content: {
             'application/json': {
-              schema: {
-                type: 'object',
-                required: ['origin_lat', 'origin_lng', 'destination_lat', 'destination_lng', 'vehicle_type', 'country'],
-                properties: {
-                  origin_lat: { type: 'number' },
-                  origin_lng: { type: 'number' },
-                  destination_lat: { type: 'number' },
-                  destination_lng: { type: 'number' },
-                  vehicle_type: { type: 'string' },
-                  country: { type: 'string', enum: ['france', 'senegal'] },
-                },
+              schema: { $ref: '#/components/schemas/PriceEstimateRequest' },
+              example: {
+                country: 'france',
+                distance_km: 15,
+                duration_min: 25,
+                vehicle_type: 'berline',
+                is_airport: false,
+                scheduled_at: '2026-06-15T21:30:00.000Z',
               },
             },
           },
         },
         responses: {
           '200': {
-            description: 'Estimation calculée',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/PriceEstimate' } } },
+            description: 'Estimation calculée avec décomposition HT/TVA/TTC',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok:   { type: 'boolean', example: true },
+                    data: { $ref: '#/components/schemas/PriceEstimateResponse' },
+                  },
+                },
+                example: {
+                  ok: true,
+                  data: {
+                    pricing_type: 'formula',
+                    country: 'france',
+                    currency: 'EUR',
+                    amount_ht: 36.45,
+                    tva_amount: 3.65,
+                    amount_ttc: 40.10,
+                    final_price: 40.10,
+                  },
+                },
+              },
+            },
           },
+          '400': { $ref: '#/components/responses/BadRequest' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
     },
@@ -1724,24 +2161,90 @@ export const swaggerSpec: OpenAPIV3.Document = {
     },
 
     // ════════════════════════════════════════════════════════════════════════════
-    // PROMO CODES
+    // PROMO CODES — Client
     // ════════════════════════════════════════════════════════════════════════════
+    '/promo-codes/mine': {
+      get: {
+        tags: ['Promo Codes'],
+        summary: 'Mes codes promo — actifs + expirés + économies totales (client)',
+        description:
+          'Retourne tous les codes accessibles au client connecté :\n' +
+          '- codes assignés à son compte (`assigned_user_id = userId`)\n' +
+          '- codes publics (`assigned_user_id IS NULL`)\n\n' +
+          'Les résultats sont partitionnés en `active` (valides, non expirés) et `expired` (expirés ou désactivés).\n' +
+          'Les `stats` incluent le compteur de codes actifs et la somme des économies depuis l\'inscription.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Codes promo retournés',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/UserPromoCodesResult' } } },
+                  ],
+                },
+                example: {
+                  ok: true,
+                  data: {
+                    stats: { active_count: 3, total_savings: 127.0 },
+                    active: [
+                      { id: 'uuid', code: 'BIENVENUE20', name: 'Bienvenue', description: '20% de réduction sur votre première course', discount_type: 'percent', discount_value: 20, valid_until: '2026-03-31T23:59:59Z', is_active: true, is_expired: false },
+                      { id: 'uuid', code: 'WEEKEND15',   name: 'Week-end',  description: '15% de réduction tous les week-ends',          discount_type: 'percent', discount_value: 15, valid_until: '2026-04-30T23:59:59Z', is_active: true, is_expired: false },
+                    ],
+                    expired: [
+                      { id: 'uuid', code: 'NOEL25', name: 'Noël', description: '25% de réduction pour les fêtes', discount_type: 'percent', discount_value: 25, valid_until: '2026-01-06T23:59:59Z', is_active: true, is_expired: true },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
     '/promo-codes/validate': {
       post: {
         tags: ['Promo Codes'],
         summary: 'Vérifier un code promo avant réservation (client)',
+        description:
+          'Applique toutes les règles de validité :\n' +
+          '- Période de validité (`valid_from` / `valid_until`)\n' +
+          '- Quota global (`max_uses`) et par utilisateur (`max_uses_per_user`)\n' +
+          '- Montant minimum de commande (`min_order_amount`)\n' +
+          '- Condition géographique (`condition_type=pickup_location`)\n' +
+          '- Assignation utilisateur (`assigned_user_id`)\n\n' +
+          'En cas de succès, retourne le montant de la remise et le prix final.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
-            'application/json': {
-              schema: { type: 'object', required: ['code'], properties: { code: { type: 'string' } } },
-            },
+            'application/json': { schema: { $ref: '#/components/schemas/ValidatePromoCodeBody' } },
           },
         },
         responses: {
-          '200': { description: 'Code valide — remise calculée' },
-          '400': { description: 'Code invalide ou expiré' },
+          '200': {
+            description: 'Code valide — remise calculée',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/PromoCodeValidationResult' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { description: 'Code assigné à un autre utilisateur' },
+          '404': { description: 'Code introuvable ou invalide' },
+          '422': { description: 'Code expiré, quota atteint ou montant minimum non respecté' },
+          '429': { description: 'Trop de tentatives — rate limit atteint (10 / minute)' },
         },
       },
     },
@@ -2263,22 +2766,81 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: { '200': { description: 'Évaluation supprimée' } },
       },
     },
+    // ════════════════════════════════════════════════════════════════════════════
+    // PROMO CODES — Admin
+    // ════════════════════════════════════════════════════════════════════════════
     '/admin/promo-codes': {
       get: {
         tags: ['Promo Codes'],
         summary: 'Liste paginée des codes promo (admin)',
         security: [{ BearerAuth: [] }],
-        responses: { '200': { description: 'Codes promo retournés' } },
+        parameters: [
+          { name: 'is_active', in: 'query', schema: { type: 'boolean' }, description: 'Filtrer par statut actif/inactif' },
+          { name: 'page',      in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit',     in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+        ],
+        responses: {
+          '200': {
+            description: 'Liste paginée des codes promo',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    {
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            promo_codes:  { type: 'array', items: { $ref: '#/components/schemas/PromoCode' } },
+                            total:        { type: 'integer' },
+                            page:         { type: 'integer' },
+                            limit:        { type: 'integer' },
+                            total_pages:  { type: 'integer' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
       },
       post: {
         tags: ['Promo Codes'],
         summary: 'Créer un code promo (admin)',
+        description:
+          '**Mode code public** : fournir `code` (sans `assigned_user_id`).\n\n' +
+          '**Mode code assigné** : fournir `code_radical` + `assigned_user_id` — le code final est généré automatiquement (`RADICAL-XXXXXX`).\n\n' +
+          'Un audit log `PROMO_CODE_CREATED` est enregistré.',
         security: [{ BearerAuth: [] }],
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/PromoCode' } } },
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreatePromoCodeBody' } } },
         },
-        responses: { '201': { description: 'Code promo créé' } },
+        responses: {
+          '201': {
+            description: 'Code promo créé',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/PromoCode' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '409': { description: 'Code déjà utilisé (unicité)' },
+        },
       },
     },
     '/admin/promo-codes/{id}': {
@@ -2287,24 +2849,111 @@ export const swaggerSpec: OpenAPIV3.Document = {
         summary: 'Détail d\'un code promo (admin)',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
-        responses: { '200': { description: 'Code promo retourné' } },
+        responses: {
+          '200': {
+            description: 'Code promo retourné',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/PromoCode' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
       },
       patch: {
         tags: ['Promo Codes'],
         summary: 'Modifier un code promo (admin)',
+        description: 'Mise à jour partielle — au moins un champ requis. Pour désactiver sans supprimer : `is_active=false`.',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         requestBody: {
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/PromoCode' } } },
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdatePromoCodeBody' } } },
         },
-        responses: { '200': { description: 'Code promo mis à jour' } },
+        responses: {
+          '200': {
+            description: 'Code promo mis à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/PromoCode' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'Code déjà utilisé par un autre promo-code' },
+        },
       },
       delete: {
         tags: ['Promo Codes'],
         summary: 'Supprimer un code promo (admin)',
+        description:
+          'Suppression physique — refusée si le code est référencé sur des réservations existantes.\n\n' +
+          'Dans ce cas, préférer `PATCH /{id}` avec `is_active=false`.\n\n' +
+          'Un audit log `PROMO_CODE_DELETED` est enregistré.',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
-        responses: { '200': { description: 'Code promo supprimé' } },
+        responses: {
+          '200': { description: 'Code promo supprimé' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'Code lié à des réservations — utiliser PATCH is_active=false à la place' },
+        },
+      },
+    },
+    '/admin/promo-codes/{id}/bulk-assign': {
+      post: {
+        tags: ['Promo Codes'],
+        summary: 'Générer des codes assignés pour une liste d\'utilisateurs (admin)',
+        description:
+          'Génère un code unique par utilisateur (`RADICAL-XXXXXX`) à partir du `code_radical` du template.\n\n' +
+          'Copie toutes les conditions tarifaires et géographiques du template.\n\n' +
+          'Les utilisateurs déjà détenteurs d\'un code pour ce radical sont ignorés silencieusement (retournés dans `created`).\n\n' +
+          'Un audit log `PROMO_CODE_BULK_ASSIGNED` est enregistré.\n\n' +
+          '⚠️ Le code template doit avoir un `code_radical` défini.',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'UUID du code template (doit avoir un code_radical)' }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/BulkAssignBody' } } },
+        },
+        responses: {
+          '201': {
+            description: 'Codes générés et assignés',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/BulkAssignResult' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'Tous les utilisateurs ont déjà un code pour ce radical' },
+          '422': { description: 'Le template n\'a pas de code_radical défini' },
+        },
       },
     },
     '/admin/commission-settings': {
@@ -2369,6 +3018,263 @@ export const swaggerSpec: OpenAPIV3.Document = {
           { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
         ],
         responses: { '200': { description: 'Résumé retourné' } },
+      },
+    },
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // MARKETING
+    // ════════════════════════════════════════════════════════════════════════════
+    '/users/me/marketing-consents': {
+      patch: {
+        tags: ['Marketing'],
+        summary: 'Mettre à jour ses consentements marketing (client)',
+        description: 'Permet à un client de gérer ses opt-in/opt-out email, SMS et push.\n\nAu moins un des trois champs doit être fourni.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/MarketingConsentsBody' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Consentements mis à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    {
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            marketing_email_opt_in: { type: 'boolean' },
+                            marketing_sms_opt_in:   { type: 'boolean' },
+                            marketing_push_opt_in:  { type: 'boolean' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/admin/marketing/clients': {
+      get: {
+        tags: ['Marketing'],
+        summary: 'Base clients marketing — statistiques opt-in + liste paginée (admin)',
+        description: 'Retourne les statistiques globales de consentement (opt_in_email, sms, push) et la liste paginée des clients avec leurs préférences.\n\nFiltrable par canal de consentement (`consent`) et par recherche nominative (`search`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'search',  in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Recherche par nom, prénom ou email' },
+          { name: 'consent', in: 'query', schema: { type: 'string', enum: ['email', 'sms', 'push'] }, description: 'Filtrer par canal de consentement actif' },
+          { name: 'page',    in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit',   in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+        ],
+        responses: {
+          '200': {
+            description: 'Base clients retournée',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/ClientBaseResult' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/admin/marketing/campaigns': {
+      get: {
+        tags: ['Marketing'],
+        summary: 'Liste paginée des campagnes (admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page',  in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+        ],
+        responses: {
+          '200': {
+            description: 'Campagnes retournées',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    {
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            campaigns:   { type: 'array', items: { $ref: '#/components/schemas/MarketingCampaign' } },
+                            total:       { type: 'integer' },
+                            page:        { type: 'integer' },
+                            limit:       { type: 'integer' },
+                            total_pages: { type: 'integer' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+      post: {
+        tags: ['Marketing'],
+        summary: 'Créer une campagne en brouillon (admin)',
+        description: 'Crée une campagne avec `status=draft`. Elle peut être modifiée librement avant envoi.\n\nLe champ `subject` est requis pour les campagnes de type `email`.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateCampaignBody' } } },
+        },
+        responses: {
+          '201': {
+            description: 'Campagne créée (brouillon)',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/MarketingCampaign' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/admin/marketing/campaigns/{id}': {
+      get: {
+        tags: ['Marketing'],
+        summary: 'Détail d\'une campagne (admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': {
+            description: 'Campagne retournée',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/MarketingCampaign' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+      patch: {
+        tags: ['Marketing'],
+        summary: 'Modifier un brouillon de campagne (admin)',
+        description: 'Modification partielle — au moins un champ requis.\n\n⚠️ Refusé si la campagne a déjà été envoyée (`status=sent`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UpdateCampaignBody' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Campagne mise à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/MarketingCampaign' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'La campagne a déjà été envoyée — modification impossible' },
+        },
+      },
+      delete: {
+        tags: ['Marketing'],
+        summary: 'Supprimer un brouillon de campagne (admin)',
+        description: '⚠️ Refusé si la campagne a déjà été envoyée (`status=sent`).',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': { description: 'Campagne supprimée' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'La campagne a déjà été envoyée — suppression impossible' },
+        },
+      },
+    },
+    '/admin/marketing/campaigns/{id}/send': {
+      post: {
+        tags: ['Marketing'],
+        summary: 'Envoyer une campagne à tous les clients opt-in (admin)',
+        description:
+          'Déclenche l\'envoi immédiat de la campagne à tous les clients ayant consenti au canal concerné.\n\n' +
+          'La campagne passe de `draft` → `sent`. L\'opération est **irréversible**.\n\n' +
+          '- `email` → envoi via SendGrid à tous les clients `marketing_email_opt_in=true`\n' +
+          '- `sms` → envoi SMS à `marketing_sms_opt_in=true`\n' +
+          '- `push` → notification FCM à `marketing_push_opt_in=true`',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: {
+          '200': {
+            description: 'Campagne envoyée',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    {
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            sent_count: { type: 'integer', description: 'Nombre de destinataires ciblés' },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+          '409': { description: 'La campagne a déjà été envoyée' },
+        },
       },
     },
 
