@@ -13,6 +13,8 @@ import type {
   PromoCodeValidationResult,
   PromoCodeListFilters,
   PromoCodeListResult,
+  UserPromoCodeItem,
+  UserPromoCodesResult,
 } from './promo-codes.types.js';
 
 // Caractères autorisés pour le suffixe auto-généré (sans I, O, 0, 1 pour éviter les confusions)
@@ -98,7 +100,9 @@ export class PromoCodesService {
       .from('promo_codes')
       .insert({
         code:             finalCode,
-        code_radical:     dto.code_radical   ?? null,
+        name:             dto.name             ?? null,
+        description:      dto.description      ?? null,
+        code_radical:     dto.code_radical     ?? null,
         assigned_user_id: dto.assigned_user_id ?? null,
         discount_type:    dto.discount_type,
         discount_value:   dto.discount_value,
@@ -188,6 +192,8 @@ export class PromoCodesService {
       const code = await this._generateUniqueCode(template.code_radical);
       rows.push({
         code,
+        name:              template.name,
+        description:       template.description,
         code_radical:      template.code_radical,
         assigned_user_id:  userId,
         discount_type:     template.discount_type,
@@ -395,6 +401,90 @@ export class PromoCodesService {
       discount_value:  promo.discount_value,
       discount_amount: discountAmount,
       final_price:     finalPrice,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VUE CLIENT — Écran "Mes codes promo"
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // GET /promo-codes/mine
+  //
+  // Retourne les codes promo accessibles au client connecté :
+  //   - codes assignés à l'utilisateur (assigned_user_id = userId)
+  //   - codes publics (assigned_user_id IS NULL)
+  // Partitionnés en actifs / expirés + économies totales depuis l'inscription.
+  async getMine(userId: string): Promise<UserPromoCodesResult> {
+    // 1. Récupérer tous les codes accessibles à cet utilisateur
+    const { data: codes, error } = await supabaseAdmin
+      .from('promo_codes')
+      .select('id, code, name, description, discount_type, discount_value, valid_until, is_active, assigned_user_id')
+      .or(`assigned_user_id.eq.${userId},assigned_user_id.is.null`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[PromoCodes] getMine error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération des codes promo' };
+    }
+
+    const now = new Date();
+
+    const active: UserPromoCodeItem[] = [];
+    const expired: UserPromoCodeItem[] = [];
+
+    for (const row of (codes ?? []) as Array<{
+      id: string;
+      code: string;
+      name: string | null;
+      description: string | null;
+      discount_type: string;
+      discount_value: number;
+      valid_until: string | null;
+      is_active: boolean;
+      assigned_user_id: string | null;
+    }>) {
+      const isExpired = !row.is_active || (!!row.valid_until && new Date(row.valid_until) < now);
+
+      const item: UserPromoCodeItem = {
+        id:             row.id,
+        code:           row.code,
+        name:           row.name,
+        description:    row.description,
+        discount_type:  row.discount_type as import('./promo-codes.types.js').DiscountType,
+        discount_value: row.discount_value,
+        valid_until:    row.valid_until,
+        is_active:      row.is_active,
+        is_expired:     isExpired,
+      };
+
+      if (isExpired) {
+        expired.push(item);
+      } else {
+        active.push(item);
+      }
+    }
+
+    // 2. Économies totales : somme des discount_amount sur les réservations du client
+    const { data: savingsData, error: savingsError } = await supabaseAdmin
+      .from('reservations')
+      .select('discount_amount')
+      .eq('client_id', userId)
+      .not('discount_amount', 'is', null);
+
+    if (savingsError) {
+      console.error('[PromoCodes] getMine savings error:', savingsError);
+    }
+
+    const totalSavings = ((savingsData ?? []) as Array<{ discount_amount: number }>)
+      .reduce((sum, r) => sum + (r.discount_amount ?? 0), 0);
+
+    return {
+      stats: {
+        active_count:  active.length,
+        total_savings: Math.round(totalSavings * 100) / 100,
+      },
+      active,
+      expired,
     };
   }
 

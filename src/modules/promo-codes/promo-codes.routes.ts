@@ -7,13 +7,14 @@
 //   app.use('/promo-codes',       promoCodesPublicRouter)
 //
 // Endpoints résultants :
-//   GET    /admin/promo-codes                Admin : liste paginée
-//   GET    /admin/promo-codes/:id            Admin : détail d'un code
-//   POST   /admin/promo-codes                Admin : créer un code (public ou assigné)
+//   GET    /admin/promo-codes                  Admin : liste paginée
+//   GET    /admin/promo-codes/:id              Admin : détail d'un code
+//   POST   /admin/promo-codes                  Admin : créer un code (public ou assigné)
 //   POST   /admin/promo-codes/:id/bulk-assign  Admin : générer N codes depuis un radical
-//   PATCH  /admin/promo-codes/:id            Admin : modifier un code
-//   DELETE /admin/promo-codes/:id            Admin : supprimer un code
-//   POST   /promo-codes/validate             Client (auth) : vérifier un code avant réservation
+//   PATCH  /admin/promo-codes/:id              Admin : modifier un code
+//   DELETE /admin/promo-codes/:id              Admin : supprimer un code
+//   GET    /promo-codes/mine                   Client : codes actifs + expirés + économies totales
+//   POST   /promo-codes/validate               Client : vérifier un code avant réservation
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
@@ -57,13 +58,20 @@ adminPromoCodesRouter.delete(
   (req, res) => promoCodesController.delete(req, res),
 );
 
-// ── Route client — validation avant réservation ───────────────────────────────
+// ── Routes client ─────────────────────────────────────────────────────────────
 export const promoCodesPublicRouter = Router();
 promoCodesPublicRouter.use(authMiddleware);
+promoCodesPublicRouter.use(requireRole('client'));
 
+// GET /promo-codes/mine  — Liste des codes actifs + expirés + économies totales
+promoCodesPublicRouter.get(
+  '/mine',
+  (req, res) => promoCodesController.mine(req, res),
+);
+
+// POST /promo-codes/validate  — Vérifier un code avant réservation
 promoCodesPublicRouter.post(
   '/validate',
   promoValidateLimiter,
-  requireRole('client'),
   (req, res) => promoCodesController.validate(req, res),
 );

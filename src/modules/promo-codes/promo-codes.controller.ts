@@ -164,6 +164,23 @@ export class PromoCodesController {
     }
   }
 
+  // ── GET /promo-codes/mine ─────────────────────────────────────────────────
+  async mine(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ ok: false, message: 'Utilisateur non authentifié' });
+      return;
+    }
+
+    try {
+      const result = await promoCodesService.getMine(userId);
+      res.status(200).json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // ── POST /promo-codes/validate ────────────────────────────────────────────
   async validate(req: Request, res: Response): Promise<void> {
     const parsed = validatePromoCodeSchema.safeParse(req.body);

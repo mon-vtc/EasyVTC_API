@@ -27,6 +27,9 @@ const geoConditionRefinement = (d: {
 //   - Code assigné : fournir `code_radical` + `assigned_user_id` (code auto-généré)
 export const createPromoCodeSchema = z.object({
 
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(300).optional(),
+
   // Champ optionnel — requis pour un code public, ignoré pour un code assigné
   code: z
     .string()
@@ -104,13 +107,17 @@ export const createPromoCodeSchema = z.object({
     geoConditionRefinement,
     { message: 'pickup_lat, pickup_lng et pickup_radius_meters sont requis pour condition_type=pickup_location', path: ['condition_type'] },
   )
-  .refine(
-    // Code public : `code` obligatoire / Code assigné : `code_radical` obligatoire
-    (d) => d.assigned_user_id ? !!d.code_radical : !!d.code,
-    (d) => d.assigned_user_id
-      ? { message: 'code_radical est requis pour un code assigné à un utilisateur', path: ['code_radical'] }
-      : { message: 'code est requis pour un code public', path: ['code'] },
-  );
+  .superRefine((d, ctx) => {
+    if (d.assigned_user_id) {
+      if (!d.code_radical) {
+        ctx.addIssue({ code: 'custom', message: 'code_radical est requis pour un code assigné à un utilisateur', path: ['code_radical'] });
+      }
+    } else {
+      if (!d.code) {
+        ctx.addIssue({ code: 'custom', message: 'code est requis pour un code public', path: ['code'] });
+      }
+    }
+  });
 
 // ── Mise à jour partielle ─────────────────────────────────────────────────────
 export const updatePromoCodeSchema = z.object({
@@ -121,6 +128,9 @@ export const updatePromoCodeSchema = z.object({
     .regex(/^[A-Z0-9_-]+$/i, 'Le code ne peut contenir que des lettres, chiffres, tirets et underscores')
     .transform((v) => v.toUpperCase())
     .optional(),
+
+  name:        z.string().min(1).max(100).nullable().optional(),
+  description: z.string().max(300).nullable().optional(),
 
   discount_type:    z.enum(discountTypes).optional(),
   discount_value:   z.number().positive().optional(),

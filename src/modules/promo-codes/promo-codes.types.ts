@@ -10,6 +10,8 @@ export type ConditionType  = 'none' | 'pickup_location';
 export interface PromoCode {
   id: string;
   code: string;
+  name: string | null;
+  description: string | null;
   // Radical lisible défini par l'admin — suffixe unique auto-généré pour les codes assignés
   code_radical: string | null;
   // Si renseigné : code réservé à cet utilisateur uniquement
@@ -38,6 +40,8 @@ export interface PromoCode {
 // Cas B : code assigné → fournir `code_radical` + `assigned_user_id` (le code est auto-généré)
 export interface CreatePromoCodeDto {
   code?: string;
+  name?: string;
+  description?: string;
   code_radical?: string;
   assigned_user_id?: string;
   discount_type: DiscountType;
@@ -56,6 +60,8 @@ export interface CreatePromoCodeDto {
 
 export interface UpdatePromoCodeDto {
   code?: string;
+  name?: string | null;
+  description?: string | null;
   discount_type?: DiscountType;
   discount_value?: number;
   valid_from?: string | null;
@@ -93,6 +99,30 @@ export interface PromoCodeValidationResult {
   discount_value: number;
   discount_amount: number;
   final_price: number;
+}
+
+// ── Vue client (écran "Mes codes promo") ─────────────────────────────────────
+export interface UserPromoCodeItem {
+  id: string;
+  code: string;
+  name: string | null;
+  description: string | null;
+  discount_type: DiscountType;
+  discount_value: number;
+  valid_until: string | null;
+  is_active: boolean;
+  is_expired: boolean;
+}
+
+export interface UserPromoCodesStats {
+  active_count: number;
+  total_savings: number;
+}
+
+export interface UserPromoCodesResult {
+  stats: UserPromoCodesStats;
+  active: UserPromoCodeItem[];
+  expired: UserPromoCodeItem[];
 }
 
 // ── Filtres & pagination ──────────────────────────────────────────────────────
