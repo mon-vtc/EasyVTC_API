@@ -13,6 +13,7 @@ export interface CommissionSetting {
   vehicle_type: string | null;
   rate_type: CommissionRateType;
   rate_value: number;
+  tva_rate: number;  // 0.20 = 20 %, 0 = pas de TVA
   is_active: boolean;
   created_by: string | null;
   created_at: string;
@@ -26,6 +27,7 @@ export interface CreateCommissionSettingDto {
   vehicle_type?: string | null;
   rate_type: CommissionRateType;
   rate_value: number;
+  tva_rate?: number;
 }
 
 export interface UpdateCommissionSettingDto {
@@ -34,6 +36,7 @@ export interface UpdateCommissionSettingDto {
   vehicle_type?: string | null;
   rate_type?: CommissionRateType;
   rate_value?: number;
+  tva_rate?: number;
   is_active?: boolean;
 }
 
@@ -47,8 +50,10 @@ export interface Commission {
   rate_type: string;
   rate_value: number;
   gross_amount: number;
-  commission_amount: number;
-  driver_net_amount: number;
+  commission_amount: number;         // Commission HT plateforme
+  commission_tva_amount: number;     // TVA sur la commission
+  commission_ttc_amount: number;     // Commission TTC (HT + TVA)
+  driver_net_amount: number;         // Montant net chauffeur = gross - commission_ttc
   currency: string;
   calculated_at: string;
 }

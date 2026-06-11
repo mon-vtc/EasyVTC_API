@@ -34,6 +34,12 @@ router.post('/estimate', authMiddleware, (req, res) => pricingController.estimat
 // ROUTES ADMIN — Authentification + rôle admin
 // ══════════════════════════════════════════════════════════════════════════════
 
+// Config unifiée — lecture
+router.get('/config', authMiddleware, requireStaff, requirePermission('view_pricing'), (req, res) => pricingController.getConfig(req, res));
+
+// Config unifiée — mise à jour
+router.patch('/config', authMiddleware, requireAdmin, (req, res) => pricingController.updateConfig(req, res));
+
 // Grilles tarifaires — lecture (toutes, avec historique) : admin + manager avec view_pricing
 router.get('/grids', authMiddleware, requireStaff, requirePermission('view_pricing'), (req, res) => pricingController.getAllGrids(req, res));
 

@@ -216,9 +216,11 @@ export class CommissionSettingsService {
 
     const setting = await this.findApplicableSetting(input.zone, input.vehicle_type);
 
-    let commissionAmount = 0;
-    let rateType   = 'none';
-    let rateValue  = 0;
+    let commissionAmount    = 0;
+    let commissionTvaAmount = 0;
+    let commissionTtcAmount = 0;
+    let rateType  = 'none';
+    let rateValue = 0;
     let settingId: string | null = null;
 
     if (setting) {
@@ -232,18 +234,26 @@ export class CommissionSettingsService {
         commissionAmount = setting.rate_value;
       }
 
-      // Arrondi selon la devise
       commissionAmount = input.currency === 'XOF'
         ? Math.round(commissionAmount)
         : Math.round(commissionAmount * 100) / 100;
 
-      // La commission ne peut pas dépasser le montant brut
       commissionAmount = Math.min(commissionAmount, input.gross_amount);
+
+      // TVA sur la commission (snapshot du taux configuré)
+      const tvRate = setting.tva_rate ?? 0;
+      commissionTvaAmount = input.currency === 'XOF'
+        ? Math.round(commissionAmount * tvRate)
+        : Math.round(commissionAmount * tvRate * 100) / 100;
+      commissionTtcAmount = input.currency === 'XOF'
+        ? Math.round(commissionAmount + commissionTvaAmount)
+        : Math.round((commissionAmount + commissionTvaAmount) * 100) / 100;
     }
 
+    // Le chauffeur reçoit le brut moins la commission TTC (plateforme encaisse comm + TVA comm)
     const driverNet = input.currency === 'XOF'
-      ? Math.round(input.gross_amount - commissionAmount)
-      : Math.round((input.gross_amount - commissionAmount) * 100) / 100;
+      ? Math.round(input.gross_amount - commissionTtcAmount)
+      : Math.round((input.gross_amount - commissionTtcAmount) * 100) / 100;
 
     const { error } = await supabaseAdmin
       .from('commissions')
@@ -256,6 +266,8 @@ export class CommissionSettingsService {
         rate_value:            rateValue,
         gross_amount:          input.gross_amount,
         commission_amount:     commissionAmount,
+        commission_tva_amount: commissionTvaAmount,
+        commission_ttc_amount: commissionTtcAmount,
         driver_net_amount:     driverNet,
         currency:              input.currency,
       });

@@ -15,6 +15,7 @@ import {
   priceEstimateSchema,
   flatRateListFiltersSchema,
   pricingIdParamSchema,
+  updatePricingConfigSchema,
 } from './pricing.validator.js';
 
 const countryParamSchema = z.object({
@@ -221,16 +222,68 @@ export class PricingController {
       const result = await pricingService.calculatePrice(parsed.data);
       // On retourne final_price + pricing_type + currency
       // Le breakdown est volontairement omis de la réponse publique (CDC p.26)
+      // CDC p.26 : les formules de calcul ne figurent pas sur les documents PDF.
+      // En revanche, la décomposition HT/TVA/TTC est exposée sur l'API.
       res.status(200).json({
         ok: true,
         data: {
           pricing_type: result.pricing_type,
           country:      result.country,
           currency:     result.currency,
+          amount_ht:    result.amount_ht,
+          tva_amount:   result.tva_amount,
+          amount_ttc:   result.amount_ttc,
           final_price:  result.final_price,
-          // breakdown disponible en interne via pricingService.computePrice()
         },
       });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+  // CONFIG UNIFIÉE
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // GET /pricing/config?country=france — Admin : lecture config complète
+  async getConfig(req: Request, res: Response): Promise<void> {
+    const parsed = z.object({
+      country: z.enum(['france', 'senegal'] as const, {
+        error: () => 'Pays invalide. Valeurs acceptées : france, senegal',
+      }),
+    }).safeParse({ country: req.query.country });
+
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
+      return;
+    }
+    try {
+      const config = await pricingService.getPricingConfig(parsed.data.country);
+      res.status(200).json({ ok: true, data: config });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /pricing/config — Admin : mise à jour config complète
+  async updateConfig(req: Request, res: Response): Promise<void> {
+    const parsed = updatePricingConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const config = await pricingService.updatePricingConfig(parsed.data, req.user!.id);
+
+      void auditLog(req, {
+        action:     'PRICING_CONFIG_UPDATED',
+        entityType: 'pricing_config',
+        entityId:   parsed.data.country,
+        newValue:   parsed.data,
+      });
+
+      res.status(200).json({ ok: true, message: 'Configuration tarifaire mise à jour', data: config });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
