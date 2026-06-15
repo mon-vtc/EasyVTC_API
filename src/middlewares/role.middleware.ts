@@ -80,3 +80,39 @@ export function requirePermission(permission: ManagerPermission) {
     next();
   };
 }
+
+/**
+ * Variante de requirePermission pour les routes mixtes (ex: client + manager).
+ * - client  : passe toujours
+ * - admin   : passe toujours
+ * - manager : doit avoir la permission explicitement accordée
+ *
+ * @example
+ * // Client peut annuler ses propres courses, manager doit avoir cancel_reservation
+ * router.patch('/:id/cancel',
+ *   requireRole('client', 'admin', 'manager'),
+ *   requirePermissionIfManager('cancel_reservation'),
+ *   handler
+ * );
+ */
+export function requirePermissionIfManager(permission: ManagerPermission) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ ok: false, message: 'Authentification requise' });
+      return;
+    }
+    if (req.user.role !== 'manager') {
+      next();
+      return;
+    }
+    if (!req.user.permissions.includes(permission)) {
+      res.status(403).json({
+        ok: false,
+        message: 'Accès refusé. Permission insuffisante.',
+        required_permission: permission,
+      });
+      return;
+    }
+    next();
+  };
+}

@@ -3,17 +3,25 @@ import type { UserStatus } from '../users/users.types.js';
 // ── Permissions RBAC gestionnaire ────────────────────────────────────────────
 
 export const MANAGER_PERMISSIONS = [
+  // Réservations
   'view_reservations',
   'assign_reservation',
   'cancel_reservation',
+  // Utilisateurs & chauffeurs
   'view_users',
   'view_drivers',
   'view_clients',
+  // Tarification
   'view_pricing',
-  'manage_pricing',
+  // Documents
+  'view_documents',
+  // Finances
   'view_orders',
   'view_invoices',
-  'view_documents',
+  // Évaluations
+  'view_ratings',
+  // Support / Chat
+  'manage_support',
 ] as const;
 
 export type ManagerPermission = typeof MANAGER_PERMISSIONS[number];

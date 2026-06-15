@@ -21,7 +21,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireStaff } from '../../middlewares/role.middleware.js';
+import { requireRole, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import { chatController } from './chat.controller.js';
 
 // ── Router chat:reservation ────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ supportRouter.get(
 
 supportRouter.put(
   '/tickets/:ticketId/status',
-  requireStaff,
+  requireStaff, requirePermission('manage_support'),
   (req, res) => chatController.updateSupportTicketStatus(req, res),
 );
 
@@ -89,13 +89,13 @@ adminChatRouter.use(authMiddleware);
 // GET /admin/chat  → conversations course actives
 adminChatRouter.get(
   '/',
-  requireStaff,
+  requireStaff, requirePermission('manage_support'),
   (req, res) => chatController.listActiveConversations(req, res),
 );
 
 // GET /admin/chat/support  → tous les tickets support (filtrable par statut)
 adminChatRouter.get(
   '/support',
-  requireStaff,
+  requireStaff, requirePermission('manage_support'),
   (req, res) => chatController.listSupportTickets(req, res),
 );
