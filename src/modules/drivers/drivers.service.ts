@@ -19,6 +19,9 @@ import type {
   DriverUnavailability,
   CreateUnavailabilityDto,
   DriverAvailabilityResult,
+  DayOfWeek,
+  WeeklyScheduleResult,
+  SetScheduleDto,
 } from './drivers.types.js';
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
@@ -835,6 +838,105 @@ export class DriversService {
     }
 
     return data as unknown as DriverWithUser;
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // PLANNING HEBDOMADAIRE RÉCURRENT — GET + PUT /drivers/me/schedule
+  // ════════════════════════════════════════════════════════════════════════════
+
+  private static readonly DAYS_ORDER: DayOfWeek[] = [
+    'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  ];
+
+  private _buildScheduleResult(driverId: string, rows: Array<Record<string, unknown>>): WeeklyScheduleResult {
+    const rowMap = new Map(rows.map((r) => [r.day_of_week as DayOfWeek, r]));
+    const schedule = DriversService.DAYS_ORDER.map((day) => {
+      const row = rowMap.get(day);
+      return {
+        day,
+        is_available: (row?.is_available as boolean) ?? false,
+        start_time:   (row?.start_time   as string | null) ?? null,
+        end_time:     (row?.end_time     as string | null) ?? null,
+      };
+    });
+    return { driver_id: driverId, schedule };
+  }
+
+  // ── GET /drivers/me/schedule ─────────────────────────────────────────────────
+  async getSchedule(userId: string): Promise<WeeklyScheduleResult> {
+    const driverId = await this.resolveDriverId(userId);
+
+    const { data, error } = await supabaseAdmin
+      .from('driver_weekly_schedule')
+      .select('day_of_week, is_available, start_time, end_time')
+      .eq('driver_id', driverId);
+
+    if (error) {
+      console.error('[Drivers] getSchedule error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération du planning hebdomadaire' };
+    }
+
+    return this._buildScheduleResult(driverId, (data ?? []) as Array<Record<string, unknown>>);
+  }
+
+  // ── PUT /drivers/me/schedule ─────────────────────────────────────────────────
+  async setSchedule(userId: string, dto: SetScheduleDto): Promise<WeeklyScheduleResult> {
+    const driverId = await this.resolveDriverId(userId);
+
+    // Suppression des lignes existantes puis réinsertion complète
+    const { error: delError } = await supabaseAdmin
+      .from('driver_weekly_schedule')
+      .delete()
+      .eq('driver_id', driverId);
+
+    if (delError) {
+      console.error('[Drivers] setSchedule delete error:', delError);
+      throw { status: 500, message: 'Erreur lors de la mise à jour du planning' };
+    }
+
+    const rows = dto.schedule.map((day) => ({
+      driver_id:    driverId,
+      day_of_week:  day.day,
+      is_available: day.is_available,
+      start_time:   day.is_available ? (day.start_time ?? null) : null,
+      end_time:     day.is_available ? (day.end_time   ?? null) : null,
+    }));
+
+    if (rows.length > 0) {
+      const { error: insError } = await supabaseAdmin
+        .from('driver_weekly_schedule')
+        .insert(rows);
+
+      if (insError) {
+        console.error('[Drivers] setSchedule insert error:', insError);
+        throw { status: 500, message: 'Erreur lors de la sauvegarde du planning' };
+      }
+    }
+
+    return this.getSchedule(userId);
+  }
+
+  // ── GET /admin/drivers/:id/schedule ──────────────────────────────────────────
+  async getScheduleAdmin(driverId: string): Promise<WeeklyScheduleResult> {
+    const { data: driver, error: driverError } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (driverError || !driver) throw { status: 404, message: 'Chauffeur introuvable' };
+
+    const { data, error } = await supabaseAdmin
+      .from('driver_weekly_schedule')
+      .select('day_of_week, is_available, start_time, end_time')
+      .eq('driver_id', driverId);
+
+    if (error) {
+      console.error('[Drivers] getScheduleAdmin error:', error);
+      throw { status: 500, message: 'Erreur lors de la récupération du planning hebdomadaire' };
+    }
+
+    return this._buildScheduleResult(driverId, (data ?? []) as Array<Record<string, unknown>>);
   }
 }
 

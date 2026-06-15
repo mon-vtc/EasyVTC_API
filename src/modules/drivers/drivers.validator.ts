@@ -144,6 +144,44 @@ export const unavailabilityIdParamSchema = z.object({
   unavailId: z.string().uuid('ID indisponibilité invalide'),
 });
 
+// ── Planning hebdomadaire récurrent ───────────────────────────────────────────
+
+const DAYS_OF_WEEK = [
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+] as const;
+
+const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const weeklyScheduleDaySchema = z.object({
+  day:          z.enum(DAYS_OF_WEEK, { error: 'Jour invalide (monday … sunday)' }),
+  is_available: z.boolean({ error: 'is_available (boolean) est requis' }),
+  start_time:   z.string().regex(timeRegex, 'Format HH:MM attendu').nullable().optional(),
+  end_time:     z.string().regex(timeRegex, 'Format HH:MM attendu').nullable().optional(),
+}).refine(
+  (d) => {
+    if (!d.is_available) return true;
+    return !!d.start_time && !!d.end_time;
+  },
+  { message: 'start_time et end_time sont requis quand is_available est true' },
+).refine(
+  (d) => {
+    if (!d.is_available || !d.start_time || !d.end_time) return true;
+    return d.end_time > d.start_time;
+  },
+  { message: 'end_time doit être postérieur à start_time', path: ['end_time'] },
+);
+
+export const setWeeklyScheduleSchema = z.object({
+  schedule: z
+    .array(weeklyScheduleDaySchema)
+    .min(1, 'Au moins un jour doit être fourni')
+    .max(7, 'Maximum 7 jours')
+    .refine(
+      (arr) => new Set(arr.map((d) => d.day)).size === arr.length,
+      { message: 'Chaque jour ne peut apparaître qu\'une seule fois' },
+    ),
+});
+
 // ── Types exportés ────────────────────────────────────────────────────────────
 export type UpdateDriverInput           = z.infer<typeof updateDriverSchema>;
 export type ToggleOnlineInput           = z.infer<typeof toggleOnlineSchema>;
@@ -153,3 +191,4 @@ export type DriverListFiltersInput      = z.infer<typeof driverListFiltersSchema
 export type PlanningQueryInput          = z.infer<typeof planningQuerySchema>;
 export type RevenuesQueryInput          = z.infer<typeof revenuesQuerySchema>;
 export type CreateUnavailabilityInput   = z.infer<typeof createUnavailabilitySchema>;
+export type SetWeeklyScheduleInput      = z.infer<typeof setWeeklyScheduleSchema>;

@@ -52,6 +52,16 @@ driversSelfRoutes.get(
   (req, res) => controller.getMyAvailability(req, res)
 );
 
+// Planning hebdomadaire récurrent (écran "Planifiez vos horaires")
+driversSelfRoutes.get(
+  '/me/schedule',
+  (req, res) => controller.getMySchedule(req, res)
+);
+driversSelfRoutes.put(
+  '/me/schedule',
+  (req, res) => controller.setMySchedule(req, res)
+);
+
 // Indisponibilités
 driversSelfRoutes.get(
   '/me/unavailability',
@@ -114,6 +124,13 @@ adminDriversRoutes.patch(
   '/:id/status',
   requireAdmin,
   (req, res) => controller.changeDriverStatus(req, res)
+);
+
+// Planning hebdomadaire récurrent — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/schedule',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverScheduleAdmin(req, res)
 );
 
 // Disponibilité — lecture : admin + manager avec view_drivers

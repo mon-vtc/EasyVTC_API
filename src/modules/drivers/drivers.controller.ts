@@ -17,6 +17,7 @@ import {
   availabilityQuerySchema,
   createUnavailabilitySchema,
   unavailabilityIdParamSchema,
+  setWeeklyScheduleSchema,
 } from './drivers.validator.js';
 
 
@@ -405,6 +406,65 @@ export async function deleteDriverUnavailabilityAdmin(req: Request, res: Respons
       unavailValidation.data.unavailId,
     );
     return res.json({ ok: true, message: 'Indisponibilité supprimée' });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS PLANNING HEBDOMADAIRE — Chauffeur + Admin
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /drivers/me/schedule
+ * Retourne les 7 créneaux hebdomadaires du chauffeur connecté.
+ * Si aucun planning n'a encore été enregistré, retourne 7 jours à false.
+ */
+export async function getMySchedule(req: Request, res: Response) {
+  try {
+    const result = await driversService.getSchedule(req.user!.id);
+    return res.json({ ok: true, data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * PUT /drivers/me/schedule
+ * Sauvegarde le planning hebdomadaire complet (replace).
+ * Corps : { schedule: [{ day, is_available, start_time?, end_time? }] }
+ */
+export async function setMySchedule(req: Request, res: Response) {
+  try {
+    const validation = setWeeklyScheduleSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: validation.error.flatten().fieldErrors,
+      });
+    }
+
+    const result = await driversService.setSchedule(req.user!.id, validation.data);
+    return res.json({ ok: true, message: 'Planning enregistré', data: result });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
+  }
+}
+
+/**
+ * GET /admin/drivers/:id/schedule
+ * Planning hebdomadaire d'un chauffeur (admin/manager)
+ */
+export async function getDriverScheduleAdmin(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const result = await driversService.getScheduleAdmin(paramValidation.data.id);
+    return res.json({ ok: true, data: result });
   } catch (err: any) {
     return res.status(err.status || 500).json({ ok: false, message: err.message || 'Erreur serveur' });
   }

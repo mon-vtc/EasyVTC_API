@@ -149,6 +149,33 @@ export interface DriverAvailabilityResult {
   total_unavailabilities:  number;
 }
 
+// ── Planning hebdomadaire récurrent ───────────────────────────────────────────
+
+export type DayOfWeek =
+  | 'monday' | 'tuesday' | 'wednesday' | 'thursday'
+  | 'friday' | 'saturday' | 'sunday';
+
+export interface WeeklyScheduleDay {
+  day:          DayOfWeek;
+  is_available: boolean;
+  start_time:   string | null; // "HH:MM" ou null
+  end_time:     string | null; // "HH:MM" ou null
+}
+
+export interface WeeklyScheduleResult {
+  driver_id: string;
+  schedule:  WeeklyScheduleDay[];
+}
+
+export interface SetScheduleDto {
+  schedule: Array<{
+    day:          DayOfWeek;
+    is_available: boolean;
+    start_time?:  string | null;
+    end_time?:    string | null;
+  }>;
+}
+
 // ── Revenus ───────────────────────────────────────────────────────────────────
 
 export type RevenuesPeriod = 'week' | 'month' | 'all';
