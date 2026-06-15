@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendMarketingEmail } from '../../utils/email.service.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import type {
   MarketingCampaign,
   MarketingConsents,
@@ -46,7 +47,7 @@ export class MarketingService {
   private async _getClientStats(): Promise<ClientBaseStats> {
     const { data, error } = await supabaseAdmin
       .from('users')
-      .select('marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in')
+      .select('marketing_email_opt_in, marketing_push_opt_in') // marketing_sms_opt_in exclu (SMS non intégré)
       .eq('role', 'client')
       .is('deleted_at', null);
 
@@ -57,14 +58,14 @@ export class MarketingService {
 
     const rows = (data ?? []) as Array<{
       marketing_email_opt_in: boolean;
-      marketing_sms_opt_in: boolean;
+      // marketing_sms_opt_in: boolean; // SMS non intégré
       marketing_push_opt_in: boolean;
     }>;
 
     return {
       total_clients: rows.length,
       opt_in_email:  rows.filter((r) => r.marketing_email_opt_in).length,
-      opt_in_sms:    rows.filter((r) => r.marketing_sms_opt_in).length,
+      // opt_in_sms: rows.filter((r) => r.marketing_sms_opt_in).length,
       opt_in_push:   rows.filter((r) => r.marketing_push_opt_in).length,
     };
   }
@@ -77,7 +78,8 @@ export class MarketingService {
       .from('users')
       .select(
         `id, first_name, last_name, email,
-         marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in`,
+         marketing_email_opt_in, marketing_push_opt_in`,
+        // marketing_sms_opt_in exclu (SMS non intégré)
         { count: 'exact' },
       )
       .eq('role', 'client')
@@ -91,7 +93,7 @@ export class MarketingService {
     }
 
     if (filters.consent === 'email') query = query.eq('marketing_email_opt_in', true);
-    if (filters.consent === 'sms')   query = query.eq('marketing_sms_opt_in', true);
+    // if (filters.consent === 'sms') query = query.eq('marketing_sms_opt_in', true); // SMS non intégré
     if (filters.consent === 'push')  query = query.eq('marketing_push_opt_in', true);
 
     const { data, error, count } = await query.range(offset, offset + filters.limit - 1);
@@ -108,7 +110,7 @@ export class MarketingService {
       last_name: string;
       email: string;
       marketing_email_opt_in: boolean;
-      marketing_sms_opt_in: boolean;
+      // marketing_sms_opt_in: boolean; // SMS non intégré
       marketing_push_opt_in: boolean;
     }>);
 
@@ -122,7 +124,7 @@ export class MarketingService {
       last_name: string;
       email: string;
       marketing_email_opt_in: boolean;
-      marketing_sms_opt_in: boolean;
+      // marketing_sms_opt_in: boolean; // SMS non intégré
       marketing_push_opt_in: boolean;
     }>,
   ): Promise<ClientSummary[]> {
@@ -162,7 +164,7 @@ export class MarketingService {
         total_spent:            Math.round(stats.total * 100) / 100,
         last_ride_date:         stats.lastDate,
         marketing_email_opt_in: u.marketing_email_opt_in,
-        marketing_sms_opt_in:   u.marketing_sms_opt_in,
+        // marketing_sms_opt_in: u.marketing_sms_opt_in, // SMS non intégré
         marketing_push_opt_in:  u.marketing_push_opt_in,
       };
     });
@@ -288,7 +290,7 @@ export class MarketingService {
 
     const { data: recipients, error: recipientsError } = await supabaseAdmin
       .from('users')
-      .select('id, email, first_name, device_token')
+      .select('id, email, first_name')
       .eq('role', 'client')
       .eq(optInColumn, true)
       .is('deleted_at', null);
@@ -302,7 +304,6 @@ export class MarketingService {
       id: string;
       email: string;
       first_name: string;
-      device_token: string | null;
     }>;
 
     let sentCount = 0;
@@ -319,22 +320,23 @@ export class MarketingService {
           );
           sentCount++;
         } else if (campaign.type === 'push') {
-          if (user.device_token) {
-            // Déléguer au service notifications pour le dispatch FCM
-            await supabaseAdmin.from('notifications').insert({
-              user_id: user.id,
-              type:    'marketing',
-              channel: 'push',
-              title:   campaign.name,
-              body:    campaign.body,
-              status:  'pending',
-            });
-            sentCount++;
-          }
-        } else {
-          // SMS : canal non encore intégré — comptabilisé pour traçabilité
+          // Délègue à notificationsService.send() qui gère :
+          //   1. Insertion BDD (status: pending)
+          //   2. Dispatch FCM via _dispatchPush (fire-and-forget)
+          //   3. Marquage status: sent/failed selon le résultat FCM
+          await notificationsService.send({
+            user_id: user.id,
+            type:    'marketing',
+            channel: 'push',
+            title:   campaign.name,
+            body:    campaign.body,
+          });
           sentCount++;
         }
+        // else if (campaign.type === 'sms') {
+        //   // SMS non intégré — Twilio ou autre prestataire à câbler en S8+
+        //   sentCount++;
+        // }
       } catch (sendErr) {
         console.error(`[Marketing] Erreur envoi à ${user.email}:`, sendErr);
       }
@@ -378,7 +380,7 @@ export class MarketingService {
     userId: string,
     consents: Partial<{
       marketing_email_opt_in: boolean;
-      marketing_sms_opt_in: boolean;
+      // marketing_sms_opt_in: boolean; // SMS non intégré
       marketing_push_opt_in: boolean;
     }>,
   ): Promise<void> {
@@ -399,7 +401,7 @@ export class MarketingService {
 
   private _optInColumn(type: string): string {
     if (type === 'email') return 'marketing_email_opt_in';
-    if (type === 'sms')   return 'marketing_sms_opt_in';
+    // if (type === 'sms') return 'marketing_sms_opt_in'; // SMS non intégré
     return 'marketing_push_opt_in';
   }
 

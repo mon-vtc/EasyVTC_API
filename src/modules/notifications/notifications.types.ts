@@ -16,7 +16,8 @@ export type NotificationType =
   | 'document_rejected'       // Chauffeur : document rejeté par l'admin (avec motif)
   | 'reservation_cancelled'   // Chauffeur ou client : course annulée
   | 'new_message'             // Destinataire : nouveau message reçu dans le chat course
-  | 'support_reply';          // Utilisateur : réponse du support à son ticket
+  | 'support_reply'           // Utilisateur : réponse du support à son ticket
+  | 'marketing';              // Push marketing envoyé depuis une campagne admin
 
 export type NotificationChannel = 'push' | 'email';
 export type NotificationStatus  = 'pending' | 'sent' | 'failed' | 'delivered';

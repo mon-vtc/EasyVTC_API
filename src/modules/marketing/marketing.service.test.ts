@@ -8,13 +8,21 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 const mockFrom               = jest.fn<any>();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockSendMarketingEmail = jest.fn<any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockNotifSend          = jest.fn<any>().mockResolvedValue({ id: 'notif-mock-id' });
 
 jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
 jest.unstable_mockModule('../../utils/email.service.js', () => ({
-  sendMarketingEmail: mockSendMarketingEmail,
+  sendMarketingEmail:    mockSendMarketingEmail,
+  sendNotificationEmail: jest.fn(), // requis par notifications.service.ts (chargé en transitive)
+}));
+
+// notificationsService est maintenant utilisé par marketing.service pour les push
+jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
+  notificationsService: { send: mockNotifSend },
 }));
 
 const { MarketingService } = await import('./marketing.service.js');
@@ -213,7 +221,7 @@ describe('MarketingService', () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'insert failed' }));
 
       await expect(
-        service.createCampaign({ name: 'Test', type: 'sms', body: 'msg' }, ADMIN_ID),
+        service.createCampaign({ name: 'Test', type: 'email', body: 'msg' }, ADMIN_ID),
       ).rejects.toMatchObject({ status: 500 });
     });
   });
@@ -317,17 +325,24 @@ describe('MarketingService', () => {
       );
     });
 
-    it('envoie des push via la table notifications pour les clients avec device_token', async () => {
-      // sendCampaign push : 4 from() → getCampaignById, destinataires, insert notification, update campagne
+    it('envoie des push via notificationsService.send() pour les clients opt-in', async () => {
+      // sendCampaign push : 3 from() → getCampaignById, destinataires, update campagne
+      // notificationsService.send() est mocké — n'appelle pas from()
       mockFrom
         .mockReturnValueOnce(chain(mockPushCampaign))       // getCampaignById
         .mockReturnValueOnce(chain([mockClientPushOptIn]))  // destinataires push opt-in
-        .mockReturnValueOnce(chain(null))                   // insert dans notifications
         .mockReturnValueOnce(chain(null));                  // update campagne → sent
 
       const result = await service.sendCampaign(mockPushCampaign.id);
 
       expect(result.sent_count).toBe(1);
+      expect(mockNotifSend).toHaveBeenCalledWith({
+        user_id: mockClientPushOptIn.id,
+        type:    'marketing',
+        channel: 'push',
+        title:   mockPushCampaign.name,
+        body:    mockPushCampaign.body,
+      });
     });
 
     it('compte 0 si aucun destinataire opt-in', async () => {
@@ -380,21 +395,21 @@ describe('MarketingService', () => {
       const result = await service.getMyMarketingConsents('user-uuid-001');
 
       expect(result.marketing_email_opt_in).toBe(true);
-      expect(result.marketing_sms_opt_in).toBe(false);
+      // expect(result.marketing_sms_opt_in).toBe(false); // SMS non intégré
       expect(result.marketing_push_opt_in).toBe(true);
     });
 
     it('retourne false pour tous les consentements par défaut', async () => {
       mockFrom.mockReturnValueOnce(chain({
         marketing_email_opt_in: false,
-        marketing_sms_opt_in:   false,
+        // marketing_sms_opt_in: false, // SMS non intégré
         marketing_push_opt_in:  false,
       }));
 
       const result = await service.getMyMarketingConsents('user-uuid-002');
 
       expect(result.marketing_email_opt_in).toBe(false);
-      expect(result.marketing_sms_opt_in).toBe(false);
+      // expect(result.marketing_sms_opt_in).toBe(false); // SMS non intégré
       expect(result.marketing_push_opt_in).toBe(false);
     });
 
@@ -425,7 +440,7 @@ describe('MarketingService', () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'update failed' }));
 
       await expect(
-        service.updateMarketingConsents('user-uuid-001', { marketing_sms_opt_in: true }),
+        service.updateMarketingConsents('user-uuid-001', { marketing_push_opt_in: true }),
       ).rejects.toMatchObject({ status: 500 });
     });
   });
@@ -459,7 +474,7 @@ describe('MarketingService', () => {
 
       expect(result.stats.total_clients).toBe(3);
       expect(result.stats.opt_in_email).toBe(2);
-      expect(result.stats.opt_in_sms).toBe(1);
+      // expect(result.stats.opt_in_sms).toBe(1); // SMS non intégré
       expect(result.stats.opt_in_push).toBe(1);
       expect(result.clients).toHaveLength(1);
       expect(result.clients[0].total_rides).toBe(2);
