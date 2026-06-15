@@ -1,11 +1,13 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
-import type { 
-  UserProfile, 
-  UpdateProfileDto, 
-  UploadAvatarResult, 
+import type {
+  UserProfile,
+  UpdateProfileDto,
+  UploadAvatarResult,
   ChangeUserStatusDto,
   UserListFilters,
   UserListResult,
+  NotificationPrefs,
+  UpdateNotificationPrefsDto,
 } from './users.types.js';
 
 // Colonnes sélectionnées pour le profil utilisateur
@@ -114,6 +116,35 @@ export class UsersService {
     }
 
     return { profile_photo_url: signedUrl.signedUrl };
+  }
+
+  // ── PRÉFÉRENCES NOTIFICATIONS (self) ─────────────────────────────────────
+  async getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) throw { status: 404, message: 'Utilisateur introuvable' };
+
+    return data as NotificationPrefs;
+  }
+
+  async updateNotificationPrefs(userId: string, dto: UpdateNotificationPrefsDto): Promise<NotificationPrefs> {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ ...dto, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select('marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in')
+      .single();
+
+    if (error || !data) {
+      console.error('[Users] updateNotificationPrefs error:', error);
+      throw { status: 500, message: 'Erreur lors de la mise à jour des préférences' };
+    }
+
+    return data as NotificationPrefs;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
