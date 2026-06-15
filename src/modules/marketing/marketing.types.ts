@@ -83,3 +83,10 @@ export interface CampaignListResult {
   limit: number;
   total_pages: number;
 }
+
+// ── Consentements marketing d'un utilisateur ──────────────────────────────────
+export interface MarketingConsents {
+  marketing_email_opt_in: boolean;
+  marketing_sms_opt_in:   boolean;
+  marketing_push_opt_in:  boolean;
+}
