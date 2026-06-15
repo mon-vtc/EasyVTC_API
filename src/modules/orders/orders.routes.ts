@@ -19,7 +19,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireStaff, requireDriver } from '../../middlewares/role.middleware.js';
+import { requireRole, requireStaff, requireDriver, requirePermission } from '../../middlewares/role.middleware.js';
 import { ordersController } from './orders.controller.js';
 
 const router = Router();
@@ -27,7 +27,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // ── Routes admin / manager ────────────────────────────────────────────────────
-router.get('/', requireStaff, (req, res) => ordersController.listAll(req, res));
+router.get('/', requireStaff, requirePermission('view_orders'), (req, res) => ordersController.listAll(req, res));
 
 // ── Routes client ─────────────────────────────────────────────────────────────
 router.get('/mine', requireRole('client'), (req, res) => ordersController.listMine(req, res));

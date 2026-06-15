@@ -18,7 +18,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireStaff, requireDriver } from '../../middlewares/role.middleware.js';
+import { requireRole, requireAdmin, requireStaff, requireDriver, requirePermission } from '../../middlewares/role.middleware.js';
 import { ratingsController } from './ratings.controller.js';
 
 // ── POST /reservations/:id/rating ─────────────────────────────────────────────
@@ -50,7 +50,7 @@ adminDriverRatingsRouter.use(authMiddleware);
 
 adminDriverRatingsRouter.get(
   '/:id/ratings',
-  requireStaff,
+  requireStaff, requirePermission('view_ratings'),
   (req, res) => ratingsController.getDriverRatings(req, res),
 );
 
@@ -58,14 +58,16 @@ adminDriverRatingsRouter.get(
 
 export const adminRatingsRouter = Router();
 adminRatingsRouter.use(authMiddleware);
-adminRatingsRouter.use(requireStaff);
 
 adminRatingsRouter.get(
   '/',
+  requireStaff, requirePermission('view_ratings'),
   (req, res) => ratingsController.listAll(req, res),
 );
 
+// Suppression d'une évaluation : admin uniquement
 adminRatingsRouter.delete(
   '/:id',
+  requireAdmin,
   (req, res) => ratingsController.deleteRating(req, res),
 );
