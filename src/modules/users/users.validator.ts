@@ -38,3 +38,15 @@ export const userListFiltersSchema = z.object({
 });
 
 export type UserListFiltersInput = z.infer<typeof userListFiltersSchema>;
+
+// ── Préférences de notifications publicitaires (par canal) ────────────────────
+export const updateNotificationPrefsSchema = z.object({
+  marketing_email_opt_in: z.boolean().optional(),
+  marketing_sms_opt_in:   z.boolean().optional(),
+  marketing_push_opt_in:  z.boolean().optional(),
+}).refine(
+  (data) => Object.values(data).some((v) => v !== undefined),
+  { message: 'Au moins un canal doit être spécifié' },
+);
+
+export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;

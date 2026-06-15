@@ -366,6 +366,46 @@ describe('MarketingService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // getMyMarketingConsents
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('getMyMarketingConsents()', () => {
+
+    it('retourne les trois consentements de l\'utilisateur', async () => {
+      mockFrom.mockReturnValueOnce(chain({
+        marketing_email_opt_in: true,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  true,
+      }));
+
+      const result = await service.getMyMarketingConsents('user-uuid-001');
+
+      expect(result.marketing_email_opt_in).toBe(true);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(true);
+    });
+
+    it('retourne false pour tous les consentements par défaut', async () => {
+      mockFrom.mockReturnValueOnce(chain({
+        marketing_email_opt_in: false,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  false,
+      }));
+
+      const result = await service.getMyMarketingConsents('user-uuid-002');
+
+      expect(result.marketing_email_opt_in).toBe(false);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(false);
+    });
+
+    it('lève 404 si l\'utilisateur est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(service.getMyMarketingConsents('inexistant')).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // updateMarketingConsents
   // ──────────────────────────────────────────────────────────────────────────
   describe('updateMarketingConsents()', () => {

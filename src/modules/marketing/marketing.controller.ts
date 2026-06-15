@@ -169,6 +169,17 @@ export class MarketingController {
     }
   }
 
+  // ── GET /users/me/marketing-consents ─────────────────────────────────────
+  async getMyMarketingConsents(req: Request, res: Response): Promise<void> {
+    try {
+      const consents = await marketingService.getMyMarketingConsents(req.user!.id);
+      res.status(200).json({ ok: true, data: consents });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // ── PATCH /users/me/marketing-consents ───────────────────────────────────
   async updateMyMarketingConsents(req: Request, res: Response): Promise<void> {
     const parsed = updateMarketingConsentsSchema.safeParse(req.body);

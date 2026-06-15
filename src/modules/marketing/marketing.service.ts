@@ -7,6 +7,7 @@ import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendMarketingEmail } from '../../utils/email.service.js';
 import type {
   MarketingCampaign,
+  MarketingConsents,
   CreateCampaignDto,
   UpdateCampaignDto,
   ClientBaseFilters,
@@ -356,6 +357,22 @@ export class MarketingService {
   // ══════════════════════════════════════════════════════════════════════════
   // CONSENTEMENTS MARKETING (endpoint utilisateur)
   // ══════════════════════════════════════════════════════════════════════════
+
+  // ── GET /users/me/marketing-consents ─────────────────────────────────────
+  async getMyMarketingConsents(userId: string): Promise<MarketingConsents> {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      console.error('[Marketing] getMyMarketingConsents error:', error);
+      throw { status: 404, message: 'Utilisateur introuvable' };
+    }
+
+    return data as MarketingConsents;
+  }
 
   async updateMarketingConsents(
     userId: string,

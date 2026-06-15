@@ -4,6 +4,7 @@ import {
   updateProfileSchema,
   changeUserStatusSchema,
   userListFiltersSchema,
+  updateNotificationPrefsSchema,
 } from './users.validator.js';
 import { auditLog } from '../../utils/audit.service.js';
 
@@ -69,6 +70,38 @@ export class UsersController {
         message: 'Photo de profil mise à jour',
         data: result,
       });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── GET /users/me/notification-prefs ─────────────────────────────────────
+  async getMyNotificationPrefs(req: Request, res: Response): Promise<void> {
+    try {
+      const prefs = await usersService.getNotificationPrefs(req.user!.id);
+      res.status(200).json({ ok: true, data: prefs });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── PUT /users/me/notification-prefs ─────────────────────────────────────
+  async updateMyNotificationPrefs(req: Request, res: Response): Promise<void> {
+    const parsed = updateNotificationPrefsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    try {
+      const prefs = await usersService.updateNotificationPrefs(req.user!.id, parsed.data);
+      res.status(200).json({ ok: true, message: 'Préférences de notification mises à jour', data: prefs });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

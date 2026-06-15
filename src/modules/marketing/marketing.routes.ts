@@ -4,7 +4,7 @@
 //
 // Montage dans app.ts :
 //   app.use('/admin/marketing', adminMarketingRouter)
-//   app.use('/users',           userMarketingRouter)   ← PATCH /me/marketing-consents
+//   app.use('/users',           userMarketingRouter)
 //
 // Endpoints résultants :
 //   GET    /admin/marketing/clients                   Statistiques + liste clients opt-in
@@ -14,6 +14,7 @@
 //   PATCH  /admin/marketing/campaigns/:id             Modifier un brouillon
 //   DELETE /admin/marketing/campaigns/:id             Supprimer un brouillon
 //   POST   /admin/marketing/campaigns/:id/send        Envoyer une campagne
+//   GET    /users/me/marketing-consents               Consulter ses consentements marketing
 //   PATCH  /users/me/marketing-consents               Mettre à jour ses consentements
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -59,6 +60,11 @@ adminMarketingRouter.post(
 // ── Route utilisateur — consentements marketing ───────────────────────────────
 export const userMarketingRouter = Router();
 userMarketingRouter.use(authMiddleware);
+
+userMarketingRouter.get(
+  '/me/marketing-consents',
+  (req, res) => marketingController.getMyMarketingConsents(req, res),
+);
 
 userMarketingRouter.patch(
   '/me/marketing-consents',

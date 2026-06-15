@@ -521,7 +521,7 @@ describe('UsersService', () => {
         eq:     jest.fn().mockReturnThis(),
         single: jest.fn().mockResolvedValue({ data: { id: 'uuid-123', role: 'client' }, error: null } as never),
       };
-      
+
       const updateChain = {
         select: jest.fn().mockReturnThis(),
         update: jest.fn().mockReturnThis(),
@@ -540,6 +540,111 @@ describe('UsersService', () => {
           'admin-uuid'
         )
       ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PRÉFÉRENCES NOTIFICATIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ── GET NOTIFICATION PREFS ───────────────────────────────────────────────────
+  describe('getNotificationPrefs()', () => {
+
+    it(' retourne les trois canaux de notification du client', async () => {
+      setupFromMock({
+        marketing_email_opt_in: true,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  true,
+      });
+
+      const result = await service.getNotificationPrefs('uuid-123');
+
+      expect(result.marketing_email_opt_in).toBe(true);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(true);
+    });
+
+    it(' retourne false pour tous les canaux (opt-out par défaut)', async () => {
+      setupFromMock({
+        marketing_email_opt_in: false,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  false,
+      });
+
+      const result = await service.getNotificationPrefs('uuid-123');
+
+      expect(result.marketing_email_opt_in).toBe(false);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(false);
+    });
+
+    it(' lève 404 si utilisateur introuvable', async () => {
+      setupFromMock(null, { message: 'Not found' });
+
+      await expect(service.getNotificationPrefs('ghost-id'))
+        .rejects.toMatchObject({ status: 404, message: 'Utilisateur introuvable' });
+    });
+  });
+
+  // ── UPDATE NOTIFICATION PREFS ────────────────────────────────────────────────
+  describe('updateNotificationPrefs()', () => {
+
+    it(' active email et push, désactive sms', async () => {
+      setupFromMock({
+        marketing_email_opt_in: true,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  true,
+      });
+
+      const result = await service.updateNotificationPrefs('uuid-123', {
+        marketing_email_opt_in: true,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  true,
+      });
+
+      expect(result.marketing_email_opt_in).toBe(true);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(true);
+    });
+
+    it(' désactive tous les canaux (opt-out complet)', async () => {
+      setupFromMock({
+        marketing_email_opt_in: false,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  false,
+      });
+
+      const result = await service.updateNotificationPrefs('uuid-123', {
+        marketing_email_opt_in: false,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  false,
+      });
+
+      expect(result.marketing_email_opt_in).toBe(false);
+      expect(result.marketing_sms_opt_in).toBe(false);
+      expect(result.marketing_push_opt_in).toBe(false);
+    });
+
+    it(' met à jour un seul canal (mise à jour partielle)', async () => {
+      setupFromMock({
+        marketing_email_opt_in: true,
+        marketing_sms_opt_in:   false,
+        marketing_push_opt_in:  false,
+      });
+
+      const result = await service.updateNotificationPrefs('uuid-123', {
+        marketing_email_opt_in: true,
+      });
+
+      expect(result.marketing_email_opt_in).toBe(true);
+    });
+
+    it(' lève 500 en cas d\'erreur DB', async () => {
+      setupFromMock(null, { message: 'update failed' });
+
+      await expect(
+        service.updateNotificationPrefs('uuid-123', { marketing_push_opt_in: true }),
+      ).rejects.toMatchObject({ status: 500, message: expect.stringContaining('préférences') });
     });
   });
 });

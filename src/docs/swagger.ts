@@ -695,6 +695,24 @@ export const swaggerSpec: OpenAPIV3.Document = {
           marketing_push_opt_in:  { type: 'boolean' },
         },
       },
+      // ── Notification Prefs ───────────────────────────────────────────────────
+      NotificationPrefs: {
+        type: 'object',
+        properties: {
+          marketing_email_opt_in: { type: 'boolean', description: 'Recevoir les offres par email' },
+          marketing_sms_opt_in:   { type: 'boolean', description: 'Recevoir les offres par SMS' },
+          marketing_push_opt_in:  { type: 'boolean', description: 'Recevoir les offres par notification push' },
+        },
+      },
+      NotificationPrefsBody: {
+        type: 'object',
+        description: 'Au moins un canal requis. Les canaux non fournis restent inchangés.',
+        properties: {
+          marketing_email_opt_in: { type: 'boolean' },
+          marketing_sms_opt_in:   { type: 'boolean' },
+          marketing_push_opt_in:  { type: 'boolean' },
+        },
+      },
       // ── Audit Log ────────────────────────────────────────────────────────────
       AuditLog: {
         type: 'object',
@@ -1035,6 +1053,58 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: {
           '200': { description: 'Avatar mis à jour' },
           '400': { description: 'Format non supporté' },
+        },
+      },
+    },
+    '/users/me/notification-prefs': {
+      get: {
+        tags: ['Users'],
+        summary: 'Mes préférences de notifications publicitaires',
+        description: 'Retourne l\'état des trois canaux de notification marketing (email, SMS, push) pour l\'utilisateur connecté. Utilisé par l\'écran Préférences de l\'app mobile.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Préférences retournées',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/NotificationPrefs' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+      put: {
+        tags: ['Users'],
+        summary: 'Mettre à jour mes préférences de notifications publicitaires',
+        description: 'Met à jour un ou plusieurs canaux de notification marketing. Les canaux non fournis dans le corps restent inchangés. Retourne l\'état complet des 3 canaux après mise à jour.\n\n**Désactiver tous les canaux (opt-out total) :** envoyer les 3 champs à `false`.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/NotificationPrefsBody' } } },
+        },
+        responses: {
+          '200': {
+            description: 'Préférences mises à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/NotificationPrefs' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
     },
@@ -3025,6 +3095,29 @@ export const swaggerSpec: OpenAPIV3.Document = {
     // MARKETING
     // ════════════════════════════════════════════════════════════════════════════
     '/users/me/marketing-consents': {
+      get: {
+        tags: ['Marketing'],
+        summary: 'Consulter ses consentements marketing (client)',
+        description: 'Retourne l\'état des trois opt-in marketing (email, SMS, push) pour l\'utilisateur connecté. Endpoint orienté RGPD/consentement.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Consentements retournés',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/NotificationPrefs' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
       patch: {
         tags: ['Marketing'],
         summary: 'Mettre à jour ses consentements marketing (client)',
@@ -3042,18 +3135,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
                 schema: {
                   allOf: [
                     { $ref: '#/components/schemas/ApiSuccess' },
-                    {
-                      properties: {
-                        data: {
-                          type: 'object',
-                          properties: {
-                            marketing_email_opt_in: { type: 'boolean' },
-                            marketing_sms_opt_in:   { type: 'boolean' },
-                            marketing_push_opt_in:  { type: 'boolean' },
-                          },
-                        },
-                      },
-                    },
+                    { properties: { data: { $ref: '#/components/schemas/NotificationPrefs' } } },
                   ],
                 },
               },

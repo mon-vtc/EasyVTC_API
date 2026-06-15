@@ -28,9 +28,11 @@ router.use(authMiddleware);
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES UTILISATEUR (self)
 // ══════════════════════════════════════════════════════════════════════════════
-router.get(   '/me',        (req, res) => usersController.getMe(req, res));
-router.patch( '/me',        (req, res) => usersController.updateMe(req, res));
-router.post(  '/me/avatar', upload.single('avatar'), (req, res) => usersController.uploadAvatar(req, res));
+router.get(   '/me',                    (req, res) => usersController.getMe(req, res));
+router.patch( '/me',                    (req, res) => usersController.updateMe(req, res));
+router.post(  '/me/avatar',             upload.single('avatar'), (req, res) => usersController.uploadAvatar(req, res));
+router.get(   '/me/notification-prefs', (req, res) => usersController.getMyNotificationPrefs(req, res));
+router.put(   '/me/notification-prefs', (req, res) => usersController.updateMyNotificationPrefs(req, res));
 
 // Note: DELETE /me a été retiré — la désactivation de compte passe par l'admin
 

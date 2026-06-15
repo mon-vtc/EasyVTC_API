@@ -62,3 +62,16 @@ export interface UserListResult {
   limit: number;
   total_pages: number;
 }
+
+// ── Préférences de notifications publicitaires (par canal) ────────────────────
+export interface NotificationPrefs {
+  marketing_email_opt_in: boolean;
+  marketing_sms_opt_in:   boolean;
+  marketing_push_opt_in:  boolean;
+}
+
+export interface UpdateNotificationPrefsDto {
+  marketing_email_opt_in?: boolean;
+  marketing_sms_opt_in?:   boolean;
+  marketing_push_opt_in?:  boolean;
+}
