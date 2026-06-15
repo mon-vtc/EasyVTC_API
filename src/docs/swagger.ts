@@ -596,8 +596,10 @@ export const swaggerSpec: OpenAPIV3.Document = {
             items: {
               type: 'string',
               enum: [
-                'view_users', 'view_clients', 'view_drivers', 'view_documents',
-                'view_reservations', 'assign_reservation', 'view_pricing',
+                'view_reservations', 'assign_reservation', 'cancel_reservation',
+                'view_users', 'view_drivers', 'view_clients',
+                'view_pricing', 'view_documents', 'view_orders', 'view_invoices',
+                'view_ratings', 'manage_support',
               ],
             },
           },
@@ -620,7 +622,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         properties: {
           id:         { type: 'string', format: 'uuid' },
           name:       { type: 'string', example: 'Offre été 2026' },
-          type:       { type: 'string', enum: ['email', 'sms', 'push'] },
+          type:       { type: 'string', enum: ['email', 'push'], description: 'SMS non intégré dans cette version' },
           status:     { type: 'string', enum: ['draft', 'sent'] },
           subject:    { type: 'string', nullable: true, example: 'Profitez de -15% cet été !' },
           body:       { type: 'string', example: 'Bonjour {{first_name}}, votre code promo : ...' },
@@ -638,7 +640,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         required: ['name', 'type', 'body'],
         properties: {
           name:    { type: 'string', minLength: 2, maxLength: 200 },
-          type:    { type: 'string', enum: ['email', 'sms', 'push'] },
+          type:    { type: 'string', enum: ['email', 'push'], description: 'SMS non intégré dans cette version' },
           subject: { type: 'string', maxLength: 500, description: 'Requis pour type=email' },
           body:    { type: 'string', minLength: 1, maxLength: 5000 },
         },
@@ -663,7 +665,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
           total_spent:             { type: 'number' },
           last_ride_date:          { type: 'string', format: 'date-time', nullable: true },
           marketing_email_opt_in:  { type: 'boolean' },
-          marketing_sms_opt_in:    { type: 'boolean' },
           marketing_push_opt_in:   { type: 'boolean' },
         },
       },
@@ -675,7 +676,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
             properties: {
               total_clients: { type: 'integer' },
               opt_in_email:  { type: 'integer' },
-              opt_in_sms:    { type: 'integer' },
               opt_in_push:   { type: 'integer' },
             },
           },
@@ -688,10 +688,9 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       MarketingConsentsBody: {
         type: 'object',
-        description: 'Au moins un consentement requis',
+        description: 'Au moins un consentement requis. SMS non intégré dans cette version.',
         properties: {
           marketing_email_opt_in: { type: 'boolean' },
-          marketing_sms_opt_in:   { type: 'boolean' },
           marketing_push_opt_in:  { type: 'boolean' },
         },
       },
@@ -767,6 +766,40 @@ export const swaggerSpec: OpenAPIV3.Document = {
           unavailabilities:       { type: 'array', items: { $ref: '#/components/schemas/DriverUnavailability' } },
           total_reservations:     { type: 'integer' },
           total_unavailabilities: { type: 'integer' },
+        },
+      },
+      // ── Weekly Schedule ───────────────────────────────────────────────────────
+      WeeklyScheduleDay: {
+        type: 'object',
+        properties: {
+          day:          { type: 'string', enum: ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] },
+          is_available: { type: 'boolean', description: 'false = disponibilité non renseignée pour ce jour' },
+          start_time:   { type: 'string', example: '08:00', nullable: true, description: 'Format HH:MM — requis si is_available=true' },
+          end_time:     { type: 'string', example: '18:00', nullable: true, description: 'Format HH:MM — requis si is_available=true, doit être postérieur à start_time' },
+        },
+      },
+      WeeklyScheduleResult: {
+        type: 'object',
+        properties: {
+          driver_id: { type: 'string', format: 'uuid' },
+          schedule:  {
+            type: 'array',
+            items: { $ref: '#/components/schemas/WeeklyScheduleDay' },
+            description: 'Toujours 7 entrées (lundi → dimanche) — jours non enregistrés retournés avec is_available=false',
+          },
+        },
+      },
+      SetWeeklyScheduleBody: {
+        type: 'object',
+        required: ['schedule'],
+        description: 'Remplace l\'intégralité du planning hebdomadaire récurrent du chauffeur. 1 à 7 jours, chaque jour apparaît au plus une fois.',
+        properties: {
+          schedule: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 7,
+            items: { $ref: '#/components/schemas/WeeklyScheduleDay' },
+          },
         },
       },
       // ── Favorite ─────────────────────────────────────────────────────────────
@@ -1367,6 +1400,91 @@ export const swaggerSpec: OpenAPIV3.Document = {
           },
           '400': { description: 'starts_at dans le passé ou ends_at ≤ starts_at', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } } },
           '409': { description: 'Chevauchement avec une réservation confirmée', content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } } },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/drivers/me/schedule': {
+      get: {
+        tags: ['Drivers'],
+        summary: 'Mon planning hebdomadaire récurrent — écran "Planifiez vos horaires" (chauffeur)',
+        description:
+          'Retourne toujours 7 entrées (lundi → dimanche), ordonnées du lundi au dimanche.\n\n' +
+          'Les jours non encore enregistrés sont retournés avec `is_available=false` et des horaires `null`.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Planning hebdomadaire retourné',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/WeeklyScheduleResult' } } },
+                  ],
+                },
+                example: {
+                  ok: true,
+                  data: {
+                    driver_id: 'uuid-chauffeur',
+                    schedule: [
+                      { day: 'monday',    is_available: true,  start_time: '08:00', end_time: '18:00' },
+                      { day: 'tuesday',   is_available: true,  start_time: '08:00', end_time: '18:00' },
+                      { day: 'wednesday', is_available: false, start_time: null,    end_time: null    },
+                      { day: 'thursday',  is_available: true,  start_time: '09:00', end_time: '17:00' },
+                      { day: 'friday',    is_available: true,  start_time: '08:00', end_time: '20:00' },
+                      { day: 'saturday',  is_available: true,  start_time: '10:00', end_time: '22:00' },
+                      { day: 'sunday',    is_available: false, start_time: null,    end_time: null    },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+      put: {
+        tags: ['Drivers'],
+        summary: 'Définir / mettre à jour mon planning hebdomadaire (chauffeur)',
+        description:
+          'Remplace l\'intégralité du planning hebdomadaire récurrent.\n\n' +
+          '- Envoyer entre 1 et 7 jours ; les jours non envoyés sont supprimés.\n' +
+          '- Pour marquer un jour comme indisponible : `is_available=false` (start_time / end_time ignorés).\n' +
+          '- Pour marquer un jour comme disponible : `is_available=true` + `start_time` + `end_time` (HH:MM, end > start).\n' +
+          '- Chaque jour ne peut apparaître qu\'une seule fois dans le tableau.',
+        security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/SetWeeklyScheduleBody' },
+              example: {
+                schedule: [
+                  { day: 'monday',   is_available: true,  start_time: '08:00', end_time: '18:00' },
+                  { day: 'tuesday',  is_available: true,  start_time: '08:00', end_time: '18:00' },
+                  { day: 'saturday', is_available: true,  start_time: '10:00', end_time: '22:00' },
+                  { day: 'sunday',   is_available: false },
+                ],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Planning mis à jour — retourne l\'état complet (7 jours)',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/WeeklyScheduleResult' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
           '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
@@ -2658,6 +2776,35 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: { '200': { description: 'Revenus retournés' } },
       },
     },
+    '/admin/drivers/{id}/schedule': {
+      get: {
+        tags: ['Drivers'],
+        summary: 'Planning hebdomadaire récurrent d\'un chauffeur (admin + manager view_drivers)',
+        description: 'Retourne les 7 jours de la semaine avec les plages horaires définies par le chauffeur.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        ],
+        responses: {
+          '200': {
+            description: 'Planning hebdomadaire retourné',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/WeeklyScheduleResult' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
     '/admin/drivers/{id}/availability': {
       get: {
         tags: ['Drivers'],
@@ -3154,7 +3301,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'search',  in: 'query', schema: { type: 'string', maxLength: 100 }, description: 'Recherche par nom, prénom ou email' },
-          { name: 'consent', in: 'query', schema: { type: 'string', enum: ['email', 'sms', 'push'] }, description: 'Filtrer par canal de consentement actif' },
+          { name: 'consent', in: 'query', schema: { type: 'string', enum: ['email', 'push'] }, description: 'Filtrer par canal de consentement actif' },
           { name: 'page',    in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit',   in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
         ],
@@ -3325,8 +3472,8 @@ export const swaggerSpec: OpenAPIV3.Document = {
           'Déclenche l\'envoi immédiat de la campagne à tous les clients ayant consenti au canal concerné.\n\n' +
           'La campagne passe de `draft` → `sent`. L\'opération est **irréversible**.\n\n' +
           '- `email` → envoi via SendGrid à tous les clients `marketing_email_opt_in=true`\n' +
-          '- `sms` → envoi SMS à `marketing_sms_opt_in=true`\n' +
-          '- `push` → notification FCM à `marketing_push_opt_in=true`',
+          '- `push` → notification FCM à `marketing_push_opt_in=true`\n\n' +
+          '> SMS non intégré dans cette version.',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         responses: {
