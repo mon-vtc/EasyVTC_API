@@ -389,7 +389,8 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))  // resolveDriverId
         .mockReturnValueOnce(revenuesChain)            // réservations
-        .mockReturnValueOnce(commChain());             // commissions (vides = non configurées)
+        .mockReturnValueOnce(commChain())              // commissions (vides = non configurées)
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
       expect(result.total_trips).toBe(2);
@@ -415,7 +416,8 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
         .mockReturnValueOnce(revenuesChain)
-        .mockReturnValueOnce(commChain());
+        .mockReturnValueOnce(commChain())              // commissions
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'all');
       expect(result.period).toBe('all');
@@ -469,7 +471,8 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
         .mockReturnValueOnce(revenuesChain)
-        .mockReturnValueOnce(commChain());
+        .mockReturnValueOnce(commChain())              // commissions
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
       // gross: 60.00 (ajusté) + 55.00 = 115.00, sans commission net = gross
@@ -597,7 +600,8 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // vérification existence
         .mockReturnValueOnce(revenuesChain)             // requête revenus
-        .mockReturnValueOnce(commChain());              // commissions vides
+        .mockReturnValueOnce(commChain())               // commissions vides
+        .mockReturnValueOnce(commChain());              // ratings (Promise.all parallèle)
 
       const result = await service.getRevenuesAdmin(DRIVER_ID, 'month', '2026-06-01');
       expect(result.total_trips).toBe(2);
@@ -629,7 +633,8 @@ describe('DriversService', () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))
         .mockReturnValueOnce(revenuesChain)
-        .mockReturnValueOnce(commChain());
+        .mockReturnValueOnce(commChain())              // commissions
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
       // xof-1: 25000, xof-2: price_adjusted=10000 (écrase 12000) → gross=35000
@@ -660,7 +665,8 @@ describe('DriversService', () => {
         .mockReturnValueOnce(revenuesChain)
         .mockReturnValueOnce(commChain([
           { reservation_id: 'xof-1', commission_amount: 3000, driver_net_amount: 22000 },
-        ]));
+        ]))
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
       expect(result.total_gross).toBe(25000);
@@ -1162,7 +1168,8 @@ describe('DriversService', () => {
         .mockReturnValueOnce(commChain([
           { reservation_id: 'r1', commission_amount: 12.00, driver_net_amount: 68.00 },
           { reservation_id: 'r2', commission_amount:  8.25, driver_net_amount: 46.75 },
-        ]));
+        ]))
+        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'all');
       expect(result.total_gross).toBeCloseTo(135, 2);
