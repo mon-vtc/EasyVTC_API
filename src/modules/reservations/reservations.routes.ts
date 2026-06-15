@@ -27,7 +27,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireStaff, requireDriver } from '../../middlewares/role.middleware.js';
+import { requireRole, requireStaff, requireDriver, requirePermission, requirePermissionIfManager } from '../../middlewares/role.middleware.js';
 import { reservationsController } from './reservations.controller.js';
 
 const router = Router();
@@ -51,9 +51,6 @@ router.get('/driver', requireDriver, (req, res) => reservationsController.listDr
 // Course active du chauffeur connecté
 router.get('/driver/active', requireDriver, (req, res) => reservationsController.getDriverActive(req, res));
 
-// Toutes les réservations du chauffeur connecté
-router.get('/driver', requireDriver, (req, res) => reservationsController.listDriverReservations(req, res));
-
 // Signaler l'arrivée au point de pickup
 router.patch('/:id/arrive', requireDriver, (req, res) => reservationsController.arrive(req, res));
 
@@ -66,16 +63,13 @@ router.patch('/:id/complete', requireDriver, (req, res) => reservationsControlle
 // ── Routes admin / manager ────────────────────────────────────────────────────
 
 // Liste de toutes les réservations avec filtres
-router.get('/', requireStaff, (req, res) => reservationsController.listAll(req, res));
+router.get('/', requireStaff, requirePermission('view_reservations'), (req, res) => reservationsController.listAll(req, res));
 
 // Chauffeurs disponibles pour assignation (doit être avant /:id)
-router.get('/drivers/available', requireStaff, (req, res) => reservationsController.getAvailableDrivers(req, res));
+router.get('/drivers/available', requireStaff, requirePermission('view_reservations'), (req, res) => reservationsController.getAvailableDrivers(req, res));
 
 // Affecter un chauffeur à une réservation
-router.post('/:id/assign', requireStaff, (req, res) => reservationsController.assign(req, res));
-
-// Chauffeurs disponibles pour l'assignation (doit être avant /:id)
-router.get('/drivers/available', requireStaff, (req, res) => reservationsController.getAvailableDrivers(req, res));
+router.post('/:id/assign', requireStaff, requirePermission('assign_reservation'), (req, res) => reservationsController.assign(req, res));
 
 // ── Routes communes ───────────────────────────────────────────────────────────
 
@@ -84,9 +78,11 @@ router.get('/:id', requireRole('client', 'driver', 'admin', 'manager'), (req, re
   reservationsController.getById(req, res),
 );
 
-// Annulation (client sur ses propres courses, admin sur toutes)
-router.patch('/:id/cancel', requireRole('client', 'admin', 'manager'), (req, res) =>
-  reservationsController.cancel(req, res),
+// Annulation : client sans restriction, manager doit avoir cancel_reservation
+router.patch('/:id/cancel',
+  requireRole('client', 'admin', 'manager'),
+  requirePermissionIfManager('cancel_reservation'),
+  (req, res) => reservationsController.cancel(req, res),
 );
 
 export default router;
