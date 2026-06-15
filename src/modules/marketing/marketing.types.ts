@@ -3,7 +3,7 @@
 // Sprint 6 — EazyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-export type CampaignType   = 'email' | 'sms' | 'push';
+export type CampaignType   = 'email' | /* 'sms' | */ 'push'; // SMS non intégré
 export type CampaignStatus = 'draft' | 'sent';
 
 // ── Entité Campagne ───────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ export interface UpdateCampaignDto {
 export interface ClientBaseStats {
   total_clients: number;
   opt_in_email: number;
-  opt_in_sms: number;
+  // opt_in_sms: number; // SMS non intégré
   opt_in_push: number;
 }
 
@@ -55,14 +55,14 @@ export interface ClientSummary {
   total_spent: number;
   last_ride_date: string | null;
   marketing_email_opt_in: boolean;
-  marketing_sms_opt_in: boolean;
+  // marketing_sms_opt_in: boolean; // SMS non intégré
   marketing_push_opt_in: boolean;
 }
 
 // ── Filtres ───────────────────────────────────────────────────────────────────
 export interface ClientBaseFilters {
   search?: string;
-  consent?: 'email' | 'sms' | 'push';
+  consent?: 'email' | /* 'sms' | */ 'push'; // SMS non intégré
   page: number;
   limit: number;
 }
@@ -87,6 +87,6 @@ export interface CampaignListResult {
 // ── Consentements marketing d'un utilisateur ──────────────────────────────────
 export interface MarketingConsents {
   marketing_email_opt_in: boolean;
-  marketing_sms_opt_in:   boolean;
+  // marketing_sms_opt_in: boolean; // SMS non intégré
   marketing_push_opt_in:  boolean;
 }

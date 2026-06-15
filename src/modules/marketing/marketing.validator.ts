@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 
-const campaignTypes = ['email', 'sms', 'push'] as const;
+const campaignTypes = ['email', /* 'sms', */ 'push'] as const; // SMS non intégré
 
 // ── Création d'une campagne ───────────────────────────────────────────────────
 export const createCampaignSchema = z.object({
@@ -44,7 +44,7 @@ export const campaignListFiltersSchema = z.object({
 // ── Filtres base clients ──────────────────────────────────────────────────────
 export const clientBaseFiltersSchema = z.object({
   search:  z.string().max(100).optional(),
-  consent: z.enum(['email', 'sms', 'push']).optional(),
+  consent: z.enum(['email', /* 'sms', */ 'push']).optional(), // SMS non intégré
   page:    z.coerce.number().int().min(1).default(1),
   limit:   z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -52,7 +52,7 @@ export const clientBaseFiltersSchema = z.object({
 // ── Consentements marketing (mis à jour par l'utilisateur) ───────────────────
 export const updateMarketingConsentsSchema = z.object({
   marketing_email_opt_in: z.boolean().optional(),
-  marketing_sms_opt_in:   z.boolean().optional(),
+  // marketing_sms_opt_in: z.boolean().optional(), // SMS non intégré
   marketing_push_opt_in:  z.boolean().optional(),
 }).refine(
   (d) => Object.keys(d).length > 0,
