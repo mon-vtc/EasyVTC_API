@@ -67,6 +67,11 @@ export const adminStatsFiltersSchema = z.object({
   message: 'Utilisez soit date + period, soit date_from/date_to, et date_from doit précéder date_to.',
 });
 
+export const adminDashboardFiltersSchema = z.object({
+  period: z.enum(['week', 'month', 'year']).default('week'),
+  date:   normalizedDateSchema,
+});
+
 export type CreateManagerInput = z.infer<typeof createManagerSchema>;
 export type UpdateManagerInput = z.infer<typeof updateManagerSchema>;
 export type ChangeManagerStatusInput = z.infer<typeof changeManagerStatusSchema>;

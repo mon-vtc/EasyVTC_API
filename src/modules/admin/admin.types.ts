@@ -139,6 +139,73 @@ export interface ManagerListFilters {
 
 export type AdminStatsPeriod = 'all' | 'day' | 'week' | 'month';
 
+// ── Dashboard analytique avancé ───────────────────────────────────────────────
+
+export type AdminDashboardPeriod = 'week' | 'month' | 'year';
+
+export interface RevenueChartEntry {
+  label: string;
+  eur:   number;
+  xof:   number;
+}
+
+export interface TopDriver {
+  rank:        number;
+  driver_id:   string;
+  first_name:  string;
+  last_name:   string;
+  trip_count:  number;
+  avg_rating:  number | null;
+  revenue_eur: number;
+}
+
+export interface PopularRoute {
+  pickup_address: string;
+  dest_address:   string;
+  count:          number;
+}
+
+export interface PeakHourSlot {
+  slot:  string;
+  count: number;
+}
+
+export interface AdminDashboard {
+  period:    AdminDashboardPeriod;
+  date_from: string;
+  date_to:   string;
+
+  revenue: {
+    total_eur: number;
+    total_xof: number;
+    trend_pct: number | null;
+    chart:     RevenueChartEntry[];
+  };
+
+  trips: {
+    total:           number;
+    completed:       number;
+    cancelled:       number;
+    completion_rate: number;
+    trend_pct:       number | null;
+  };
+
+  drivers: {
+    total:  number;
+    active: number;
+  };
+
+  clients: {
+    total:  number;
+    active: number;
+  };
+
+  avg_rating:     number | null;
+  top_drivers:    TopDriver[];
+  popular_routes: PopularRoute[];
+  peak_hours:     PeakHourSlot[];
+}
+
 export interface AdminStatsFilters {
   period?:    AdminStatsPeriod;
   date?:      string;

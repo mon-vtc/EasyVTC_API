@@ -9,6 +9,7 @@ import {
   changeManagerStatusSchema,
   setManagerPermissionsSchema,
   adminStatsFiltersSchema,
+  adminDashboardFiltersSchema,
 } from './admin.validator.js';
 
 export class AdminController {
@@ -270,6 +271,22 @@ export class AdminController {
       });
 
       res.json({ ok: true, message: 'Chauffeur assigné avec succès', data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/dashboard
+  async getDashboard(req: Request, res: Response): Promise<void> {
+    const parsed = adminDashboardFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const data = await adminService.getDashboard(parsed.data.period, parsed.data.date);
+      res.json({ ok: true, data });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

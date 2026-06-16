@@ -42,5 +42,6 @@ router.get('/clients/:id/trips',  requireStaff, requirePermission('view_clients'
 router.get('/reservations',            requireStaff, requirePermission('view_reservations'), (req, res) => adminController.listReservations(req, res));
 router.put('/reservations/:id/assign', requireStaff, requirePermission('assign_reservation'), (req, res) => adminController.assignReservation(req, res));
 router.get('/stats',                   requireAdmin, (req, res) => adminController.getStats(req, res));
+router.get('/dashboard',               requireAdmin, (req, res) => adminController.getDashboard(req, res));
 
 export default router;

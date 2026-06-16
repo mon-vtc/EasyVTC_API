@@ -2626,6 +2626,152 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: { '200': { description: 'Statistiques retournées' } },
       },
     },
+    '/admin/dashboard': {
+      get: {
+        tags: ['Admin'],
+        summary: 'Dashboard analytique avancé — écran Statistiques (admin)',
+        description:
+          'Retourne toutes les métriques nécessaires à l\'écran "Statistiques" de l\'application mobile.\n\n' +
+          '**KPIs filtrés par la période sélectionnée :**\n' +
+          '- Chiffre d\'affaires (EUR + XOF) avec trend vs période précédente\n' +
+          '- Total courses (terminées / annulées / taux de complétion) avec trend\n' +
+          '- Clients actifs sur total\n' +
+          '- Chauffeurs actifs sur total\n' +
+          '- Note moyenne globale\n\n' +
+          '**Toujours sur l\'année en cours :**\n' +
+          '- Graphique CA mensuel (Jan → Déc)\n\n' +
+          '**Rankings & patterns :**\n' +
+          '- Top 3 chauffeurs (revenu, nb courses, note)\n' +
+          '- Top 5 trajets populaires (pickup → destination, nb courses)\n' +
+          '- Heures de pointe (5 créneaux : 6h-9h, 9h-12h, 12h-15h, 15h-18h, 18h-21h)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'period', in: 'query',
+            schema: { type: 'string', enum: ['week', 'month', 'year'], default: 'week' },
+            description: 'Période de référence pour les KPIs (défaut: semaine courante)',
+          },
+          {
+            name: 'date', in: 'query',
+            schema: { type: 'string', format: 'date' },
+            description: 'Date de référence YYYY-MM-DD (défaut: aujourd\'hui)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Dashboard retourné',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    {
+                      properties: {
+                        data: {
+                          type: 'object',
+                          properties: {
+                            period:    { type: 'string', enum: ['week', 'month', 'year'] },
+                            date_from: { type: 'string', format: 'date-time' },
+                            date_to:   { type: 'string', format: 'date-time' },
+                            revenue: {
+                              type: 'object',
+                              properties: {
+                                total_eur: { type: 'number', example: 45680 },
+                                total_xof: { type: 'number', example: 0 },
+                                trend_pct: { type: 'number', nullable: true, example: 12.5, description: '% vs période précédente (null si pas de données antérieures)' },
+                                chart: {
+                                  type: 'array',
+                                  items: {
+                                    type: 'object',
+                                    properties: {
+                                      label: { type: 'string', example: 'Jan' },
+                                      eur:   { type: 'number' },
+                                      xof:   { type: 'number' },
+                                    },
+                                  },
+                                  description: 'Toujours 12 entrées Jan→Déc pour l\'année en cours',
+                                },
+                              },
+                            },
+                            trips: {
+                              type: 'object',
+                              properties: {
+                                total:           { type: 'integer', example: 1847 },
+                                completed:       { type: 'integer', example: 1756 },
+                                cancelled:       { type: 'integer', example: 91 },
+                                completion_rate: { type: 'number',  example: 95.1, description: 'completed / (completed + cancelled) × 100' },
+                                trend_pct:       { type: 'number',  nullable: true, example: 8.3 },
+                              },
+                            },
+                            drivers: {
+                              type: 'object',
+                              properties: {
+                                total:  { type: 'integer', example: 52 },
+                                active: { type: 'integer', example: 45 },
+                              },
+                            },
+                            clients: {
+                              type: 'object',
+                              properties: {
+                                total:  { type: 'integer', example: 892 },
+                                active: { type: 'integer', example: 456 },
+                              },
+                            },
+                            avg_rating: { type: 'number', nullable: true, example: 4.7 },
+                            top_drivers: {
+                              type: 'array',
+                              maxItems: 3,
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  rank:        { type: 'integer', example: 1 },
+                                  driver_id:   { type: 'string', format: 'uuid' },
+                                  first_name:  { type: 'string', example: 'Mohamed' },
+                                  last_name:   { type: 'string', example: 'Diallo' },
+                                  trip_count:  { type: 'integer', example: 156 },
+                                  avg_rating:  { type: 'number', nullable: true, example: 4.9 },
+                                  revenue_eur: { type: 'number', example: 4680 },
+                                },
+                              },
+                            },
+                            popular_routes: {
+                              type: 'array',
+                              maxItems: 5,
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  pickup_address: { type: 'string', example: 'Centre de Paris' },
+                                  dest_address:   { type: 'string', example: 'CDG' },
+                                  count:          { type: 'integer', example: 234 },
+                                },
+                              },
+                            },
+                            peak_hours: {
+                              type: 'array',
+                              items: {
+                                type: 'object',
+                                properties: {
+                                  slot:  { type: 'string', example: '6h-9h', enum: ['6h-9h', '9h-12h', '12h-15h', '15h-18h', '18h-21h'] },
+                                  count: { type: 'integer', example: 456 },
+                                },
+                              },
+                              description: 'Toujours 5 créneaux dans cet ordre',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
     '/admin/chat': {
       get: {
         tags: ['Chat'],

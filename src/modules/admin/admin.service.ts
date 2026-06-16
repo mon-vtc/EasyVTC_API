@@ -7,6 +7,8 @@ import type {
   ClientGlobalStats, ClientTripsResult, ClientTripItem,
   SetManagerPermissionsDto, ManagerPermissionsResult, ManagerPermission,
   AdminStats, AdminStatsFilters,
+  AdminDashboardPeriod, AdminDashboard,
+  TopDriver, PopularRoute, PeakHourSlot, RevenueChartEntry,
 } from './admin.types.js';
 import type { UserProfile } from '../users/users.types.js';
 
@@ -651,6 +653,305 @@ export class AdminService {
     return {
       dateFrom: firstDay.toISOString(),
       dateTo:   lastDay.toISOString(),
+    };
+  }
+
+  // ── GET /admin/dashboard — Tableau de bord analytique avancé ───────────────
+  async getDashboard(period: AdminDashboardPeriod, date?: string): Promise<AdminDashboard> {
+    const { dateFrom, dateTo }         = this._dashboardRange(period, date);
+    const { dateFrom: prevFrom,
+            dateTo:   prevTo }         = this._previousPeriod(period, dateFrom, dateTo);
+    const { dateFrom: yearFrom,
+            dateTo:   yearTo }         = this._yearRange(dateFrom);
+
+    const [
+      { data: currRaw },
+      { data: prevRaw },
+      { data: yearRaw },
+      { data: driversRaw },
+      { count: totalClients },
+      { count: activeClients },
+      { data: ratingsRaw },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('reservations')
+        .select('status, price_final, price_estimated, country, driver_id, pickup_address, dest_address, scheduled_at')
+        .gte('scheduled_at', dateFrom)
+        .lte('scheduled_at', dateTo),
+      supabaseAdmin
+        .from('reservations')
+        .select('status, price_final, price_estimated, country')
+        .gte('scheduled_at', prevFrom)
+        .lte('scheduled_at', prevTo),
+      supabaseAdmin
+        .from('reservations')
+        .select('scheduled_at, price_final, price_estimated, country')
+        .eq('status', 'completed')
+        .gte('scheduled_at', yearFrom)
+        .lte('scheduled_at', yearTo),
+      supabaseAdmin
+        .from('drivers')
+        .select('status, is_online'),
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .is('deleted_at', null),
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('role', 'client')
+        .eq('status', 'active')
+        .is('deleted_at', null),
+      supabaseAdmin
+        .from('ratings')
+        .select('driver_id, score')
+        .gte('created_at', dateFrom)
+        .lte('created_at', dateTo),
+    ]);
+
+    const curr    = currRaw    ?? [];
+    const prev    = prevRaw    ?? [];
+    const yearRes = yearRaw    ?? [];
+    const ratings = ratingsRaw ?? [];
+
+    // ── Revenue ────────────────────────────────────────────────────────────
+    const [currEur, currXof] = this._sumRevenue(curr);
+    const [prevEur]          = this._sumRevenue(prev);
+    const revTrend = prevEur > 0
+      ? Math.round(((currEur - prevEur) / prevEur) * 1000) / 10
+      : null;
+
+    // ── Trips ──────────────────────────────────────────────────────────────
+    const completed  = curr.filter(r => r.status === 'completed').length;
+    const cancelled  = curr.filter(r => r.status === 'cancelled').length;
+    const prevTotal  = prev.length;
+    const tripsTrend = prevTotal > 0
+      ? Math.round(((curr.length - prevTotal) / prevTotal) * 1000) / 10
+      : null;
+    const completionRate = (completed + cancelled) > 0
+      ? Math.round((completed / (completed + cancelled)) * 1000) / 10
+      : 0;
+
+    // ── Revenue chart (12 mois de l'année) ────────────────────────────────
+    const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const chart: RevenueChartEntry[] = MONTH_LABELS.map(label => ({ label, eur: 0, xof: 0 }));
+    for (const r of yearRes) {
+      const m   = new Date(r.scheduled_at as string).getUTCMonth();
+      const amt = Number(r.price_final ?? r.price_estimated ?? 0);
+      if (r.country === 'senegal') chart[m]!.xof += amt;
+      else                         chart[m]!.eur += amt;
+    }
+    for (const e of chart) {
+      e.eur = Math.round(e.eur * 100) / 100;
+      e.xof = Math.round(e.xof);
+    }
+
+    // ── Chauffeurs ─────────────────────────────────────────────────────────
+    const driverRows    = driversRaw ?? [];
+    const totalDrivers  = driverRows.length;
+    const activeDrivers = driverRows.filter(d => d.status === 'active').length;
+
+    // ── Note moyenne globale ───────────────────────────────────────────────
+    const avgRating = ratings.length > 0
+      ? Math.round((ratings.reduce((s, r) => s + r.score, 0) / ratings.length) * 10) / 10
+      : null;
+
+    // ── Top 3 chauffeurs ───────────────────────────────────────────────────
+    const completedRows = curr.filter(r => r.status === 'completed' && r.driver_id);
+    const driverRevMap  = new Map<string, { rev: number; trips: number }>();
+    for (const r of completedRows) {
+      const id  = r.driver_id as string;
+      const amt = Number(r.price_final ?? r.price_estimated ?? 0);
+      const cur = driverRevMap.get(id) ?? { rev: 0, trips: 0 };
+      driverRevMap.set(id, { rev: cur.rev + amt, trips: cur.trips + 1 });
+    }
+
+    const driverRatingMap = new Map<string, number[]>();
+    for (const rt of ratings) {
+      if (!rt.driver_id) continue;
+      const arr = driverRatingMap.get(rt.driver_id as string) ?? [];
+      arr.push(rt.score);
+      driverRatingMap.set(rt.driver_id as string, arr);
+    }
+
+    const topIds = [...driverRevMap.entries()]
+      .sort((a, b) => b[1].rev - a[1].rev)
+      .slice(0, 3)
+      .map(([id]) => id);
+
+    const driverUserMap = new Map<string, { first_name: string; last_name: string }>();
+    if (topIds.length > 0) {
+      const { data: driverRecords } = await supabaseAdmin
+        .from('drivers')
+        .select('id, user_id')
+        .in('id', topIds);
+      if (driverRecords && driverRecords.length > 0) {
+        const userIds = driverRecords.map(d => d.user_id as string);
+        const { data: userRecords } = await supabaseAdmin
+          .from('users')
+          .select('id, first_name, last_name')
+          .in('id', userIds);
+        const uMap = new Map((userRecords ?? []).map(u => [u.id as string, u]));
+        for (const d of driverRecords) {
+          const u = uMap.get(d.user_id as string);
+          if (u) driverUserMap.set(d.id as string, { first_name: u.first_name as string, last_name: u.last_name as string });
+        }
+      }
+    }
+
+    const topDrivers: TopDriver[] = topIds.map((id, idx) => {
+      const { rev, trips } = driverRevMap.get(id)!;
+      const user   = driverUserMap.get(id);
+      const scores = driverRatingMap.get(id);
+      return {
+        rank:        idx + 1,
+        driver_id:   id,
+        first_name:  user?.first_name ?? '',
+        last_name:   user?.last_name  ?? '',
+        trip_count:  trips,
+        avg_rating:  scores && scores.length > 0
+          ? Math.round((scores.reduce((s, x) => s + x, 0) / scores.length) * 10) / 10
+          : null,
+        revenue_eur: Math.round(rev * 100) / 100,
+      };
+    });
+
+    // ── Trajets populaires (top 5) ─────────────────────────────────────────
+    const routeMap = new Map<string, number>();
+    for (const r of curr) {
+      if (!r.pickup_address || !r.dest_address) continue;
+      const key = `${r.pickup_address as string}||${r.dest_address as string}`;
+      routeMap.set(key, (routeMap.get(key) ?? 0) + 1);
+    }
+    const popularRoutes: PopularRoute[] = [...routeMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([key, count]) => {
+        const sep = key.indexOf('||');
+        return {
+          pickup_address: key.slice(0, sep),
+          dest_address:   key.slice(sep + 2),
+          count,
+        };
+      });
+
+    // ── Heures de pointe ───────────────────────────────────────────────────
+    const SLOTS = [
+      { slot: '6h-9h',   from: 6,  to: 8  },
+      { slot: '9h-12h',  from: 9,  to: 11 },
+      { slot: '12h-15h', from: 12, to: 14 },
+      { slot: '15h-18h', from: 15, to: 17 },
+      { slot: '18h-21h', from: 18, to: 20 },
+    ];
+    const slotCount = new Map(SLOTS.map(s => [s.slot, 0]));
+    for (const r of curr) {
+      const h = new Date(r.scheduled_at as string).getUTCHours();
+      for (const s of SLOTS) {
+        if (h >= s.from && h <= s.to) {
+          slotCount.set(s.slot, (slotCount.get(s.slot) ?? 0) + 1);
+          break;
+        }
+      }
+    }
+    const peakHours: PeakHourSlot[] = SLOTS.map(s => ({
+      slot:  s.slot,
+      count: slotCount.get(s.slot) ?? 0,
+    }));
+
+    return {
+      period,
+      date_from: dateFrom,
+      date_to:   dateTo,
+      revenue: {
+        total_eur: Math.round(currEur * 100) / 100,
+        total_xof: Math.round(currXof),
+        trend_pct: revTrend,
+        chart,
+      },
+      trips: {
+        total:           curr.length,
+        completed,
+        cancelled,
+        completion_rate: completionRate,
+        trend_pct:       tripsTrend,
+      },
+      drivers: { total: totalDrivers,  active: activeDrivers },
+      clients: { total: totalClients ?? 0, active: activeClients ?? 0 },
+      avg_rating:     avgRating,
+      top_drivers:    topDrivers,
+      popular_routes: popularRoutes,
+      peak_hours:     peakHours,
+    };
+  }
+
+  private _sumRevenue(
+    rows: Array<{ status: string; price_final: unknown; price_estimated: unknown; country: string }>,
+  ): [number, number] {
+    let eur = 0, xof = 0;
+    for (const r of rows) {
+      if (r.status !== 'completed') continue;
+      const amt = Number(r.price_final ?? r.price_estimated ?? 0);
+      if (r.country === 'senegal') xof += amt;
+      else                         eur += amt;
+    }
+    return [eur, xof];
+  }
+
+  private _dashboardRange(period: AdminDashboardPeriod, date?: string): { dateFrom: string; dateTo: string } {
+    const today = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
+    if (Number.isNaN(today.getTime())) throw { status: 400, message: 'Date invalide' };
+
+    if (period === 'week') {
+      const diff   = today.getUTCDay() === 0 ? -6 : 1 - today.getUTCDay();
+      const monday = new Date(today);
+      monday.setUTCDate(today.getUTCDate() + diff);
+      monday.setUTCHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setUTCDate(monday.getUTCDate() + 6);
+      sunday.setUTCHours(23, 59, 59, 999);
+      return { dateFrom: monday.toISOString(), dateTo: sunday.toISOString() };
+    }
+
+    if (period === 'month') {
+      const first = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1, 0, 0, 0, 0));
+      const last  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+      return { dateFrom: first.toISOString(), dateTo: last.toISOString() };
+    }
+
+    const first = new Date(Date.UTC(today.getUTCFullYear(), 0,  1, 0,  0,  0,   0));
+    const last  = new Date(Date.UTC(today.getUTCFullYear(), 11, 31, 23, 59, 59, 999));
+    return { dateFrom: first.toISOString(), dateTo: last.toISOString() };
+  }
+
+  private _previousPeriod(
+    period: AdminDashboardPeriod,
+    dateFrom: string,
+    dateTo:   string,
+  ): { dateFrom: string; dateTo: string } {
+    if (period === 'week') {
+      const f = new Date(dateFrom); f.setUTCDate(f.getUTCDate() - 7);
+      const t = new Date(dateTo);   t.setUTCDate(t.getUTCDate() - 7);
+      return { dateFrom: f.toISOString(), dateTo: t.toISOString() };
+    }
+    if (period === 'month') {
+      const ref  = new Date(dateFrom);
+      const year = ref.getUTCFullYear();
+      const mon  = ref.getUTCMonth() - 1; // may be -1 → Dec of prev year
+      const first = new Date(Date.UTC(year, mon, 1, 0, 0, 0, 0));
+      const last  = new Date(Date.UTC(year, mon + 1, 0, 23, 59, 59, 999));
+      return { dateFrom: first.toISOString(), dateTo: last.toISOString() };
+    }
+    const f = new Date(dateFrom); f.setUTCFullYear(f.getUTCFullYear() - 1);
+    const t = new Date(dateTo);   t.setUTCFullYear(t.getUTCFullYear() - 1);
+    return { dateFrom: f.toISOString(), dateTo: t.toISOString() };
+  }
+
+  private _yearRange(dateFrom: string): { dateFrom: string; dateTo: string } {
+    const year = new Date(dateFrom).getUTCFullYear();
+    return {
+      dateFrom: new Date(Date.UTC(year, 0,  1, 0,  0,  0,   0)).toISOString(),
+      dateTo:   new Date(Date.UTC(year, 11, 31, 23, 59, 59, 999)).toISOString(),
     };
   }
 
