@@ -261,8 +261,6 @@ export class UsersService {
       throw { status: 500, message: 'Erreur lors du changement de statut' };
     }
 
-    // TODO: Si le statut devient 'inactive' ou 'locked', invalider les sessions de l'utilisateur
-    // Cela nécessite d'appeler supabaseAdmin.auth.admin.signOut() avec l'ID de l'utilisateur
     if (dto.status !== 'active') {
       // Invalider toutes les sessions de l'utilisateur
       await supabaseAdmin.auth.admin.signOut(targetUserId, 'global').catch((err) => {
