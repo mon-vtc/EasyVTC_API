@@ -801,7 +801,7 @@ export class ReservationsService {
   private async _mapReservation(raw: any): Promise<ReservationWithRelations> {
     let driverRating: number | null = null;
     if (raw.driver) {
-      driverRating = await ratingsService.computeAvgForDriver(raw.driver.id);
+      driverRating = await ratingsService.getRatingForReservation(raw.id);
     }
     return {
       ...raw,
