@@ -575,6 +575,62 @@ export class ChatService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // 9. MARQUER LES MESSAGES D'UNE CONVERSATION COMME LUS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async markChatMessagesAsRead(
+    reservationId: string,
+    requesterId:   string,
+    requesterRole: UserRole,
+  ): Promise<{ updated: number }> {
+    await this._assertAccess(reservationId, requesterId, requesterRole);
+
+    const { error, count } = await supabaseAdmin
+      .from('chat_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('reservation_id', reservationId)
+      .neq('sender_id', requesterId)
+      .is('read_at', null);
+
+    if (error) throw { status: 500, message: 'Erreur lors du marquage des messages' };
+    return { updated: count ?? 0 };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 10. MARQUER LES MESSAGES D'UN TICKET SUPPORT COMME LUS
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async markSupportMessagesAsRead(
+    ticketId:      string,
+    requesterId:   string,
+    requesterRole: UserRole,
+  ): Promise<{ updated: number }> {
+    const { data: ticket, error } = await supabaseAdmin
+      .from('support_tickets')
+      .select('id, user_id')
+      .eq('id', ticketId)
+      .single();
+
+    if (error || !ticket) throw { status: 404, message: 'Ticket introuvable' };
+
+    if (requesterRole !== 'admin' && requesterRole !== 'manager') {
+      if ((ticket as any).user_id !== requesterId) {
+        throw { status: 403, message: 'Accès refusé' };
+      }
+    }
+
+    const { error: updateError, count } = await supabaseAdmin
+      .from('support_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('ticket_id', ticketId)
+      .neq('sender_id', requesterId)
+      .is('read_at', null);
+
+    if (updateError) throw { status: 500, message: 'Erreur lors du marquage des messages' };
+    return { updated: count ?? 0 };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // PRIVÉ — Notification support (fire-and-forget)
   // ──────────────────────────────────────────────────────────────────────────
 

@@ -2282,6 +2282,39 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: { '201': { description: 'Message envoyé' } },
       },
     },
+    '/chat/reservations/{reservationId}/messages/read': {
+      patch: {
+        tags: ['Chat'],
+        summary: 'Marquer les messages d\'une conversation comme lus',
+        description:
+          'Marque comme lus tous les messages non-lus envoyés par l\'interlocuteur dans la conversation.\n\n' +
+          'Comportement :\n' +
+          '- Seuls les messages dont `read_at IS NULL` et `sender_id != requester` sont mis à jour.\n' +
+          '- Appel idempotent : si aucun message non-lu, retourne `{ updated: 0 }` sans erreur.\n' +
+          '- L\'opération ne modifie pas ses propres messages.',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'reservationId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'UUID de la réservation' }],
+        responses: {
+          '200': {
+            description: 'Messages marqués comme lus',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok:      { type: 'boolean', example: true },
+                    message: { type: 'string',  example: 'Messages marqués comme lus' },
+                    data:    { type: 'object', properties: { updated: { type: 'integer', example: 3, description: 'Nombre de messages mis à jour' } } },
+                  },
+                },
+              },
+            },
+          },
+          '403': { description: 'Accès refusé — la réservation ne vous appartient pas' },
+          '404': { description: 'Réservation introuvable' },
+        },
+      },
+    },
     '/support/tickets': {
       post: {
         tags: ['Chat'],
@@ -2345,6 +2378,39 @@ export const swaggerSpec: OpenAPIV3.Document = {
           },
         },
         responses: { '201': { description: 'Message envoyé' } },
+      },
+    },
+    '/support/tickets/{ticketId}/messages/read': {
+      patch: {
+        tags: ['Chat'],
+        summary: 'Marquer les messages d\'un ticket support comme lus',
+        description:
+          'Marque comme lus tous les messages non-lus envoyés par l\'interlocuteur dans le ticket.\n\n' +
+          'Comportement :\n' +
+          '- Seuls les messages dont `read_at IS NULL` et `sender_id != requester` sont mis à jour.\n' +
+          '- Appel idempotent : si aucun message non-lu, retourne `{ updated: 0 }` sans erreur.\n' +
+          '- Admin et manager accèdent à tous les tickets sans restriction.',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'ticketId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' }, description: 'UUID du ticket support' }],
+        responses: {
+          '200': {
+            description: 'Messages marqués comme lus',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    ok:      { type: 'boolean', example: true },
+                    message: { type: 'string',  example: 'Messages marqués comme lus' },
+                    data:    { type: 'object', properties: { updated: { type: 'integer', example: 2, description: 'Nombre de messages mis à jour' } } },
+                  },
+                },
+              },
+            },
+          },
+          '403': { description: 'Accès refusé — le ticket ne vous appartient pas' },
+          '404': { description: 'Ticket introuvable' },
+        },
       },
     },
 

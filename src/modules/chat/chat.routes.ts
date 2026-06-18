@@ -3,16 +3,18 @@
 // Sprint 5 — EazyVTC
 //
 // ── chat:reservation ──────────────────────────────────────────────────────────
-// GET  /chat/conversations                         → Liste  (client / driver)
-// GET  /chat/reservations/:reservationId/messages  → Historique de la conversation
-// POST /chat/reservations/:reservationId/messages  → Envoyer un message
+// GET   /chat/conversations                              → Liste  (client / driver)
+// GET   /chat/reservations/:reservationId/messages       → Historique de la conversation
+// POST  /chat/reservations/:reservationId/messages       → Envoyer un message
+// PATCH /chat/reservations/:reservationId/messages/read  → Marquer les messages comme lus
 //
 // ── chat:support ──────────────────────────────────────────────────────────────
-// POST /support/tickets                            → Ouvrir un ticket (client, driver)
-// GET  /support/tickets                            → Mes tickets / tous (admin)
-// GET  /support/tickets/:ticketId                  → Détail + messages
-// PUT  /support/tickets/:ticketId/status           → Changer statut (admin, manager)
-// POST /support/tickets/:ticketId/messages         → Envoyer un message dans le ticket
+// POST  /support/tickets                            → Ouvrir un ticket (client, driver)
+// GET   /support/tickets                            → Mes tickets / tous (admin)
+// GET   /support/tickets/:ticketId                  → Détail + messages
+// PUT   /support/tickets/:ticketId/status           → Changer statut (admin, manager)
+// POST  /support/tickets/:ticketId/messages         → Envoyer un message dans le ticket
+// PATCH /support/tickets/:ticketId/messages/read    → Marquer les messages comme lus
 //
 // ── Admin ─────────────────────────────────────────────────────────────────────
 // GET  /admin/chat                                 → Conversations course actives
@@ -44,6 +46,12 @@ router.post(
   '/reservations/:reservationId/messages',
   requireRole('client', 'driver', 'admin', 'manager'),
   (req, res) => chatController.sendMessage(req, res),
+);
+
+router.patch(
+  '/reservations/:reservationId/messages/read',
+  requireRole('client', 'driver', 'admin', 'manager'),
+  (req, res) => chatController.markChatMessagesAsRead(req, res),
 );
 
 export default router;
@@ -80,6 +88,12 @@ supportRouter.post(
   '/tickets/:ticketId/messages',
   requireRole('client', 'driver', 'admin', 'manager'),
   (req, res) => chatController.sendSupportMessage(req, res),
+);
+
+supportRouter.patch(
+  '/tickets/:ticketId/messages/read',
+  requireRole('client', 'driver', 'admin', 'manager'),
+  (req, res) => chatController.markSupportMessagesAsRead(req, res),
 );
 
 // ── Router admin (monté sur /admin/chat dans app.ts) ──────────────────────────

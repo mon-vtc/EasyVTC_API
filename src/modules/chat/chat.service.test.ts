@@ -1254,4 +1254,130 @@ describe('ChatService — Support', () => {
       expect(reopenChain.update).toHaveBeenCalledWith({ status: 'in_progress', closed_at: null });
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // markChatMessagesAsRead()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('markChatMessagesAsRead()', () => {
+
+    it('client propriétaire — marque les messages non-lus et retourne le count', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockReservation))   // _assertAccess
+        .mockReturnValueOnce(chain(null, null, 3));    // UPDATE chat_messages
+
+      const result = await service.markChatMessagesAsRead(RESA_ID, CLIENT_ID, 'client');
+
+      expect(result).toEqual({ updated: 3 });
+      expect(mockFrom).toHaveBeenCalledTimes(2);
+    });
+
+    it('admin — contourne _assertAccess (pas de requête BDD pour la vérification)', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, null, 1)); // UPDATE seulement
+
+      const result = await service.markChatMessagesAsRead(RESA_ID, ADMIN_ID, 'admin');
+
+      expect(result).toEqual({ updated: 1 });
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
+
+    it('retourne { updated: 0 } si aucun message non-lu (idempotent)', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockReservation))
+        .mockReturnValueOnce(chain(null, null, 0));
+
+      const result = await service.markChatMessagesAsRead(RESA_ID, CLIENT_ID, 'client');
+
+      expect(result).toEqual({ updated: 0 });
+    });
+
+    it('réservation introuvable → lève 404', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(
+        service.markChatMessagesAsRead(RESA_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it('client non propriétaire → lève 403', async () => {
+      mockFrom.mockReturnValueOnce(chain({ ...mockReservation, client_id: 'other-client-id' }));
+
+      await expect(
+        service.markChatMessagesAsRead(RESA_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("lève 500 si l'UPDATE échoue", async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockReservation))
+        .mockReturnValueOnce(chain(null, { message: 'db error' }));
+
+      await expect(
+        service.markChatMessagesAsRead(RESA_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // markSupportMessagesAsRead()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('markSupportMessagesAsRead()', () => {
+
+    it('client propriétaire — marque les messages non-lus et retourne le count', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))        // SELECT ticket
+        .mockReturnValueOnce(chain(null, null, 2));    // UPDATE support_messages
+
+      const result = await service.markSupportMessagesAsRead(TICKET_ID, CLIENT_ID, 'client');
+
+      expect(result).toEqual({ updated: 2 });
+      expect(mockFrom).toHaveBeenCalledTimes(2);
+    });
+
+    it('admin — sélectionne le ticket mais ignore la vérification user_id', async () => {
+      const otherUserTicket = { ...mockTicket, user_id: 'other-user-id' };
+      mockFrom
+        .mockReturnValueOnce(chain(otherUserTicket))   // SELECT ticket (autre user)
+        .mockReturnValueOnce(chain(null, null, 1));    // UPDATE — admin y a accès quand même
+
+      const result = await service.markSupportMessagesAsRead(TICKET_ID, ADMIN_ID, 'admin');
+
+      expect(result).toEqual({ updated: 1 });
+    });
+
+    it('retourne { updated: 0 } si aucun message non-lu (idempotent)', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(null, null, 0));
+
+      const result = await service.markSupportMessagesAsRead(TICKET_ID, CLIENT_ID, 'client');
+
+      expect(result).toEqual({ updated: 0 });
+    });
+
+    it('ticket introuvable → lève 404', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
+
+      await expect(
+        service.markSupportMessagesAsRead(TICKET_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+
+    it("client tentant d'accéder au ticket d'un autre → lève 403", async () => {
+      mockFrom.mockReturnValueOnce(chain({ ...mockTicket, user_id: 'other-user-id' }));
+
+      await expect(
+        service.markSupportMessagesAsRead(TICKET_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 403 });
+    });
+
+    it("lève 500 si l'UPDATE échoue", async () => {
+      mockFrom
+        .mockReturnValueOnce(chain(mockTicket))
+        .mockReturnValueOnce(chain(null, { message: 'db error' }));
+
+      await expect(
+        service.markSupportMessagesAsRead(TICKET_ID, CLIENT_ID, 'client'),
+      ).rejects.toMatchObject({ status: 500 });
+    });
+  });
 });

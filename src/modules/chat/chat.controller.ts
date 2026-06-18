@@ -9,6 +9,8 @@ import {
   supportTicketParamsSchema,
   updateSupportStatusSchema,
   supportListFiltersSchema,
+  markReadParamsSchema,
+  markSupportReadParamsSchema,
 } from './chat.validator.js';
 
 export class ChatController {
@@ -190,6 +192,46 @@ export class ChatController {
         bodyParsed.data.priority,
       );
       res.status(200).json({ ok: true, message: 'Ticket mis à jour', data: ticket });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /chat/reservations/:reservationId/messages/read
+  async markChatMessagesAsRead(req: Request, res: Response): Promise<void> {
+    const parsed = markReadParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'ID de réservation invalide' });
+      return;
+    }
+    try {
+      const result = await chatService.markChatMessagesAsRead(
+        parsed.data.reservationId,
+        req.user!.id,
+        req.user!.role,
+      );
+      res.status(200).json({ ok: true, message: 'Messages marqués comme lus', data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /support/tickets/:ticketId/messages/read
+  async markSupportMessagesAsRead(req: Request, res: Response): Promise<void> {
+    const parsed = markSupportReadParamsSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'ID de ticket invalide' });
+      return;
+    }
+    try {
+      const result = await chatService.markSupportMessagesAsRead(
+        parsed.data.ticketId,
+        req.user!.id,
+        req.user!.role,
+      );
+      res.status(200).json({ ok: true, message: 'Messages marqués comme lus', data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

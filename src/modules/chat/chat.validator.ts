@@ -67,3 +67,13 @@ export const supportListFiltersSchema = z.object({
     .refine(v => !isNaN(v) && v >= 1 && v <= 100, { message: 'Limit doit être entre 1 et 100' }),
   status: supportTicketStatusEnum.optional(),
 });
+
+// ── Validators — marquage comme lu ────────────────────────────────────────────
+
+export const markReadParamsSchema = z.object({
+  reservationId: z.string().uuid('ID de réservation invalide'),
+});
+
+export const markSupportReadParamsSchema = z.object({
+  ticketId: z.string().uuid('ID de ticket invalide'),
+});
