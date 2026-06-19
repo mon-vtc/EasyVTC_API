@@ -17,7 +17,7 @@ jest.unstable_mockModule('../pricing/pricing.service.js', () => ({
 }));
 
 jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
-  notificationsService: { sendToUser: mockSendToUser },
+  notificationsService: { sendToUser: mockSendToUser, sendToAdmins: jest.fn() },
 }));
 
 // Référence nommée pour pouvoir asserter les appels dans les tests

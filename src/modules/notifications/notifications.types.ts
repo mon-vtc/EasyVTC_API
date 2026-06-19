@@ -17,6 +17,7 @@ export type NotificationType =
   | 'reservation_cancelled'   // Chauffeur ou client : course annulée
   | 'new_message'             // Destinataire : nouveau message reçu dans le chat course
   | 'support_reply'           // Utilisateur : réponse du support à son ticket
+  | 'new_reservation_admin'  // Admin : nouvelle réservation en attente d'attribution
   | 'marketing';              // Push marketing envoyé depuis une campagne admin
 
 export type NotificationChannel = 'push' | 'email';

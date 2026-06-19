@@ -150,6 +150,14 @@ export class ReservationsService {
       { reservation_id: reservation.id, status: 'pending' },
     );
 
+    // Alerte aux admins — nouvelle réservation en attente d'attribution (fire-and-forget)
+    notificationsService.sendToAdmins(
+      'new_reservation_admin',
+      'Nouvelle réservation',
+      `Une course est en attente d'attribution pour le ${this._formatDate(dto.scheduled_at)}.`,
+      { reservation_id: reservation.id },
+    );
+
     return reservation;
   }
 

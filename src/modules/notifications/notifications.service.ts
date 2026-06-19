@@ -120,6 +120,27 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Envoie une notification push à tous les utilisateurs ayant le rôle admin.
+   * Fire-and-forget — ne lève jamais d'erreur.
+   */
+  sendToAdmins(
+    type: NotificationType,
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ): void {
+    (async () => {
+      const { data: admins } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('role', 'admin');
+      if (admins?.length) {
+        this.sendToMany(admins.map((a) => a.id as string), type, title, body, data);
+      }
+    })().catch((err: unknown) => console.error('[Notifications] Erreur sendToAdmins:', err));
+  }
+
   // ──────────────────────────────────────────────────────────────────────────
   // LECTURE — API utilisateur (application mobile)
   // ──────────────────────────────────────────────────────────────────────────
