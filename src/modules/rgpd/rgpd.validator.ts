@@ -16,6 +16,9 @@ export const anonymizeSchema = z.object({
   confirm: z.literal(true, {
     error: 'Vous devez confirmer explicitement : { "confirm": true }',
   }),
+  password: z.string().min(1, {
+    error: 'Le mot de passe est requis pour confirmer la suppression.',
+  }),
 });
 
 export type UserIdParamInput = z.infer<typeof userIdParamSchema>;

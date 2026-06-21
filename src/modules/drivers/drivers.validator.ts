@@ -150,7 +150,7 @@ const DAYS_OF_WEEK = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ] as const;
 
-const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+const timeRegex = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
 const weeklyScheduleDaySchema = z.object({
   day:          z.enum(DAYS_OF_WEEK, { error: 'Jour invalide (monday … sunday)' }),
