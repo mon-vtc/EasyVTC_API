@@ -43,6 +43,7 @@ import {
 import { favoritesRouter } from './modules/favorites/favorites.routes.js';
 import { rgpdRouter }      from './modules/rgpd/rgpd.routes.js';
 import auditLogsRoutes    from './modules/audit-logs/audit-logs.routes.js';
+import appConfigRoutes    from './modules/app-config/app-config.routes.js';
 import {
   adminMarketingRouter,
   userMarketingRouter,
@@ -142,6 +143,7 @@ app.use('/users',                     userMarketingRouter);
 app.use('/users',                     favoritesRouter);
 app.use('/users',                     rgpdRouter);
 app.use('/admin/audit-logs',          auditLogsRoutes);
+app.use('/admin/app-config',          appConfigRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
