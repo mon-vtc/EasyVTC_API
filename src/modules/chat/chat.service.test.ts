@@ -12,7 +12,7 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 }));
 
 jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
-  notificationsService: { sendToUser: mockSendToUser },
+  notificationsService: { sendToUser: mockSendToUser, sendToAdmins: jest.fn() },
 }));
 
 const { ChatService } = await import('./chat.service.js');

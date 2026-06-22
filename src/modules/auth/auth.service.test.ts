@@ -42,6 +42,12 @@ jest.unstable_mockModule('../../utils/email.service.js', () => ({
   sendWelcomeEmail:         jest.fn().mockResolvedValue(undefined as never),
   sendResetPasswordEmail:   jest.fn().mockResolvedValue(undefined as never),
   sendPasswordChangedEmail: jest.fn().mockResolvedValue(undefined as never),
+  sendNotificationEmail:    jest.fn().mockResolvedValue(undefined as never),
+}));
+
+// Mock du service notifications (auth envoie des alertes admins)
+jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
+  notificationsService: { sendToAdmins: jest.fn(), sendToUser: jest.fn() },
 }));
 
 // Import dynamique APRÈS le mock (obligatoire avec ESM)

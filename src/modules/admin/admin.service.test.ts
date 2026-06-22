@@ -22,6 +22,7 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 
 jest.unstable_mockModule('../../utils/email.service.js', () => ({
   sendManagerAccessEmail: jest.fn().mockResolvedValue(undefined as never),
+  sendNotificationEmail:  jest.fn().mockResolvedValue(undefined as never),
 }));
 
 const mockChangeUserStatus = jest.fn();
