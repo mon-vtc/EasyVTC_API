@@ -83,7 +83,7 @@ export class InvoicesService {
         actual_distance_km, actual_duration_min,
         reservation:reservations!reservation_id(
           id, pickup_address, dest_address, vehicle_type,
-          scheduled_at, price_final, price_estimated, country,
+          scheduled_at, price_final, price_estimated, country, discount_amount,
           client:users!client_id(first_name, last_name, phone, email),
           driver:drivers!driver_id(
             id, siret, tva_rate, zone,
@@ -137,11 +137,12 @@ export class InvoicesService {
     };
 
     // Calcul HT / TVA / TTC
-    const amountTtc = Number(reservation.price_final ?? reservation.price_estimated ?? 0);
-    const tvaRate   = driverBilling.tva_rate;
-    const amountHt  = tvaRate > 0
+    const amountTtc     = Number(reservation.price_final ?? reservation.price_estimated ?? 0);
+    const tvaRate       = driverBilling.tva_rate;
+    const amountHt      = tvaRate > 0
       ? Math.round((amountTtc / (1 + tvaRate / 100)) * 100) / 100
       : amountTtc;
+    const discountAmount = reservation.discount_amount ? Number(reservation.discount_amount) : null;
 
     // Générer le numéro de facture unique
     const invoiceNumber = await this._generateInvoiceNumber();
@@ -155,6 +156,7 @@ export class InvoicesService {
       amountHt,
       tvaRate,
       amountTtc,
+      discountAmount,
       issuedAt: new Date(),
     });
 
@@ -173,6 +175,7 @@ export class InvoicesService {
         trip_snapshot:   tripSnapshot,
         amount_ht:       amountHt,
         tva_rate:        tvaRate,
+        discount_amount: discountAmount,
         amount_ttc:      amountTtc,
         adjustments:     [],
         issued_at:       new Date().toISOString(),
@@ -267,6 +270,7 @@ export class InvoicesService {
         amountHt:       invoice.amount_ht,
         tvaRate:        invoice.tva_rate,
         amountTtc:      invoice.amount_ttc,
+        discountAmount: invoice.discount_amount ?? null,
         issuedAt:       new Date(invoice.issued_at),
         adjustments:    invoice.adjustments ?? [],
       });
@@ -452,6 +456,7 @@ export class InvoicesService {
       amountHt:       newAmountHt,
       tvaRate:        invoice.tva_rate,
       amountTtc:      dto.new_amount_ttc,
+      discountAmount: invoice.discount_amount ?? null,
       issuedAt:       new Date(invoice.issued_at),
       adjustments:    updatedAdjustments,
     });
@@ -551,13 +556,14 @@ export class InvoicesService {
     amountHt:       number;
     tvaRate:        number;
     amountTtc:      number;
+    discountAmount?: number | null;
     issuedAt:       Date;
     adjustments?:   InvoiceAdjustment[];
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const {
         invoiceNumber, driverBilling, clientSnapshot, tripSnapshot,
-        amountHt, tvaRate, amountTtc, issuedAt, adjustments = [],
+        amountHt, tvaRate, amountTtc, discountAmount = null, issuedAt, adjustments = [],
       } = params;
 
       const doc    = new PDFDocument({ size: 'A4', margin: 50 });
@@ -691,6 +697,14 @@ export class InvoicesService {
       const AMT_W    = CW - DESIG_W - QTY_W;
       const ROW_H    = 28;
 
+      // Montant HT brut avant réduction (pour affichage dans le tableau)
+      const discountAmountHt = discountAmount
+        ? (tvaRate > 0
+          ? Math.round((discountAmount / (1 + tvaRate / 100)) * 100) / 100
+          : discountAmount)
+        : null;
+      const grossAmountHt = discountAmountHt !== null ? amountHt + discountAmountHt : amountHt;
+
       // En-tête tableau
       doc.rect(M, y, CW, ROW_H).fill(BORDEAUX);
       doc.fontSize(9).fillColor(WHITE).font('Helvetica-Bold')
@@ -701,7 +715,7 @@ export class InvoicesService {
         .text('Montant HT', M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
       y += ROW_H;
 
-      // Ligne transport
+      // Ligne transport (montant brut HT si réduction, net HT sinon)
       doc.rect(M, y, CW, ROW_H).fill(WHITE);
       doc.rect(M, y, CW, ROW_H).stroke(DIVIDER);
       doc.fontSize(8.5).fillColor(DARK).font('Helvetica')
@@ -709,8 +723,21 @@ export class InvoicesService {
       doc.fontSize(8.5).fillColor(DARK)
         .text('1', M + DESIG_W, y + 10, { width: QTY_W, align: 'center', lineBreak: false });
       doc.fontSize(8.5).fillColor(DARK)
-        .text(`${this._fmtAmount(amountHt)} ${currency}`, M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
-      y += ROW_H + 10;
+        .text(`${this._fmtAmount(grossAmountHt)} ${currency}`, M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
+      y += ROW_H;
+
+      // Ligne réduction (si applicable)
+      if (discountAmountHt !== null) {
+        doc.rect(M, y, CW, ROW_H).fill(WHITE);
+        doc.rect(M, y, CW, ROW_H).stroke(DIVIDER);
+        doc.fontSize(8.5).fillColor(BORDEAUX).font('Helvetica-Oblique')
+          .text('Réduction (code promo)', M + 8, y + 10, { width: DESIG_W - 8, lineBreak: false });
+        doc.fontSize(8.5).fillColor(BORDEAUX).font('Helvetica-Bold')
+          .text(`-${this._fmtAmount(discountAmountHt)} ${currency}`, M + DESIG_W + QTY_W, y + 10, { width: AMT_W - 8, align: 'right', lineBreak: false });
+        y += ROW_H;
+      }
+
+      y += 10;
 
       // ── 6. TOTAUX ──────────────────────────────────────────────────────
       const totRow = (label: string, value: string, bold = false) => {

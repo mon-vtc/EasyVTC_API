@@ -86,6 +86,7 @@ const mockTripFull = {
     price_final:     48.50,
     price_estimated: 45.00,
     country:         'france',
+    discount_amount: null,
     client:          mockClient,
     driver: {
       id:       DRIVER_ID,
@@ -117,10 +118,11 @@ const mockInvoice = {
     ended_at:       '2026-04-15T09:52:00Z',
     actual_distance_km: 31.2, actual_duration_min: 47,
   },
-  amount_ht:   44.09,
-  tva_rate:    10,
-  amount_ttc:  48.50,
-  adjustments: [],
+  amount_ht:       44.09,
+  tva_rate:        10,
+  discount_amount: null,
+  amount_ttc:      48.50,
+  adjustments:     [],
   issued_at:   '2026-04-15T10:00:00Z',
   created_at:  '2026-04-15T10:00:00Z',
 };
@@ -230,6 +232,36 @@ describe('InvoicesService', () => {
 
       await expect(service.createFromTrip(TRIP_ID))
         .rejects.toMatchObject({ status: 400 });
+    });
+
+    it(' intègre la réduction (code promo) et la stocke sur la facture', async () => {
+      const tripWithPromo = {
+        ...mockTripFull,
+        reservation: {
+          ...mockTripFull.reservation,
+          price_final:     43.00,
+          price_estimated: 43.00,
+          discount_amount: 5.00,   // code promo -5 EUR TTC
+        },
+      };
+      // HT = 43 / 1.10 = 39.09, discount HT = 5 / 1.10 = 4.55
+      const invoiceWithDiscount = {
+        ...mockInvoice,
+        amount_ht:       39.09,
+        amount_ttc:      43.00,
+        discount_amount: 5.00,
+      };
+
+      mockStorageOk();
+      mockFrom
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain(tripWithPromo))
+        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(invoiceWithDiscount));
+
+      const result = await service.createFromTrip(TRIP_ID);
+      expect(result.discount_amount).toBe(5.00);
+      expect(result.amount_ttc).toBe(43.00);
     });
 
     it(' TVA = 0 — montant HT = TTC (non assujetti)', async () => {
