@@ -2232,18 +2232,39 @@ export const swaggerSpec: OpenAPIV3.Document = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['user_id', 'title', 'body'],
+                required: ['user_id', 'type', 'title', 'body'],
                 properties: {
-                  user_id: { type: 'string', format: 'uuid' },
-                  title: { type: 'string' },
-                  body: { type: 'string' },
-                  channel: { type: 'string', enum: ['push', 'email', 'both'], default: 'push' },
+                  user_id: { type: 'string', format: 'uuid', description: 'Destinataire' },
+                  type: {
+                    type: 'string',
+                    description: 'Type sémantique de la notification',
+                    enum: [
+                      'reservation_confirmed', 'trip_assigned', 'trip_reminder', 'trip_started',
+                      'driver_arrived', 'invoice_available',
+                      'document_expiry', 'document_validated', 'document_rejected',
+                      'reservation_cancelled',
+                      'new_message', 'support_reply',
+                      'new_reservation_admin', 'new_document_admin',
+                      'new_user_admin', 'user_status_changed_admin', 'user_anonymized_admin',
+                      'trip_completed_admin', 'new_support_ticket_admin', 'low_rating_admin',
+                      'driver_reminder_24h', 'driver_reminder_2h', 'driver_reminder_30min',
+                      'weekly_digest_admin', 'marketing',
+                    ],
+                  },
+                  title: { type: 'string', maxLength: 100 },
+                  body:  { type: 'string', maxLength: 500 },
+                  data:  { type: 'object', additionalProperties: { type: 'string' }, description: 'Payload contextuel (deep link, IDs…)' },
                 },
               },
             },
           },
         },
-        responses: { '200': { description: 'Notification envoyée' } },
+        responses: {
+          '201': { description: 'Notification créée et envoyée' },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
       },
     },
 
@@ -3828,9 +3849,130 @@ export const swaggerSpec: OpenAPIV3.Document = {
     '/cron/notifications/reminders': {
       post: {
         tags: ['Cron'],
-        summary: 'Envoyer les rappels de course 1h avant le départ',
+        summary: 'Rappels client 1h avant le départ (fenêtre 45–75 min)',
+        description: 'Idempotent — ignore les réservations déjà rappelées. Fréquence recommandée : toutes les 15 min.',
         security: [{ CronSecret: [] }],
-        responses: { '200': { description: 'Rappels envoyés' }, '401': { description: 'CRON_SECRET invalide' } },
+        responses: {
+          '200': {
+            description: 'Rappels envoyés',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              ok:      { type: 'boolean' },
+              message: { type: 'string' },
+              data:    { type: 'object', properties: { sent: { type: 'integer' } } },
+            } } } },
+          },
+          '401': { description: 'CRON_SECRET invalide' },
+        },
+      },
+    },
+
+    '/cron/notifications/driver-reminders': {
+      post: {
+        tags: ['Cron'],
+        summary: '3 séquences de rappels push aux chauffeurs (J-1 / H-2 / H-30min)',
+        description: [
+          'Envoie jusqu\'à 3 vagues de rappels push aux chauffeurs pour leurs courses assignées :',
+          '- **J-1** : fenêtre [+23h, +25h] — "Vous avez une course demain"',
+          '- **H-2** : fenêtre [+1h45, +2h15] — "Votre course commence dans 2h"',
+          '- **H-30min** : fenêtre [+20min, +40min] — "Rejoignez le point de départ"',
+          '',
+          'Idempotent par type × reservation_id. Fréquence recommandée : toutes les 15 min.',
+        ].join('\n'),
+        security: [{ CronSecret: [] }],
+        responses: {
+          '200': {
+            description: 'Rappels envoyés',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              ok:      { type: 'boolean' },
+              message: { type: 'string' },
+              data: { type: 'object', properties: {
+                sent_24h:   { type: 'integer', description: 'Rappels J-1 envoyés' },
+                sent_2h:    { type: 'integer', description: 'Rappels H-2 envoyés' },
+                sent_30min: { type: 'integer', description: 'Rappels H-30min envoyés' },
+              } },
+            } } } },
+          },
+          '401': { description: 'CRON_SECRET invalide' },
+        },
+      },
+    },
+
+    '/cron/notifications/pending-documents': {
+      post: {
+        tags: ['Cron'],
+        summary: 'Alerte admin — documents chauffeur en attente de validation depuis +24h',
+        description: [
+          'Compte les documents en statut `pending` créés il y a plus de 24h.',
+          'Si count > 0, envoie une push agrégée à tous les admins.',
+          'Fréquence recommandée : toutes les 12h.',
+        ].join('\n'),
+        security: [{ CronSecret: [] }],
+        responses: {
+          '200': {
+            description: 'Résultat de la vérification',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              ok:      { type: 'boolean' },
+              message: { type: 'string' },
+              data: { type: 'object', properties: {
+                count: { type: 'integer', description: 'Nombre de documents en attente depuis +24h' },
+              } },
+            } } } },
+          },
+          '401': { description: 'CRON_SECRET invalide' },
+        },
+      },
+    },
+
+    '/cron/notifications/unassigned-reservations': {
+      post: {
+        tags: ['Cron'],
+        summary: 'Alerte admin — courses de demain sans chauffeur assigné',
+        description: [
+          'Compte les réservations au statut `pending` prévues pour le lendemain.',
+          'Si count > 0, envoie une push agrégée à tous les admins.',
+          'Fréquence recommandée : chaque soir à 20h.',
+        ].join('\n'),
+        security: [{ CronSecret: [] }],
+        responses: {
+          '200': {
+            description: 'Résultat de la vérification',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              ok:      { type: 'boolean' },
+              message: { type: 'string' },
+              data: { type: 'object', properties: {
+                count: { type: 'integer', description: 'Nombre de courses non assignées pour demain' },
+              } },
+            } } } },
+          },
+          '401': { description: 'CRON_SECRET invalide' },
+        },
+      },
+    },
+
+    '/cron/notifications/weekly-digest': {
+      post: {
+        tags: ['Cron'],
+        summary: 'Bilan hebdomadaire envoyé aux admins (7 derniers jours)',
+        description: [
+          'Agrège les métriques de la semaine et envoie une push aux admins :',
+          'nombre de courses, CA France (EUR) et Sénégal (XOF), nouveaux comptes,',
+          'tickets support ouverts, note moyenne des chauffeurs.',
+          'Fréquence recommandée : lundi à 8h.',
+        ].join('\n'),
+        security: [{ CronSecret: [] }],
+        responses: {
+          '200': {
+            description: 'Bilan envoyé',
+            content: { 'application/json': { schema: { type: 'object', properties: {
+              ok:      { type: 'boolean' },
+              message: { type: 'string' },
+              data: { type: 'object', properties: {
+                sent: { type: 'boolean' },
+              } },
+            } } } },
+          },
+          '401': { description: 'CRON_SECRET invalide' },
+        },
       },
     },
   },
