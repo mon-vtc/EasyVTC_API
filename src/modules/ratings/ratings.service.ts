@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import type { UserRole } from '../auth/auth.types.js';
 import type {
   Rating,
@@ -65,6 +66,20 @@ export class RatingsService {
 
     if (insertErr || !rating) {
       throw { status: 500, message: "Erreur lors de la création de l'évaluation" };
+    }
+
+    // Alerte aux admins si note mauvaise (≤ 2 étoiles) — fire-and-forget
+    if (dto.note <= 2) {
+      notificationsService.sendToAdmins(
+        'low_rating_admin',
+        `Note basse — ${dto.note}/5`,
+        `Un chauffeur a reçu une note de ${dto.note}/5${dto.comment ? ` : "${dto.comment}"` : ''}.`,
+        {
+          reservation_id: reservationId,
+          driver_id:      reservation.driver_id,
+          note:           String(dto.note),
+        },
+      );
     }
 
     return rating as Rating;

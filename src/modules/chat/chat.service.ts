@@ -388,6 +388,15 @@ export class ChatService {
       throw { status: 500, message: 'Erreur lors de l\'envoi du message initial' };
     }
 
+    // Alerte aux admins — nouveau ticket support (fire-and-forget)
+    const roleLabel = userRole === 'driver' ? 'chauffeur' : 'client';
+    notificationsService.sendToAdmins(
+      'new_support_ticket_admin',
+      'Nouveau ticket support',
+      `Un ${roleLabel} a ouvert un ticket : "${dto.subject}" (catégorie : ${dto.category}).`,
+      { ticket_id: ticket.id as string, category: dto.category, user_id: userId },
+    );
+
     return {
       ...(ticket as SupportTicket),
       messages: [message as SupportMessage],

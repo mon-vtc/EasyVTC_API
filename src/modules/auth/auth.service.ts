@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config/env.js';
 import type { Vehicle } from '../vehicles/vehicles.types.js'
 import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
@@ -143,6 +144,15 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     // ── Email de bienvenue (non bloquant) ──────────────────────────────────
     sendWelcomeEmail(dto.email, dto.first_name).catch((err) =>
       console.warn('[Email] Welcome email failed:', err)
+    );
+
+    // Alerte aux admins — nouveau compte créé (fire-and-forget)
+    const roleLabel = dto.role === 'driver' ? 'chauffeur' : 'client';
+    notificationsService.sendToAdmins(
+      'new_user_admin',
+      'Nouveau compte créé',
+      `Un nouveau compte ${roleLabel} vient de s'inscrire : ${dto.first_name} ${dto.last_name} (${dto.email}).`,
+      { user_id: authData.user.id, role: dto.role },
     );
 
     return {
@@ -335,6 +345,12 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       sendWelcomeEmail(supabaseUser.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
       );
+      notificationsService.sendToAdmins(
+        'new_user_admin',
+        'Nouveau compte créé (Google)',
+        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${supabaseUser.email}).`,
+        { user_id: supabaseUser.id, role: 'client' },
+      );
     }
 
     const userProfile = await this.fetchFullProfile(supabaseUser.id);
@@ -387,6 +403,12 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       }
       sendWelcomeEmail(user.email!, firstName).catch((err) =>
         console.warn('[Email] Welcome Google email failed:', err)
+      );
+      notificationsService.sendToAdmins(
+        'new_user_admin',
+        'Nouveau compte créé (Google)',
+        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${user.email}).`,
+        { user_id: user.id, role: 'client' },
       );
     }
 

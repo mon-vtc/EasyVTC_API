@@ -14,6 +14,7 @@
 
 import crypto from 'crypto';
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import type { RgpdExport, AnonymizeResult } from './rgpd.types.js';
 import type { UserRole } from '../auth/auth.types.js';
 
@@ -170,6 +171,14 @@ export class RgpdService {
         .remove(exts.map((ext) => `${userId}/avatar.${ext}`))
         .catch(() => {}); // Silencieux — le fichier peut déjà avoir été supprimé
     }
+
+    // Alerte aux admins — anonymisation RGPD (fire-and-forget)
+    notificationsService.sendToAdmins(
+      'user_anonymized_admin',
+      'Compte anonymisé (RGPD Art.17)',
+      `Un compte a été anonymisé suite à une demande d'effacement RGPD${requesterId !== userId ? ' par un administrateur' : ' par l\'utilisateur'}.`,
+      { user_id: userId, requested_by: requesterId },
+    );
 
     return {
       user_id:        userId,

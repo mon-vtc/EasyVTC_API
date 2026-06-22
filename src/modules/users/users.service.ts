@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import type {
   UserProfile,
   UpdateProfileDto,
@@ -266,6 +267,22 @@ export class UsersService {
       await supabaseAdmin.auth.admin.signOut(targetUserId, 'global').catch((err) => {
         console.warn(`[UsersService] Impossible d'invalider les sessions de ${targetUserId}:`, err);
       });
+    }
+
+    // Alerte aux admins — changement de statut par un autre admin (fire-and-forget)
+    if (targetUserId !== adminId) {
+      const statusLabels: Record<string, string> = {
+        active:   'activé',
+        inactive: 'suspendu',
+        locked:   'verrouillé',
+      };
+      const label = statusLabels[dto.status] ?? dto.status;
+      notificationsService.sendToAdmins(
+        'user_status_changed_admin',
+        'Statut compte modifié',
+        `Un compte a été ${label}${dto.reason ? ` — Motif : ${dto.reason}` : ''}.`,
+        { user_id: targetUserId, new_status: dto.status },
+      );
     }
 
     return data as UserProfile;
