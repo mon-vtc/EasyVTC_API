@@ -705,7 +705,7 @@ export class AdminService {
         .is('deleted_at', null),
       supabaseAdmin
         .from('ratings')
-        .select('driver_id, score')
+        .select('driver_id, note')
         .gte('created_at', dateFrom)
         .lte('created_at', dateTo),
     ]);
@@ -754,7 +754,7 @@ export class AdminService {
 
     // ── Note moyenne globale ───────────────────────────────────────────────
     const avgRating = ratings.length > 0
-      ? Math.round((ratings.reduce((s, r) => s + r.score, 0) / ratings.length) * 10) / 10
+      ? Math.round((ratings.reduce((s, r) => s + (r.note as number), 0) / ratings.length) * 10) / 10
       : null;
 
     // ── Top 3 chauffeurs ───────────────────────────────────────────────────
@@ -771,7 +771,7 @@ export class AdminService {
     for (const rt of ratings) {
       if (!rt.driver_id) continue;
       const arr = driverRatingMap.get(rt.driver_id as string) ?? [];
-      arr.push(rt.score);
+      arr.push(rt.note as number);
       driverRatingMap.set(rt.driver_id as string, arr);
     }
 
