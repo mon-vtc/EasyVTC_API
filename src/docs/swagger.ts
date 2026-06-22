@@ -36,6 +36,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
     { name: 'RGPD', description: 'Export et anonymisation des données personnelles' },
     { name: 'Admin', description: 'Administration — utilisateurs, gestionnaires, stats' },
     { name: 'Audit Logs', description: 'Traçabilité des actions sensibles admin/manager' },
+    { name: 'App Config', description: 'Configuration globale de l\'application (coordonnées support)' },
     { name: 'Cron', description: 'Routes déclenchées par cron job (CRON_SECRET requis)' },
   ],
   components: {
@@ -736,6 +737,28 @@ export const swaggerSpec: OpenAPIV3.Document = {
               role:       { type: 'string', enum: ['admin', 'manager'] },
             },
           },
+        },
+      },
+      // ── App Config ───────────────────────────────────────────────────────────
+      SupportConfig: {
+        type: 'object',
+        description: 'Coordonnées du service support affichées dans l\'application',
+        properties: {
+          support_phone:   { type: 'string', example: '+33 1 23 45 67 89', description: 'Numéro de téléphone du support' },
+          support_email:   { type: 'string', format: 'email', example: 'support@eazyvtc.com' },
+          support_address: { type: 'string', example: '12 rue de la Paix, 75001 Paris', description: 'Adresse postale (optionnel)' },
+          support_hours:   { type: 'string', example: 'Lun–Ven 9h–18h', description: 'Horaires d\'ouverture du support' },
+        },
+        required: ['support_phone', 'support_email', 'support_address', 'support_hours'],
+      },
+      AppConfigEntry: {
+        type: 'object',
+        description: 'Entrée individuelle de la table app_config',
+        properties: {
+          key:        { type: 'string', example: 'support_phone', description: 'Clé de configuration' },
+          value:      { type: 'string', example: '+33 1 23 45 67 89' },
+          updated_at: { type: 'string', format: 'date-time' },
+          updated_by: { type: 'string', format: 'uuid', nullable: true, description: 'ID de l\'admin ayant effectué la modification' },
         },
       },
       // ── Driver Unavailability ─────────────────────────────────────────────────
@@ -3831,6 +3854,91 @@ export const swaggerSpec: OpenAPIV3.Document = {
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
           '404': { $ref: '#/components/responses/NotFound' },
+        },
+      },
+    },
+
+    // ════════════════════════════════════════════════════════════════════════════
+    // APP CONFIG
+    // ════════════════════════════════════════════════════════════════════════════
+    '/admin/app-config': {
+      get: {
+        tags: ['App Config'],
+        summary: 'Lire les coordonnées du support',
+        description: 'Retourne les 4 champs de contact du support : téléphone, email, adresse, horaires.',
+        security: [{ BearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Configuration retournée',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/SupportConfig' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/admin/app-config/{key}': {
+      put: {
+        tags: ['App Config'],
+        summary: 'Mettre à jour une valeur de configuration',
+        description: [
+          'Met à jour une clé de configuration.',
+          'Clés acceptées : `support_phone`, `support_email`, `support_address`, `support_hours`.',
+          'L\'opération est idempotente (upsert).',
+        ].join(' '),
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'key',
+            in: 'path',
+            required: true,
+            schema: {
+              type: 'string',
+              enum: ['support_phone', 'support_email', 'support_address', 'support_hours'],
+            },
+            description: 'Clé de configuration à mettre à jour',
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['value'],
+                properties: {
+                  value: { type: 'string', maxLength: 500, example: '+33 1 23 45 67 89' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Valeur mise à jour',
+            content: {
+              'application/json': {
+                schema: {
+                  allOf: [
+                    { $ref: '#/components/schemas/ApiSuccess' },
+                    { properties: { data: { $ref: '#/components/schemas/AppConfigEntry' } } },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
         },
       },
     },
