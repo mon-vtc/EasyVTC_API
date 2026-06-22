@@ -5,6 +5,7 @@ import {
   changeUserStatusSchema,
   userListFiltersSchema,
   updateNotificationPrefsSchema,
+  idParamSchema,
 } from './users.validator.js';
 import { auditLog } from '../../utils/audit.service.js';
 
@@ -135,12 +136,12 @@ export class UsersController {
 
   // GET /users/:id (détail d'un utilisateur)
   async getUserById(req: Request, res: Response): Promise<void> {
-    const id = req.params.id as string;
-
-    if (!id) {
-      res.status(400).json({ ok: false, message: 'ID utilisateur requis' });
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID utilisateur invalide' });
       return;
     }
+    const { id } = paramParsed.data;
 
     try {
       const user = await usersService.getUserById(id);
@@ -153,12 +154,12 @@ export class UsersController {
 
   // PATCH /users/:id/status (activer/désactiver/verrouiller)
   async changeUserStatus(req: Request, res: Response): Promise<void> {
-    const id = req.params.id as string;
-
-    if (!id) {
-      res.status(400).json({ ok: false, message: 'ID utilisateur requis' });
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID utilisateur invalide' });
       return;
     }
+    const { id } = paramParsed.data;
 
     const parsed = changeUserStatusSchema.safeParse(req.body);
     if (!parsed.success) {

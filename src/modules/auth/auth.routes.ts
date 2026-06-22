@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { authController } from './auth.controller.js';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { authStrictLimiter, registerLimiter } from '../../config/rate-limit.js';
+import { authStrictLimiter, registerLimiter, refreshLimiter } from '../../config/rate-limit.js';
 
 const router = Router();
 
 // ── Routes publiques ──────────────────────────────────────────────────────
 router.post('/register',         registerLimiter,    (req, res) => authController.register(req, res));
 router.post('/login',            authStrictLimiter,  (req, res) => authController.login(req, res));
-router.post('/refresh',          (req, res) => authController.refresh(req, res));
+router.post('/refresh',          refreshLimiter, (req, res) => authController.refresh(req, res));
 router.post('/forgot-password',  authStrictLimiter,  (req, res) => authController.forgotPassword(req, res));
 router.post('/reset-password',   authStrictLimiter,  (req, res) => authController.resetPassword(req, res));
 router.get( '/google',           (req, res) => authController.googleAuth(req, res));

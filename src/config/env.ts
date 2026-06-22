@@ -33,7 +33,12 @@ const envSchema = z
 
     // ── Cron jobs ────────────────────────────────────────────────────────────
     // Transmis dans le header X-Cron-Secret par le scheduler (Railway Cron, etc.)
+    // Obligatoire en production pour protéger les routes /cron/*
     CRON_SECRET:   z.string().min(32, 'CRON_SECRET doit faire au moins 32 caractères').optional(),
+
+    // ── CORS ─────────────────────────────────────────────────────────────────
+    // Origines supplémentaires autorisées en production (séparées par des virgules)
+    ALLOWED_ORIGINS: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (!data.SUPABASE_SECRET_KEY && !data.SUPABASE_SERVICE_ROLE_KEY) {
@@ -41,6 +46,13 @@ const envSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Renseigne SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY',
         path: ['SUPABASE_SECRET_KEY'],
+      });
+    }
+    if (data.NODE_ENV === 'production' && !data.CRON_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'CRON_SECRET est obligatoire en production (min 32 caractères)',
+        path: ['CRON_SECRET'],
       });
     }
   });

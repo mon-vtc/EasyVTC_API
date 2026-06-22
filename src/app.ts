@@ -1,10 +1,11 @@
 import express from 'express';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import swaggerUi from 'swagger-ui-express';
 import { globalLimiter } from './config/rate-limit.js';
+import { env } from './config/env.js';
 import { supabaseAdmin } from './database/supabase/client.js';
 import { swaggerSpec } from './docs/swagger.js';
 
@@ -53,7 +54,31 @@ const app = express();
 
 // ── Middlewares globaux ──────────────────────────────────────────────────────
 app.use(helmet());
-app.use(cors());
+
+const ALLOWED_ORIGINS = env.NODE_ENV === 'production'
+  ? [env.APP_URL]
+  : [
+      'http://localhost:3000',
+      'http://localhost:4000',
+      'http://localhost:19000',
+      'http://localhost:8081',
+      'http://10.0.2.2:4000',   // Android emulator → host
+    ];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Autoriser les requêtes sans origin (Postman, mobile natif, curl)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || origin.startsWith('exp://') || origin.startsWith('easyvtc://')) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origine non autorisée par CORS : ${origin}`));
+  },
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-cron-secret'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(morgan('dev'));
 app.use(globalLimiter);
@@ -148,6 +173,31 @@ app.use('/admin/app-config',          appConfigRoutes);
 // ── 404 handler ───────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ ok: false, message: 'Route introuvable' });
+});
+
+// ── Gestionnaire d'erreurs global ─────────────────────────────────────────────
+// Capture les exceptions non gérées propagées via next(err)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const isProd = env.NODE_ENV === 'production';
+
+  // Erreurs métier levées par les services : { status, message }
+  if (typeof err === 'object' && err !== null && 'status' in err && 'message' in err) {
+    const e = err as { status: number; message: string };
+    res.status(e.status ?? 500).json({ ok: false, message: e.message });
+    return;
+  }
+
+  // Erreurs CORS
+  if (err instanceof Error && err.message.startsWith('Origine non autorisée')) {
+    res.status(403).json({ ok: false, message: err.message });
+    return;
+  }
+
+  // Erreur interne — ne pas exposer le détail en production
+  const message = !isProd && err instanceof Error ? err.message : 'Erreur interne du serveur';
+  if (!isProd) console.error('[Unhandled error]', err);
+  res.status(500).json({ ok: false, message });
 });
 
 export default app;

@@ -39,7 +39,17 @@ export const registerLimiter = rateLimit({
   message:         json('Trop de créations de compte depuis cette IP. Réessayez dans 1 heure.'),
 });
 
-// ── Palier 4 — Validation code promo (anti-abus) ────────────────────────────
+// ── Palier 4 — Refresh token (anti-rotation abuse) ──────────────────────────
+// Évite la rotation en boucle ou l'extraction de tokens via brute-force.
+export const refreshLimiter = rateLimit({
+  windowMs:        15 * 60 * 1000,
+  limit:           30,
+  standardHeaders: 'draft-7',
+  legacyHeaders:   false,
+  message:         json('Trop de renouvellements de session. Réessayez dans 15 minutes.'),
+});
+
+// ── Palier 5 — Validation code promo (anti-abus) ────────────────────────────
 // Évite la découverte par force brute des codes actifs.
 export const promoValidateLimiter = rateLimit({
   windowMs:        15 * 60 * 1000,

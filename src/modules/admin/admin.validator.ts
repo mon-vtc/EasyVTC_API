@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { MANAGER_PERMISSIONS } from './admin.types.js';
 
+export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — format UUID attendu') });
+
 export const createManagerSchema = z.object({
   email: z.string().email({ message: 'Email invalide' }),
   password: z

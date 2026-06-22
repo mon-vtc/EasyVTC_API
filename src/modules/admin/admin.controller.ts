@@ -10,6 +10,7 @@ import {
   setManagerPermissionsSchema,
   adminStatsFiltersSchema,
   adminDashboardFiltersSchema,
+  idParamSchema,
 } from './admin.validator.js';
 
 export class AdminController {
@@ -66,8 +67,10 @@ export class AdminController {
 
   // GET /admin/managers/:id
   async getManagerById(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     try {
-      const manager = await adminService.getManagerById(req.params['id'] as string);
+      const manager = await adminService.getManagerById(paramParsed.data.id);
       res.json({ ok: true, data: manager });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -77,6 +80,8 @@ export class AdminController {
 
   // PATCH /admin/managers/:id
   async updateManager(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     const parsed = updateManagerSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -87,7 +92,7 @@ export class AdminController {
       return;
     }
     try {
-      const manager = await adminService.updateManager(req.params['id'] as string, parsed.data);
+      const manager = await adminService.updateManager(paramParsed.data.id, parsed.data);
       res.json({ ok: true, data: manager });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -97,6 +102,8 @@ export class AdminController {
 
   // PATCH /admin/managers/:id/status
   async changeManagerStatus(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     const parsed = changeManagerStatusSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -107,7 +114,7 @@ export class AdminController {
       return;
     }
     try {
-      const managerId = req.params['id'] as string;
+      const managerId = paramParsed.data.id;
       const manager = await adminService.changeManagerStatus(managerId, parsed.data, req.user!.id);
 
       void auditLog(req, {
@@ -126,8 +133,10 @@ export class AdminController {
 
   // GET /admin/managers/:id/permissions
   async getManagerPermissions(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     try {
-      const result = await adminService.getManagerPermissions(req.params['id'] as string);
+      const result = await adminService.getManagerPermissions(paramParsed.data.id);
       res.json({ ok: true, data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -137,6 +146,8 @@ export class AdminController {
 
   // PUT /admin/managers/:id/permissions
   async setManagerPermissions(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     const parsed = setManagerPermissionsSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -147,7 +158,7 @@ export class AdminController {
       return;
     }
     try {
-      const managerId = req.params['id'] as string;
+      const managerId = paramParsed.data.id;
       const result = await adminService.setManagerPermissions(managerId, parsed.data as any, req.user!.id);
 
       void auditLog(req, {
@@ -166,8 +177,10 @@ export class AdminController {
 
   // DELETE /admin/managers/:id
   async deleteManager(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
     try {
-      const managerId = req.params['id'] as string;
+      const managerId = paramParsed.data.id;
       await adminService.deleteManager(managerId);
 
       void auditLog(req, {
@@ -202,8 +215,10 @@ export class AdminController {
 
   // GET /admin/clients/:id
   async getClientById(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID client invalide' }); return; }
     try {
-      const client = await adminService.getClientById(req.params['id'] as string);
+      const client = await adminService.getClientById(paramParsed.data.id);
       res.json({ ok: true, data: client });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

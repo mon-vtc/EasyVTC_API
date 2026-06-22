@@ -299,11 +299,31 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
 
   // ── GOOGLE AUTH — URL de redirection ─────────────────────────────────────
   async getGoogleAuthUrl(redirectTo?: string): Promise<string> {
-    const callbackUrl = encodeURIComponent(
-      redirectTo ?? `${env.APP_URL}/auth/google/callback`
-    );
+    const defaultCallback = `${env.APP_URL}/auth/google/callback`;
+    const sanitized = this._sanitizeRedirectTo(redirectTo, defaultCallback);
+    const callbackUrl = encodeURIComponent(sanitized);
     const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
     return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${callbackUrl}`;
+  }
+
+  private _sanitizeRedirectTo(redirectTo: string | undefined, fallback: string): string {
+    if (!redirectTo) return fallback;
+
+    // Origines autorisées : APP_URL, deep links mobile, localhost dev
+    const isAllowed =
+      redirectTo.startsWith(env.APP_URL) ||
+      redirectTo.startsWith(`${env.MOBILE_DEEP_LINK_SCHEME}://`) ||
+      redirectTo.startsWith('exp://') ||
+      (env.NODE_ENV !== 'production' && (
+        redirectTo.startsWith('http://localhost') ||
+        redirectTo.startsWith('http://10.0.2.2')
+      ));
+
+    if (!isAllowed) {
+      console.warn(`[Auth] redirect_to rejeté (open redirect) : ${redirectTo}`);
+      return fallback;
+    }
+    return redirectTo;
   }
 
   // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — format UUID attendu') });
+
 // ── Mise à jour du profil (par l'utilisateur) ────────────────────────────────
 export const updateProfileSchema = z.object({
   first_name: z.string().min(2).max(100).optional(),
