@@ -111,7 +111,7 @@ export class NotificationsController {
     }
   }
 
-  // POST /cron/notifications/reminders — Rappels 1h avant course (cron protégé)
+  // POST /cron/notifications/reminders — Rappels 1h avant course client (cron protégé)
   async sendTripReminders(req: Request, res: Response): Promise<void> {
     const cronSecret = req.headers['x-cron-secret'];
     if (!cronSecret || cronSecret !== process.env['CRON_SECRET']) {
@@ -121,6 +121,71 @@ export class NotificationsController {
     try {
       const result = await notificationsService.sendUpcomingTripReminders();
       res.status(200).json({ ok: true, message: `${result.sent} rappel(s) envoyé(s)`, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /cron/notifications/driver-reminders — 3 séquences de rappels chauffeur
+  async sendDriverReminders(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await notificationsService.sendDriverTripReminders();
+      const total = result.sent_24h + result.sent_2h + result.sent_30min;
+      res.status(200).json({
+        ok: true,
+        message: `${total} rappel(s) chauffeur envoyé(s)`,
+        data: result,
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /cron/notifications/pending-documents — Documents en attente >24h
+  async sendPendingDocumentsDigest(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await notificationsService.sendPendingDocumentsDigest();
+      res.status(200).json({
+        ok: true,
+        message: result.count > 0
+          ? `Alerte envoyée — ${result.count} document(s) en attente`
+          : 'Aucun document en attente depuis +24h',
+        data: result,
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /cron/notifications/unassigned-reservations — Courses sans chauffeur demain
+  async sendUnassignedReservationsAlert(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await notificationsService.sendUnassignedReservationsAlert();
+      res.status(200).json({
+        ok: true,
+        message: result.count > 0
+          ? `Alerte envoyée — ${result.count} course(s) non assignée(s) demain`
+          : 'Toutes les courses de demain ont un chauffeur',
+        data: result,
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /cron/notifications/weekly-digest — Bilan hebdomadaire admins
+  async sendWeeklyDigest(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await notificationsService.sendWeeklyDigest();
+      res.status(200).json({
+        ok: true,
+        message: 'Bilan hebdomadaire envoyé aux admins',
+        data: result,
+      });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

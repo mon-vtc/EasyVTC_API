@@ -37,7 +37,19 @@ router.post('/send', requireStaff, (req, res) => notificationsController.send(re
 
 export default router;
 
-// ── Route cron (montée sur /cron/notifications dans app.ts) ──────────────────
+// ── Routes cron (montées sur /cron/notifications dans app.ts) ────────────────
+//
+// Fréquences recommandées (Railway Cron ou GitHub Actions) :
+//   reminders              → toutes les 15min   (fenêtres glissantes 1h client)
+//   driver-reminders       → toutes les 15min   (fenêtres J-1 / H-2 / H-30min)
+//   pending-documents      → toutes les 12h     (escalade docs non traités)
+//   unassigned-reservations → chaque soir 20h   (courses J+1 sans chauffeur)
+//   weekly-digest          → lundi 8h (1×/semaine)
 import { Router as CronRouter } from 'express';
 export const cronNotificationsRouter = CronRouter();
-cronNotificationsRouter.post('/reminders', requireCronSecret, (req, res) => notificationsController.sendTripReminders(req, res));
+
+cronNotificationsRouter.post('/reminders',               requireCronSecret, (req, res) => notificationsController.sendTripReminders(req, res));
+cronNotificationsRouter.post('/driver-reminders',        requireCronSecret, (req, res) => notificationsController.sendDriverReminders(req, res));
+cronNotificationsRouter.post('/pending-documents',       requireCronSecret, (req, res) => notificationsController.sendPendingDocumentsDigest(req, res));
+cronNotificationsRouter.post('/unassigned-reservations', requireCronSecret, (req, res) => notificationsController.sendUnassignedReservationsAlert(req, res));
+cronNotificationsRouter.post('/weekly-digest',           requireCronSecret, (req, res) => notificationsController.sendWeeklyDigest(req, res));

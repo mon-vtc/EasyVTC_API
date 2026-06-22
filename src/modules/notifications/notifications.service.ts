@@ -282,6 +282,227 @@ export class NotificationsService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // RAPPELS CHAUFFEUR — 3 séquences (J-1 / H-2 / H-30min)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Envoie 3 vagues de rappels push aux chauffeurs pour leurs courses à venir.
+   *   - J-1    : fenêtre [+23h, +25h]
+   *   - H-2    : fenêtre [+1h45, +2h15]
+   *   - H-30min: fenêtre [+20min, +40min]
+   * Idempotent par type de rappel + reservation_id.
+   * Cible uniquement les réservations au statut 'assigned'.
+   */
+  async sendDriverTripReminders(): Promise<{ sent_24h: number; sent_2h: number; sent_30min: number }> {
+    const now = new Date();
+
+    const windows = {
+      '24h':   { from: new Date(now.getTime() + 23 * 60 * 60 * 1000),  to: new Date(now.getTime() + 25 * 60 * 60 * 1000)  },
+      '2h':    { from: new Date(now.getTime() + 105 * 60 * 1000),       to: new Date(now.getTime() + 135 * 60 * 1000)       },
+      '30min': { from: new Date(now.getTime() + 20 * 60 * 1000),        to: new Date(now.getTime() + 40 * 60 * 1000)        },
+    } as const;
+
+    // Récupérer les réservations assignées dans chaque fenêtre
+    const fetchAssigned = async (from: Date, to: Date) => {
+      const { data } = await supabaseAdmin
+        .from('reservations')
+        .select('id, scheduled_at, pickup_address, driver:drivers!driver_id(user_id)')
+        .eq('status', 'assigned')
+        .gte('scheduled_at', from.toISOString())
+        .lte('scheduled_at', to.toISOString());
+      return (data ?? []) as any[];
+    };
+
+    const [res24h, res2h, res30m] = await Promise.all([
+      fetchAssigned(windows['24h'].from,   windows['24h'].to),
+      fetchAssigned(windows['2h'].from,    windows['2h'].to),
+      fetchAssigned(windows['30min'].from, windows['30min'].to),
+    ]);
+
+    // Déduplication : vérifier quelles notifications ont déjà été envoyées
+    const alreadySentIds = async (type: string, ids: string[]): Promise<Set<string>> => {
+      if (!ids.length) return new Set();
+      const { data } = await supabaseAdmin
+        .from('notifications')
+        .select('data')
+        .eq('type', type)
+        .in('data->>reservation_id', ids);
+      return new Set(
+        (data ?? []).map(n => (n.data as Record<string, string>)?.reservation_id).filter(Boolean),
+      );
+    };
+
+    const [sent24hSet, sent2hSet, sent30mSet] = await Promise.all([
+      alreadySentIds('driver_reminder_24h',   res24h.map(r => r.id)),
+      alreadySentIds('driver_reminder_2h',    res2h.map(r => r.id)),
+      alreadySentIds('driver_reminder_30min', res30m.map(r => r.id)),
+    ]);
+
+    const fmt = (iso: string) =>
+      new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+
+    let sent_24h = 0, sent_2h = 0, sent_30min = 0;
+
+    for (const r of res24h) {
+      const driverUserId24h = Array.isArray(r.driver) ? r.driver[0]?.user_id : r.driver?.user_id;
+      if (sent24hSet.has(r.id) || !driverUserId24h) continue;
+      this.sendToUser(driverUserId24h, 'driver_reminder_24h',
+        'Course demain',
+        `Rappel : vous avez une course demain à ${fmt(r.scheduled_at)}. Départ : ${r.pickup_address}.`,
+        { reservation_id: r.id, scheduled_at: r.scheduled_at },
+      );
+      sent_24h++;
+    }
+
+    for (const r of res2h) {
+      const driverUserId2h = Array.isArray(r.driver) ? r.driver[0]?.user_id : r.driver?.user_id;
+      if (sent2hSet.has(r.id) || !driverUserId2h) continue;
+      this.sendToUser(driverUserId2h, 'driver_reminder_2h',
+        'Course dans 2 heures',
+        `Votre course de ${fmt(r.scheduled_at)} commence dans 2h. Préparez-vous.`,
+        { reservation_id: r.id, scheduled_at: r.scheduled_at },
+      );
+      sent_2h++;
+    }
+
+    for (const r of res30m) {
+      const driverUserId30m = Array.isArray(r.driver) ? r.driver[0]?.user_id : r.driver?.user_id;
+      if (sent30mSet.has(r.id) || !driverUserId30m) continue;
+      this.sendToUser(driverUserId30m, 'driver_reminder_30min',
+        'Course dans 30 minutes',
+        `Votre course commence dans 30 min. Rejoignez le point de départ : ${r.pickup_address}.`,
+        { reservation_id: r.id, scheduled_at: r.scheduled_at, pickup_address: r.pickup_address },
+      );
+      sent_30min++;
+    }
+
+    return { sent_24h, sent_2h, sent_30min };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CRON ADMIN — Documents en attente depuis +24h
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Alerte les admins si des documents sont en statut 'pending' depuis plus de 24h
+   * sans avoir été traités. Envoie une seule notification agrégée.
+   */
+  async sendPendingDocumentsDigest(): Promise<{ count: number }> {
+    const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    const { count } = await supabaseAdmin
+      .from('driver_documents')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .lte('created_at', threshold);
+
+    if (!count) return { count: 0 };
+
+    this.sendToAdmins(
+      'new_document_admin',
+      `${count} document(s) en attente depuis +24h`,
+      `${count} document(s) chauffeur attend${count > 1 ? 'ent' : ''} une validation depuis plus de 24h.`,
+      { pending_count: String(count) },
+    );
+
+    return { count };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CRON ADMIN — Réservations non assignées à J-1
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Alerte les admins chaque soir si des réservations du lendemain
+   * n'ont toujours pas de chauffeur assigné.
+   */
+  async sendUnassignedReservationsAlert(): Promise<{ count: number }> {
+    const now = new Date();
+    const tomorrowStart = new Date(now);
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    tomorrowStart.setHours(0, 0, 0, 0);
+    const tomorrowEnd = new Date(tomorrowStart);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+
+    const { count } = await supabaseAdmin
+      .from('reservations')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+      .gte('scheduled_at', tomorrowStart.toISOString())
+      .lte('scheduled_at', tomorrowEnd.toISOString());
+
+    if (!count) return { count: 0 };
+
+    const dayLabel = tomorrowStart.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    this.sendToAdmins(
+      'new_reservation_admin',
+      `${count} course(s) sans chauffeur demain`,
+      `Attention : ${count} course(s) prévue(s) le ${dayLabel} n'ont pas encore de chauffeur assigné.`,
+      { unassigned_count: String(count), date: tomorrowStart.toISOString().split('T')[0] },
+    );
+
+    return { count };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // CRON ADMIN — Digest hebdomadaire (lundi matin)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Envoie aux admins un bilan de l'activité des 7 derniers jours :
+   * courses, CA, nouveaux comptes, tickets ouverts, note moyenne.
+   */
+  async sendWeeklyDigest(): Promise<{ sent: boolean }> {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [reservationsRes, usersRes, ticketsRes, ratingsRes] = await Promise.all([
+      supabaseAdmin
+        .from('reservations')
+        .select('id, status, price_final, country')
+        .gte('created_at', since),
+      supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', since),
+      supabaseAdmin
+        .from('support_tickets')
+        .select('id, status')
+        .gte('created_at', since),
+      supabaseAdmin
+        .from('ratings')
+        .select('note')
+        .gte('created_at', since),
+    ]);
+
+    const allReservations  = (reservationsRes.data ?? []) as Array<{ id: string; status: string; price_final: number | null; country: string }>;
+    const completed        = allReservations.filter(r => r.status === 'completed');
+    const revenueEur       = completed.filter(r => r.country !== 'senegal').reduce((s, r) => s + (r.price_final ?? 0), 0);
+    const revenueXof       = completed.filter(r => r.country === 'senegal').reduce((s, r) => s + (r.price_final ?? 0), 0);
+    const newUsers         = usersRes.count ?? 0;
+    const openTickets      = (ticketsRes.data ?? []).filter((t: any) => t.status === 'open').length;
+    const notes            = (ratingsRes.data ?? []).map((r: any) => r.note as number);
+    const avgRating        = notes.length ? Math.round(notes.reduce((a, b) => a + b, 0) / notes.length * 10) / 10 : null;
+
+    const lines = [
+      `Courses : ${allReservations.length} (${completed.length} terminées)`,
+      revenueEur > 0 ? `CA France : ${revenueEur.toFixed(2)} €` : null,
+      revenueXof > 0 ? `CA Sénégal : ${Math.round(revenueXof).toLocaleString('fr-FR')} XOF` : null,
+      `Nouveaux comptes : ${newUsers}`,
+      openTickets > 0 ? `Tickets support ouverts : ${openTickets}` : null,
+      avgRating !== null ? `Note moyenne : ${avgRating}/5` : null,
+    ].filter(Boolean).join(' · ');
+
+    this.sendToAdmins(
+      'weekly_digest_admin',
+      'Bilan hebdomadaire EazyVTC',
+      lines,
+      { period: 'weekly', generated_at: new Date().toISOString() },
+    );
+
+    return { sent: true };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // TOKEN FCM — Enregistrement device mobile
   // ──────────────────────────────────────────────────────────────────────────
 
