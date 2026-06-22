@@ -457,7 +457,7 @@ export class ReservationsService {
     // Notification au client — course démarrée
     notificationsService.sendToUser(
       reservation.client_id,
-      'trip_reminder',
+      'trip_started',
       'Course démarrée',
       'Votre course est en cours. Bon voyage !',
       { reservation_id: reservationId },
@@ -600,6 +600,19 @@ export class ReservationsService {
           ...(invoiceId && { invoice_id: invoiceId }),
         },
       );
+
+      // Alerte aux admins — course terminée (suivi revenus)
+      notificationsService.sendToAdmins(
+        'trip_completed_admin',
+        'Course terminée',
+        `Une course vient d'être clôturée. Montant : ${amount} ${currency}.`,
+        {
+          reservation_id: reservationId,
+          amount: String(amount),
+          currency,
+          ...(invoiceId && { invoice_id: invoiceId }),
+        },
+      );
     })();
 
     return await this._mapReservation(data);
@@ -680,6 +693,16 @@ export class ReservationsService {
         'Réservation annulée',
         `Votre course du ${this._formatDate(reservation.scheduled_at)} a été annulée par l'équipe.${reason ? ` Motif : ${reason}` : ''}`,
         { reservation_id: reservationId },
+      );
+    }
+
+    // Alerter les admins si un client annule une course déjà assignée
+    if (requesterRole === 'client' && reservation.driver_id) {
+      notificationsService.sendToAdmins(
+        'reservation_cancelled',
+        'Course annulée par le client',
+        `Un client a annulé une course assignée prévue le ${this._formatDate(reservation.scheduled_at)}.`,
+        { reservation_id: reservationId, driver_id: reservation.driver_id },
       );
     }
 

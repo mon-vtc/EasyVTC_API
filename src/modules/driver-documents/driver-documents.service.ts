@@ -153,6 +153,14 @@ export class DriverDocumentsService {
     // Générer l'URL signée
     const signedUrl = await this.generateSignedUrl(filePath);
 
+    // Alerte aux admins — nouveau document en attente de validation (fire-and-forget)
+    notificationsService.sendToAdmins(
+      'new_document_admin',
+      'Nouveau document à valider',
+      `Un chauffeur a soumis un ${DOCUMENT_TYPE_LABELS[dto.doc_type as DocumentType] ?? dto.doc_type} en attente de validation.`,
+      { document_id: document.id as string, driver_id: driverId, doc_type: dto.doc_type },
+    );
+
     return {
       ...document,
       signed_url: signedUrl,

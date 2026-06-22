@@ -17,8 +17,21 @@ export type NotificationType =
   | 'reservation_cancelled'   // Chauffeur ou client : course annulée
   | 'new_message'             // Destinataire : nouveau message reçu dans le chat course
   | 'support_reply'           // Utilisateur : réponse du support à son ticket
-  | 'new_reservation_admin'  // Admin : nouvelle réservation en attente d'attribution
-  | 'marketing';              // Push marketing envoyé depuis une campagne admin
+  | 'new_reservation_admin'      // Admin : nouvelle réservation en attente d'attribution
+  | 'new_document_admin'        // Admin : nouveau document chauffeur en attente de validation
+  | 'new_user_admin'            // Admin : nouveau compte utilisateur créé
+  | 'user_status_changed_admin' // Admin : statut d'un compte modifié (suspension, activation)
+  | 'user_anonymized_admin'     // Admin : compte anonymisé suite à demande RGPD Art.17
+  | 'trip_completed_admin'      // Admin : course terminée (suivi revenus)
+  | 'new_support_ticket_admin'  // Admin : nouveau ticket support ouvert
+  | 'low_rating_admin'          // Admin : évaluation ≤ 2 étoiles soumise
+  | 'trip_started'              // Client : le chauffeur a démarré la course (client à bord)
+  | 'driver_reminder_24h'      // Chauffeur : rappel J-1 (24h avant la course)
+  | 'driver_reminder_2h'       // Chauffeur : rappel H-2 (2h avant la course)
+  | 'driver_reminder_30min'    // Chauffeur : rappel H-30min (mise en route)
+  | 'weekly_digest_admin'      // Admin : bilan hebdomadaire automatique
+  | 'marketing'                // Push marketing envoyé depuis une campagne admin
+  | 'support_reply';           // Utilisateur : réponse du support à son ticket
 
 export type NotificationChannel = 'push' | 'email';
 export type NotificationStatus  = 'pending' | 'sent' | 'failed' | 'delivered';
