@@ -59,6 +59,7 @@ export class RgpdController {
         paramParsed.data.id,
         req.user!.id,
         req.user!.role,
+        bodyParsed.data.password,
       );
 
       void auditLog(req, {

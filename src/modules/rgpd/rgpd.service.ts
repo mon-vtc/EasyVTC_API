@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import type { RgpdExport, AnonymizeResult } from './rgpd.types.js';
+import { authService } from '../auth/auth.service.js';
 import type { UserRole } from '../auth/auth.types.js';
 
 export class RgpdService {
@@ -103,17 +104,17 @@ export class RgpdService {
       chat_messages:  messagesResult.data       ?? [],
     };
   }
-
+//
   // ══════════════════════════════════════════════════════════════════════════
   // DELETE /users/:id/anonymize — Droit à l'effacement (Art. 17 RGPD)
   // ══════════════════════════════════════════════════════════════════════════
-  async anonymize(userId: string, requesterId: string, requesterRole: UserRole): Promise<AnonymizeResult> {
+  async anonymize(userId: string, requesterId: string, requesterRole: UserRole, password: string): Promise<AnonymizeResult> {
     this._checkAccess(userId, requesterId, requesterRole);
 
     // Récupérer l'utilisateur
     const { data: user, error: fetchErr } = await supabaseAdmin
       .from('users')
-      .select('id, role, deleted_at, profile_photo_url')
+      .select('id, email, role, deleted_at, profile_photo_url')
       .eq('id', userId)
       .single();
 
@@ -121,10 +122,20 @@ export class RgpdService {
       throw { status: 404, message: 'Utilisateur introuvable' };
     }
 
+    // Vérification du mot de passe en simulant une connexion.
+    // C'est plus sûr que de maintenir une logique de vérification séparée.
+    try {
+      await authService.login({ email: user.email!, password });
+    } catch (err: any) {
+      // Si le login échoue (401), c'est que le mot de passe est incorrect.
+      if (err.status === 401) throw { status: 403, message: 'Mot de passe incorrect.' };
+      throw err; // Propage les autres erreurs (compte bloqué, etc.)
+    }
+
     if (user.role === 'admin') {
       throw { status: 403, message: 'Impossible d\'anonymiser un compte administrateur' };
     }
-
+ 
     if (user.deleted_at) {
       throw { status: 422, message: 'Ce compte a déjà été anonymisé' };
     }
