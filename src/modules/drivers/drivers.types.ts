@@ -32,6 +32,30 @@ export interface DriverWithUser {
   };
 }
 
+// ── Profil chauffeur enrichi avec statistiques (pour admin) ──────────────────
+export interface DriverWithUserAndStats extends DriverWithUser {
+  trips_count: number;        // Nombre de courses complétées
+  average_rating: number | null; // Note moyenne (null si pas encore évaluée)
+}
+
+// ── Profil chauffeur avec infos utilisateur et véhicule actif (pour admin) ────
+export interface DriverWithUserAndVehicle extends DriverWithUser {
+  vehicle: {
+    id: string;
+    driver_id: string;
+    plate_number: string;
+    brand: string;
+    model: string;
+    year: number | null;
+    color: string | null;
+    type: VehicleType;
+    photo_url: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+  } | null;
+}
+
 // ── DTO mise à jour profil chauffeur (par le chauffeur lui-même) ──────────────
 export interface UpdateDriverDto {
   siret?: string;
@@ -66,7 +90,7 @@ export interface DriverListFilters {
 
 // ── Résultat paginé ───────────────────────────────────────────────────────────
 export interface DriverListResult {
-  drivers: DriverWithUser[];
+  drivers: DriverWithUserAndStats[];
   total: number;
   page: number;
   limit: number;
@@ -176,6 +200,16 @@ export interface SetScheduleDto {
   }>;
 }
 
+// ── Filtres revenus ───────────────────────────────────────────────────────────
+
+export type RevenueStatus = 'completed' | 'cancelled';
+
+export interface RevenuesFilters {
+  status?: RevenueStatus;
+  page?: number;
+  limit?: number;
+}
+
 // ── Revenus ───────────────────────────────────────────────────────────────────
 
 export type RevenuesPeriod = 'week' | 'month' | 'all';
@@ -206,4 +240,50 @@ export interface DriverRevenuesResult {
   currency: string;
   revenue_by_currency: { EUR: number; XOF: number };
   trips: RevenueTrip[];
+  page?: number;
+  limit?: number;
+  total_trips_unfiltered?: number; // Total avant pagination
+}
+
+// ── Statistiques mensuelles ──────────────────────────────────────────────────
+
+export interface DriverMonthlyStats {
+  date: string;                      // YYYY-MM
+  total_courses: number;             // courses complétées ce mois
+  total_earning: number;             // gains nets
+  total_commission: number;          // commissions prélevées
+  total_distance_km: number;         // km parcourus
+  total_duration_min: number;        // minutes totales
+  average_rating: number | null;     // note moyenne ce mois
+  acceptance_rate: number;           // % des réservations acceptées (0-100)
+  cancellation_rate: number;         // % des réservations annulées (0-100)
+}
+
+// ── Historique des courses ───────────────────────────────────────────────────
+
+export interface DriverTripHistory {
+  reservation_id: string;
+  scheduled_at: string;
+  completed_at?: string;
+  status: string;                    // completed, cancelled, etc.
+  pickup_address: string;
+  dest_address: string;
+  distance_km: number | null;
+  duration_min: number | null;
+  price_final: number;
+  commission_amount: number;
+  net_amount: number;
+  currency: string;
+  client_first_name: string | null;
+  client_last_name: string | null;
+  client_rating: number | null;      // note du client
+  client_comment: string | null;     // commentaire du client
+}
+
+export interface DriverTripsHistoryResult {
+  trips: DriverTripHistory[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
 }

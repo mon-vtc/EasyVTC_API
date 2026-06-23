@@ -7,6 +7,7 @@ import { supabaseAdmin } from '../../database/supabase/client.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import type {
   DriverWithUser,
+  DriverWithUserAndVehicle,
   UpdateDriverDto,
   ChangeDriverStatusDto,
   AdminUpdateDriverDto,
@@ -16,6 +17,8 @@ import type {
   DriverPlanningResult,
   RevenuesPeriod,
   DriverRevenuesResult,
+  DriverMonthlyStats,
+  DriverTripsHistoryResult,
   DriverUnavailability,
   CreateUnavailabilityDto,
   DriverAvailabilityResult,
@@ -29,6 +32,17 @@ const DRIVER_WITH_USER_SELECT = `
   id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
+  )
+`;
+
+// ── Colonnes du join drivers + user + véhicule actif ────────────────────────
+const DRIVER_WITH_USER_AND_VEHICLE_SELECT = `
+  id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, status_reason, created_at, updated_at,
+  user:users!inner (
+    id, email, first_name, last_name, phone, profile_photo_url, status, created_at
+  ),
+  vehicle:vehicles (
+    id, driver_id, plate_number, brand, model, year, color, type, photo_url, is_active, created_at, updated_at
   )
 `;
 
@@ -148,7 +162,7 @@ export class DriversService {
   // ══════════════════════════════════════════════════════════════════════════
 
   // ────────────────────────────────────────────────────────────────────────────
-  // GET /admin/drivers — liste paginée avec filtres
+  // GET /admin/drivers — liste paginée avec filtres + statistiques
   // ────────────────────────────────────────────────────────────────────────────
   async listDrivers(filters: DriverListFilters): Promise<DriverListResult> {
     const page  = filters.page  ?? 1;
@@ -190,9 +204,38 @@ export class DriversService {
     }
 
     const total = count ?? 0;
+    const drivers = (data ?? []) as unknown as DriverWithUser[];
+
+    // Enrichir avec les statistiques : nombre de courses + note moyenne
+    const enrichedDrivers = await Promise.all(
+      drivers.map(async (driver) => {
+        // Compter les réservations complétées
+        const { count: tripsCount } = await supabaseAdmin
+          .from('reservations')
+          .select('id', { count: 'exact' })
+          .eq('driver_id', driver.id)
+          .eq('status', 'completed');
+
+        // Calculer la note moyenne des évaluations
+        const { data: ratings } = await supabaseAdmin
+          .from('ratings')
+          .select('note')
+          .eq('driver_id', driver.id);
+
+        const averageRating = ratings && ratings.length > 0
+          ? ratings.reduce((sum, r) => sum + (r.note ?? 0), 0) / ratings.length
+          : null;
+
+        return {
+          ...driver,
+          trips_count: tripsCount ?? 0,
+          average_rating: averageRating ? Math.round(averageRating * 10) / 10 : null,
+        };
+      })
+    );
 
     return {
-      drivers: (data ?? []) as unknown as DriverWithUser[],
+      drivers: enrichedDrivers,
       total,
       page,
       limit,
@@ -203,10 +246,10 @@ export class DriversService {
   // ────────────────────────────────────────────────────────────────────────────
   // GET /admin/drivers/:id
   // ────────────────────────────────────────────────────────────────────────────
-  async getDriverById(driverId: string): Promise<DriverWithUser> {
+  async getDriverById(driverId: string): Promise<DriverWithUserAndVehicle> {
     const { data, error } = await supabaseAdmin
       .from('drivers')
-      .select(DRIVER_WITH_USER_SELECT)
+      .select(DRIVER_WITH_USER_AND_VEHICLE_SELECT)
       .eq('id', driverId)
       .single();
 
@@ -214,7 +257,15 @@ export class DriversService {
       throw { status: 404, message: 'Chauffeur non trouvé' };
     }
 
-    return data as unknown as DriverWithUser;
+    // Retourner le premier véhicule actif ou le dernier créé
+    const vehicleData = data as any;
+    const vehicles = vehicleData.vehicle || [];
+    const activeVehicle = vehicles.find((v: any) => v.is_active) || vehicles[0] || null;
+
+    return {
+      ...data,
+      vehicle: activeVehicle,
+    } as unknown as DriverWithUserAndVehicle;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -324,6 +375,9 @@ export class DriversService {
     driverId: string,
     period:   RevenuesPeriod,
     date?:    string,
+    status?:  string,
+    page:     number = 1,
+    limit:    number = 20,
   ): Promise<DriverRevenuesResult> {
     let dateFrom: string | null = null;
     let dateTo:   string | null = null;
@@ -334,18 +388,31 @@ export class DriversService {
       dateTo   = range.dateTo;
     }
 
-    // 1. Réservations terminées avec infos client
+    // 1. Réservations (filtrées par status) avec infos client
     let query = supabaseAdmin
       .from('reservations')
-      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)')
+      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)', { count: 'exact' })
       .eq('driver_id', driverId)
-      .eq('status', 'completed')
       .order('scheduled_at', { ascending: false });
+
+    // Filtre par statut
+    if (status === 'completed') {
+      query = query.eq('status', 'completed');
+    } else if (status === 'cancelled') {
+      query = query.eq('status', 'cancelled');
+    } else {
+      // Par défaut, afficher completed (revenus générés)
+      query = query.eq('status', 'completed');
+    }
 
     if (dateFrom) query = query.gte('scheduled_at', dateFrom);
     if (dateTo)   query = query.lte('scheduled_at', dateTo);
 
-    const { data, error } = await query;
+    // Pagination
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, error, count: totalCount } = await query;
 
     if (error) {
       console.error('[Drivers] _fetchRevenues error:', error);
@@ -360,6 +427,9 @@ export class DriversService {
         total_revenue: 0, currency: 'EUR',
         revenue_by_currency: { EUR: 0, XOF: 0 },
         trips: [],
+        page,
+        limit,
+        total_trips_unfiltered: totalCount ?? 0,
       };
     }
 
@@ -447,6 +517,9 @@ export class DriversService {
         XOF: Math.round(netXof),
       },
       trips,
+      page,
+      limit,
+      total_trips_unfiltered: totalCount ?? 0,
     };
   }
 
@@ -478,15 +551,15 @@ export class DriversService {
   // ────────────────────────────────────────────────────────────────────────────
   // GET /drivers/me/revenues — chauffeur voit ses propres revenus
   // ────────────────────────────────────────────────────────────────────────────
-  async getRevenues(userId: string, period: RevenuesPeriod, date?: string): Promise<DriverRevenuesResult> {
+  async getRevenues(userId: string, period: RevenuesPeriod, date?: string, status?: string, page?: number, limit?: number): Promise<DriverRevenuesResult> {
     const driverId = await this.resolveDriverId(userId);
-    return this._fetchRevenues(driverId, period, date);
+    return this._fetchRevenues(driverId, period, date, status, page, limit);
   }
 
   // ────────────────────────────────────────────────────────────────────────────
   // GET /admin/drivers/:id/revenues — admin voit les revenus d'un chauffeur
   // ────────────────────────────────────────────────────────────────────────────
-  async getRevenuesAdmin(driverId: string, period: RevenuesPeriod, date?: string): Promise<DriverRevenuesResult> {
+  async getRevenuesAdmin(driverId: string, period: RevenuesPeriod, date?: string, status?: string, page?: number, limit?: number): Promise<DriverRevenuesResult> {
     const { data: driver, error } = await supabaseAdmin
       .from('drivers')
       .select('id')
@@ -497,7 +570,220 @@ export class DriversService {
       throw { status: 404, message: 'Chauffeur non trouvé' };
     }
 
-    return this._fetchRevenues(driverId, period, date);
+    return this._fetchRevenues(driverId, period, date, status, page, limit);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STATISTIQUES MENSUELLES — Agrégation KPIs
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/monthly-stats — stats mensuelles d'un chauffeur
+  // ────────────────────────────────────────────────────────────────────────────
+  async getMonthlyStats(driverId: string, date?: string): Promise<DriverMonthlyStats> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) {
+      throw { status: 404, message: 'Chauffeur non trouvé' };
+    }
+
+    // Calculer la plage du mois
+    const ref = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
+    const monthStart = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), 1)).toISOString();
+    const monthEnd = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 0, 23, 59, 59, 999)).toISOString();
+    const monthYearMonth = `${ref.getUTCFullYear()}-${String(ref.getUTCMonth() + 1).padStart(2, '0')}`;
+
+    // 1. Récupérer les réservations du mois
+    const { data: reservations, error: resErr } = await supabaseAdmin
+      .from('reservations')
+      .select('id, status, scheduled_at, price_final')
+      .eq('driver_id', driverId)
+      .gte('scheduled_at', monthStart)
+      .lte('scheduled_at', monthEnd);
+
+    if (resErr) throw { status: 500, message: 'Erreur lors de la récupération des réservations' };
+
+    const allReservations = reservations ?? [];
+    const completedReservations = allReservations.filter(r => r.status === 'completed');
+    const cancelledReservations = allReservations.filter(r => r.status === 'cancelled');
+
+    const totalCourses = completedReservations.length;
+    const totalCancelled = cancelledReservations.length;
+
+    // 2. Calculer les revenus et distances pour les courses complétées
+    let totalGross = 0;
+    let totalCommission = 0;
+    let totalDistance = 0;
+    let totalDuration = 0;
+
+    for (const res of completedReservations) {
+      totalGross += res.price_final ?? 0;
+
+      // Récupérer commission
+      const { data: commData } = await supabaseAdmin
+        .from('commissions')
+        .select('amount')
+        .eq('reservation_id', res.id)
+        .limit(1);
+      if (commData?.length) {
+        totalCommission += commData[0].amount ?? 0;
+      }
+
+      // Récupérer trip details
+      const { data: tripData } = await supabaseAdmin
+        .from('trips')
+        .select('actual_distance_km, actual_duration_min')
+        .eq('reservation_id', res.id)
+        .limit(1);
+      if (tripData?.length) {
+        totalDistance += tripData[0].actual_distance_km ?? 0;
+        totalDuration += tripData[0].actual_duration_min ?? 0;
+      }
+    }
+
+    const totalNet = totalGross - totalCommission;
+
+    // 3. Calculer les notes moyennes
+    const { data: ratingsData } = await supabaseAdmin
+      .from('ratings')
+      .select('note')
+      .eq('driver_id', driverId)
+      .gte('created_at', monthStart)
+      .lte('created_at', monthEnd);
+
+    const averageRating = ratingsData && ratingsData.length > 0
+      ? ratingsData.reduce((sum, r) => sum + (r.note ?? 0), 0) / ratingsData.length
+      : null;
+
+    // 4. Calculer taux d'acceptation et d'annulation
+    const totalReservations = allReservations.length;
+    const acceptanceRate = totalReservations > 0 ? Math.round((totalCourses / totalReservations) * 100) : 0;
+    const cancellationRate = totalReservations > 0 ? Math.round((totalCancelled / totalReservations) * 100) : 0;
+
+    return {
+      date: monthYearMonth,
+      total_courses: totalCourses,
+      total_earning: Math.round(totalNet * 100) / 100,
+      total_commission: Math.round(totalCommission * 100) / 100,
+      total_distance_km: Math.round(totalDistance * 100) / 100,
+      total_duration_min: totalDuration,
+      average_rating: averageRating ? Math.round(averageRating * 10) / 10 : null,
+      acceptance_rate: acceptanceRate,
+      cancellation_rate: cancellationRate,
+    };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // HISTORIQUE DES COURSES — Détails agrégés
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // GET /admin/drivers/:id/trips-history — historique des courses avec détails
+  // ────────────────────────────────────────────────────────────────────────────
+  async getTripsHistory(driverId: string, status?: string, page: number = 1, limit: number = 20): Promise<DriverTripsHistoryResult> {
+    const { data: driver, error } = await supabaseAdmin
+      .from('drivers')
+      .select('id')
+      .eq('id', driverId)
+      .single();
+
+    if (error || !driver) {
+      throw { status: 404, message: 'Chauffeur non trouvé' };
+    }
+
+    const offset = (page - 1) * limit;
+
+    let query = supabaseAdmin
+      .from('reservations')
+      .select('id, status, scheduled_at, pickup_address, dest_address, price_final, client_id', { count: 'exact' })
+      .eq('driver_id', driverId)
+      .order('scheduled_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+
+    const { data: reservations, error: resErr, count } = await query;
+
+    if (resErr) {
+      throw { status: 500, message: 'Erreur lors de la récupération de l\'historique' };
+    }
+
+    const total = count ?? 0;
+
+    // Enrichir chaque réservation avec details
+    const trips = await Promise.all(
+      (reservations ?? []).map(async (res: any) => {
+        // Récupérer trip details (distance, durée, date fin)
+        const { data: tripData } = await supabaseAdmin
+          .from('trips')
+          .select('actual_distance_km, actual_duration_min, ended_at')
+          .eq('reservation_id', res.id)
+          .limit(1);
+
+        const trip = tripData?.[0];
+
+        // Récupérer commission
+        const { data: commData } = await supabaseAdmin
+          .from('commissions')
+          .select('amount')
+          .eq('reservation_id', res.id)
+          .limit(1);
+
+        const commissionAmount = commData?.[0]?.amount ?? 0;
+        const netAmount = (res.price_final ?? 0) - commissionAmount;
+
+        // Récupérer évaluation client
+        const { data: ratingData } = await supabaseAdmin
+          .from('ratings')
+          .select('note, comment')
+          .eq('reservation_id', res.id)
+          .limit(1);
+
+        const rating = ratingData?.[0];
+
+        // Récupérer infos client
+        const { data: clientData } = await supabaseAdmin
+          .from('users')
+          .select('first_name, last_name')
+          .eq('id', res.client_id)
+          .limit(1);
+
+        const client = clientData?.[0];
+
+        return {
+          reservation_id: res.id,
+          scheduled_at: res.scheduled_at,
+          completed_at: trip?.ended_at,
+          status: res.status,
+          pickup_address: res.pickup_address,
+          dest_address: res.dest_address,
+          distance_km: trip?.actual_distance_km ?? null,
+          duration_min: trip?.actual_duration_min ?? null,
+          price_final: res.price_final ?? 0,
+          commission_amount: commissionAmount,
+          net_amount: netAmount,
+          currency: 'EUR',
+          client_first_name: client?.first_name ?? null,
+          client_last_name: client?.last_name ?? null,
+          client_rating: rating?.note ?? null,
+          client_comment: rating?.comment ?? null,
+        };
+      })
+    );
+
+    return {
+      trips,
+      total,
+      page,
+      limit,
+      total_pages: Math.ceil(total / limit),
+    };
   }
 
   // ────────────────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import {
   rejectDocumentSchema,
   documentListFiltersSchema,
   documentIdParamSchema,
+  driverIdParamSchema,
 } from './driver-documents.validator.js';
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from './driver-documents.types.js';
 import { auditLog } from '../../utils/audit.service.js';
@@ -198,6 +199,40 @@ export async function listAllDocuments(req: Request, res: Response) {
     });
   } catch (err: any) {
     console.error('[DriverDocuments] List all error:', err);
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+/**
+ * GET /admin/documents/driver/:driverId
+ * Récupère tous les documents d'un chauffeur spécifique
+ */
+export async function getDriverDocuments(req: Request, res: Response) {
+  try {
+    const paramParsed = driverIdParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+    const { driverId } = paramParsed.data;
+
+    const result = await service.listAllDocuments({ driver_id: driverId });
+
+    return res.json({
+      ok: true,
+      data: result.documents,
+      meta: {
+        total: result.total,
+        labels: {
+          types: DOCUMENT_TYPE_LABELS,
+          statuses: DOCUMENT_STATUS_LABELS,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('[DriverDocuments] Get driver documents error:', err);
     return res.status(err.status || 500).json({
       ok: false,
       message: err.message || 'Erreur serveur',

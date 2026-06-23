@@ -56,9 +56,13 @@ export const documentListFiltersSchema = z.object({
     .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
-// ── Validation UUID param ────────────────────────────────────────────────────
+// ── Validation UUID params ────────────────────────────────────────────────────
 export const documentIdParamSchema = z.object({
   id: z.string().uuid('ID document invalide'),
+});
+
+export const driverIdParamSchema = z.object({
+  driverId: z.string().uuid('ID chauffeur invalide'),
 });
 
 // ── Types exportés ───────────────────────────────────────────────────────────

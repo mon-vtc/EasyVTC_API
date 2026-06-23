@@ -106,6 +106,19 @@ export const revenuesQuerySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format de date invalide (YYYY-MM-DD)')
     .optional(),
+  status: z.enum(['completed', 'cancelled'] as const, {
+    error: 'Statut invalide. Valeurs acceptées: completed, cancelled',
+  }).optional(),
+  page: z
+    .string()
+    .default('1')
+    .transform((v) => parseInt(v, 10))
+    .refine((v) => v >= 1, 'Page doit être >= 1'),
+  limit: z
+    .string()
+    .default('20')
+    .transform((v) => parseInt(v, 10))
+    .refine((v) => v >= 1 && v <= 100, 'Limit doit être entre 1 et 100'),
 });
 
 // ── Availability query ────────────────────────────────────────────────────────

@@ -84,6 +84,13 @@ adminDocumentsRoutes.get(
   (req, res) => controller.getDocumentStats(req, res)
 );
 
+// Documents d'un chauffeur spécifique — lecture : staff
+adminDocumentsRoutes.get(
+  '/driver/:driverId',
+  requireStaff,
+  (req, res) => controller.getDriverDocuments(req, res)
+);
+
 // Détail d'un document — lecture : admin + manager avec view_documents
 adminDocumentsRoutes.get(
   '/:id',

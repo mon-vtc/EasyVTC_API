@@ -133,7 +133,7 @@ export async function getMyPlanning(req: Request, res: Response) {
 }
 
 /**
- * GET /drivers/me/revenues?period=month&date=2026-04-09
+ * GET /drivers/me/revenues?period=month&date=2026-04-09&status=completed&page=1&limit=20
  * Retourne les revenus du chauffeur connecté pour la période demandée
  */
 export async function getMyRevenues(req: Request, res: Response) {
@@ -147,8 +147,8 @@ export async function getMyRevenues(req: Request, res: Response) {
       });
     }
 
-    const { period, date } = validation.data;
-    const revenues = await driversService.getRevenues(req.user!.id, period, date);
+    const { period, date, status, page = 1, limit = 20 } = validation.data;
+    const revenues = await driversService.getRevenues(req.user!.id, period, date, status, page, limit);
 
     return res.json({ ok: true, data: revenues });
   } catch (err: any) {
@@ -196,7 +196,7 @@ export async function getDriverPlanningAdmin(req: Request, res: Response) {
 }
 
 /**
- * GET /admin/drivers/:id/revenues?period=month&date=2026-06-01
+ * GET /admin/drivers/:id/revenues?period=month&date=2026-06-01&status=completed&page=1&limit=20
  * Retourne les revenus d'un chauffeur spécifique (admin/manager)
  */
 export async function getDriverRevenuesAdmin(req: Request, res: Response) {
@@ -215,8 +215,8 @@ export async function getDriverRevenuesAdmin(req: Request, res: Response) {
       });
     }
 
-    const { period, date } = queryValidation.data;
-    const revenues = await driversService.getRevenuesAdmin(paramValidation.data.id, period, date);
+    const { period, date, status, page = 1, limit = 20 } = queryValidation.data;
+    const revenues = await driversService.getRevenuesAdmin(paramValidation.data.id, period, date, status, page, limit);
 
     return res.json({ ok: true, data: revenues });
   } catch (err: any) {
@@ -228,8 +228,68 @@ export async function getDriverRevenuesAdmin(req: Request, res: Response) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ENDPOINTS DISPONIBILITÉ — Chauffeur
+// ENDPOINTS STATISTIQUES MENSUELLES
 // ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /admin/drivers/:id/monthly-stats?date=2026-01
+ * Retourne les statistiques mensuelles d'un chauffeur (admin/manager)
+ */
+export async function getDriverMonthlyStats(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const { date } = req.query;
+
+    const stats = await driversService.getMonthlyStats(
+      paramValidation.data.id,
+      date as string | undefined
+    );
+
+    return res.json({ ok: true, data: stats });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENDPOINTS HISTORIQUE DES COURSES
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /admin/drivers/:id/trips-history?status=completed&page=1&limit=20
+ * Retourne l'historique des courses d'un chauffeur (admin/manager)
+ */
+export async function getDriverTripsHistory(req: Request, res: Response) {
+  try {
+    const paramValidation = driverIdParamSchema.safeParse(req.params);
+    if (!paramValidation.success) {
+      return res.status(400).json({ ok: false, message: 'ID chauffeur invalide' });
+    }
+
+    const { status, page = '1', limit = '20' } = req.query;
+
+    const history = await driversService.getTripsHistory(
+      paramValidation.data.id,
+      status as string | undefined,
+      parseInt(page as string, 10),
+      parseInt(limit as string, 10)
+    );
+
+    return res.json({ ok: true, data: history });
+  } catch (err: any) {
+    return res.status(err.status || 500).json({
+      ok: false,
+      message: err.message || 'Erreur serveur',
+    });
+  }
+}
 
 /**
  * GET /drivers/me/availability?period=week&date=YYYY-MM-DD
