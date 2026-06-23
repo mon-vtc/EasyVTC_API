@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml
 # Repo : EazyVTC_API — Node.js + Express
-name: CI — EasyVTC API (Node.js + Express)
+name: CI/CD — EazyVTC API
 
 on:
   push:
@@ -9,53 +9,70 @@ on:
     branches: ['**']
 
 jobs:
+  # ── Job 1 : Lint + Tests + Coverage ─────────────────────────────────────────
   test-api:
-    name:  API Express — Lint + Tests + Coverage
+    name: API — Lint + Tests + Coverage
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: easyvtc_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
-      - name:  Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name:  Setup Node 20
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name:  Install dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name:  Lint
+      - name: Lint
         run: npm run lint
 
-      - name:  Unit tests
+      - name: Unit tests
         run: npm test
         env:
           NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/easyvtc_test
-          JWT_SECRET: ci-test-secret-key
+          APP_URL: http://localhost:4000
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAILTRAP_HOST: sandbox.smtp.mailtrap.io
+          MAILTRAP_PORT: '2525'
+          MAILTRAP_USER: ${{ secrets.MAILTRAP_USER }}
+          MAILTRAP_PASS: ${{ secrets.MAILTRAP_PASS }}
+          MAIL_FROM: noreply@eazyvtc.com
+          CRON_SECRET: ci-cron-secret-placeholder-for-tests-only
 
       - name: Coverage
         run: npm run test:coverage
         env:
           NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/easyvtc_test
-          JWT_SECRET: ci-test-secret-key
+          APP_URL: http://localhost:4000
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAILTRAP_HOST: sandbox.smtp.mailtrap.io
+          MAILTRAP_PORT: '2525'
+          MAILTRAP_USER: ${{ secrets.MAILTRAP_USER }}
+          MAILTRAP_PASS: ${{ secrets.MAILTRAP_PASS }}
+          MAIL_FROM: noreply@eazyvtc.com
+          CRON_SECRET: ci-cron-secret-placeholder-for-tests-only
+
+  # ── Job 2 : Deploy to Railway (main branch uniquement) ──────────────────────
+  deploy:
+    name: Deploy to Railway (Production)
+    needs: test-api
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway deploy --service eazyvtc-api --detach
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

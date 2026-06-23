@@ -8,6 +8,7 @@ import { globalLimiter } from './config/rate-limit.js';
 import { env } from './config/env.js';
 import { supabaseAdmin } from './database/supabase/client.js';
 import { swaggerSpec } from './docs/swagger.js';
+import { logger } from './utils/logger.js';
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 import authRoutes          from './modules/auth/auth.routes.js';
@@ -51,6 +52,9 @@ import {
 } from './modules/marketing/marketing.routes.js';
 
 const app = express();
+
+// Nécessaire derrière Railway/proxy : permet de lire X-Forwarded-For pour rate limiting et logs
+app.set('trust proxy', 1);
 
 // ── Middlewares globaux ──────────────────────────────────────────────────────
 app.use(helmet());
@@ -196,7 +200,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 
   // Erreur interne — ne pas exposer le détail en production
   const message = !isProd && err instanceof Error ? err.message : 'Erreur interne du serveur';
-  if (!isProd) console.error('[Unhandled error]', err);
+  logger.error('app', 'Erreur non gérée', err);
   res.status(500).json({ ok: false, message });
 });
 

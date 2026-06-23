@@ -8,11 +8,8 @@ uploads/
 
 # Firebase service account key (contient la clé privée — ne jamais committer)
 *-firebase-adminsdk-*.json
+firebase-adminsdk.json
 
 Claude.md
 EazyVTC_API.postman_collection.json
 EazyVTC_Local.postman_environment_corrigé.json
-
-# Firebase Admin SDK — NE JAMAIS COMMITER
-*-firebase-adminsdk-*.json
-firebase-adminsdk.json

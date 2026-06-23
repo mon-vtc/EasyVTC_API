@@ -2,6 +2,7 @@ import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config/env.js';
+import { logger } from '../../utils/logger.js';
 import type { Vehicle } from '../vehicles/vehicles.types.js'
 import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
 import type { ManagerPermission } from '../admin/admin.types.js';
@@ -187,7 +188,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
         token_type: 'Bearer',
       };
     } catch (err) {
-      console.error('[Login] Erreur fetchFullProfile:', err); // ← log complet
+      logger.error('auth', 'Erreur fetchFullProfile après login', err);
       throw err;
     }
 
@@ -197,7 +198,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   // ── LOGOUT ────────────────────────────────────────────────────────────────
   async logout(accessToken: string): Promise<void> {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken);
-    if (error) console.warn('[Auth] Logout warning:', error.message);
+    if (error) logger.warn('auth', `Logout warning: ${error.message}`);
   }
 
   // ── REFRESH TOKEN ─────────────────────────────────────────────────────────
