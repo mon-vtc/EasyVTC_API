@@ -105,6 +105,20 @@ adminDriversRoutes.get(
   (req, res) => controller.getDriverRevenuesAdmin(req, res)
 );
 
+// Statistiques mensuelles d'un chauffeur — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/monthly-stats',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverMonthlyStats(req, res)
+);
+
+// Historique des courses d'un chauffeur — lecture : admin + manager avec view_drivers
+adminDriversRoutes.get(
+  '/:id/trips-history',
+  requireStaff, requirePermission('view_drivers'),
+  (req, res) => controller.getDriverTripsHistory(req, res)
+);
+
 // Détail par ID — lecture : admin + manager avec view_drivers
 adminDriversRoutes.get(
   '/:id',
