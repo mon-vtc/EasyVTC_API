@@ -4,13 +4,13 @@
 //
 // Architecture push :
 //   - Stockage systématique en BDD (table notifications)
-//   - Envoi push via Firebase Admin SDK / FCM v1 (nécessite FIREBASE_PROJECT_ID,
-//     FIREBASE_PRIVATE_KEY, FIREBASE_CLIENT_EMAIL dans .env)
+//   - Envoi push via Expo Push Notifications API (https://exp.host/--/api/v2/push/send)
+//     Compatible Android et iOS sans configuration Firebase/APNs côté serveur.
+//     Le mobile enregistre un ExponentPushToken via expo-notifications.
 //   - Les notifications sont fire-and-forget : elles ne bloquent jamais
 //     le flux principal (réservation, assignation…)
 // ══════════════════════════════════════════════════════════════════════════════
 
-import admin from 'firebase-admin';
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { env } from '../../config/env.js';
 import { sendNotificationEmail } from '../../utils/email.service.js';
@@ -20,26 +20,6 @@ import type {
   CreateNotificationDto,
   NotificationListFilters,
 } from './notifications.types.js';
-
-// ── Firebase Admin SDK — initialisation lazy (singleton) ─────────────────────
-let _firebaseApp: admin.app.App | null = null;
-let _firebaseWarningLogged = false;
-
-function getFirebaseApp(): admin.app.App | null {
-  if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
-    return null;
-  }
-  if (!_firebaseApp) {
-    _firebaseApp = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId:   env.FIREBASE_PROJECT_ID,
-        privateKey:  env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        clientEmail: env.FIREBASE_CLIENT_EMAIL,
-      }),
-    });
-  }
-  return _firebaseApp;
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE
@@ -534,7 +514,9 @@ export class NotificationsService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
-  // PRIVÉ — Dispatch push via Firebase Admin SDK (FCM v1)
+  // PRIVÉ — Dispatch push via Expo Push Notifications API
+  // Fonctionne sur Android et iOS sans configuration Firebase/APNs côté serveur.
+  // Attend un ExponentPushToken enregistré par expo-notifications côté mobile.
   // ──────────────────────────────────────────────────────────────────────────
 
   private async _dispatchPush(
@@ -544,20 +526,6 @@ export class NotificationsService {
     body:    string,
     data?:   Record<string, string>,
   ): Promise<void> {
-    // Vérification Firebase avant toute requête BDD (early exit si non configuré)
-    const firebaseApp = getFirebaseApp();
-    if (!firebaseApp) {
-      if (!_firebaseWarningLogged) {
-        console.warn('[Notifications] Firebase non configuré — notifications push désactivées (FIREBASE_PROJECT_ID / FIREBASE_PRIVATE_KEY / FIREBASE_CLIENT_EMAIL manquants dans .env)');
-        _firebaseWarningLogged = true;
-      }
-      await supabaseAdmin
-        .from('notifications')
-        .update({ status: 'failed', error_log: 'Firebase Admin SDK non configuré' })
-        .eq('id', notifId);
-      return;
-    }
-
     const { data: user } = await supabaseAdmin
       .from('users')
       .select('device_token')
@@ -572,23 +540,60 @@ export class NotificationsService {
       return;
     }
 
+    const token = user.device_token as string;
+
+    if (!token.startsWith('ExponentPushToken[') && !token.startsWith('ExpoPushToken[')) {
+      await supabaseAdmin
+        .from('notifications')
+        .update({ status: 'failed', error_log: `Token non-Expo détecté — reconnexion requise : ${token.substring(0, 30)}` })
+        .eq('id', notifId);
+      return;
+    }
+
     try {
-      await admin.messaging(firebaseApp).send({
-        token: user.device_token as string,
-        notification: { title, body },
-        data: data ?? {},
-        android: { priority: 'high' },
-        apns: {
-          payload: { aps: { sound: 'default', badge: 1, contentAvailable: true } },
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type':   'application/json',
+          'Accept':         'application/json',
+          'Accept-Encoding': 'gzip, deflate',
         },
+        body: JSON.stringify({
+          to:       token,
+          title,
+          body,
+          data:     data ?? {},
+          sound:    'default',
+          badge:    1,
+          priority: 'high',
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Expo Push API HTTP ${response.status}`);
+      }
+
+      const result = await response.json() as {
+        data: { status: 'ok' | 'error'; id?: string; message?: string; details?: { error?: string } };
+      };
+
+      const ticket = result.data;
+
+      if (ticket.status === 'error') {
+        const errMsg = ticket.message ?? ticket.details?.error ?? 'Erreur Expo Push inconnue';
+        await supabaseAdmin
+          .from('notifications')
+          .update({ status: 'failed', error_log: errMsg.substring(0, 500) })
+          .eq('id', notifId);
+        return;
+      }
 
       await supabaseAdmin
         .from('notifications')
         .update({ status: 'sent', sent_at: new Date().toISOString() })
         .eq('id', notifId);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Erreur Firebase inconnue';
+      const msg = err instanceof Error ? err.message : 'Erreur réseau Expo Push inconnue';
       await supabaseAdmin
         .from('notifications')
         .update({ status: 'failed', error_log: msg.substring(0, 500) })
