@@ -3,16 +3,20 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import rateLimit from 'express-rate-limit';
+import { env } from './env.js';
 
 // Réponse JSON uniforme (cohérente avec le format { ok, message } de l'API)
 const json = (msg: string) => ({ ok: false, message: msg });
 
+const isDev = env.NODE_ENV === 'development' || env.NODE_ENV === 'test';
+
 // ── Palier 1 — Limiteur global (toutes routes) ────────────────────────────────
 // Protection large-spectre contre les bots et le scraping.
 // 200 req / 15 min est généreux pour un usage normal.
+// En développement : limite élevée pour ne pas bloquer les tests k6 et Postman.
 export const globalLimiter = rateLimit({
-  windowMs:        15 * 60 * 1000,   // 15 minutes
-  limit:           200,
+  windowMs:        15 * 60 * 1000,
+  limit:           isDev ? 5000 : 200,
   standardHeaders: 'draft-7',
   legacyHeaders:   false,
   message:         json('Trop de requêtes. Réessayez dans quelques minutes.'),

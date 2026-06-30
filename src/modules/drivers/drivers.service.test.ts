@@ -91,7 +91,7 @@ describe('DriversService', () => {
 
   beforeEach(() => {
     service = new DriversService();
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -183,7 +183,10 @@ describe('DriversService', () => {
           data: [mockDriverWithUser], error: null, count: 1,
         } as never),
       };
-      mockFrom.mockReturnValueOnce(listChain);
+      mockFrom
+        .mockReturnValueOnce(listChain)
+        .mockReturnValueOnce(chain(null, null, 0))  // trips count enrichment
+        .mockReturnValueOnce(chain([]));            // ratings enrichment
 
       const result = await service.listDrivers({ page: 1, limit: 20 });
       expect(result.drivers).toHaveLength(1);
@@ -383,6 +386,7 @@ describe('DriversService', () => {
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockReturnThis(),
+        range:   jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -410,6 +414,7 @@ describe('DriversService', () => {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
         order:   jest.fn().mockReturnThis(),
+        range:   jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -434,6 +439,7 @@ describe('DriversService', () => {
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockReturnThis(),
+        range:   jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolvedEmpty).then(resolve, reject),
       };
@@ -465,6 +471,7 @@ describe('DriversService', () => {
         gte:    jest.fn().mockReturnThis(),
         lte:    jest.fn().mockReturnThis(),
         order:  jest.fn().mockReturnThis(),
+        range:  jest.fn().mockReturnThis(),
         then:   (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -594,6 +601,7 @@ describe('DriversService', () => {
         gte:     jest.fn().mockReturnThis(),
         lte:     jest.fn().mockReturnThis(),
         order:   jest.fn().mockReturnThis(),
+        range:   jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -627,6 +635,7 @@ describe('DriversService', () => {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
         order:  jest.fn().mockReturnThis(),
+        range:  jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -656,6 +665,7 @@ describe('DriversService', () => {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
         order:  jest.fn().mockReturnThis(),
+        range:  jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };
@@ -1158,6 +1168,7 @@ describe('DriversService', () => {
         select: jest.fn().mockReturnThis(),
         eq:     jest.fn().mockReturnThis(),
         order:  jest.fn().mockReturnThis(),
+        range:  jest.fn().mockReturnThis(),
         then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
           Promise.resolve(resolved).then(resolve, reject),
       };

@@ -30,20 +30,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
-        env:
-          NODE_ENV: test
-          APP_URL: http://localhost:4000
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          MAILTRAP_HOST: sandbox.smtp.mailtrap.io
-          MAILTRAP_PORT: '2525'
-          MAILTRAP_USER: ${{ secrets.MAILTRAP_USER }}
-          MAILTRAP_PASS: ${{ secrets.MAILTRAP_PASS }}
-          MAIL_FROM: noreply@eazyvtc.com
-          CRON_SECRET: ci-cron-secret-placeholder-for-tests-only
-
       - name: Coverage
         run: npm run test:coverage
         env:

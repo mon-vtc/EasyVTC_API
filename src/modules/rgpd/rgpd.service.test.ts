@@ -9,6 +9,7 @@ const mockUpdateUserById = jest.fn();
 const mockAuthSignOut    = jest.fn();
 const mockStorageRemove  = jest.fn();
 const mockStorageFrom    = jest.fn();
+const mockAuthLogin      = jest.fn();
 
 jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   supabaseAdmin: {
@@ -16,6 +17,10 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
     auth:    { admin: { updateUserById: mockUpdateUserById, signOut: mockAuthSignOut } },
     storage: { from: mockStorageFrom },
   },
+}));
+
+jest.unstable_mockModule('../auth/auth.service.js', () => ({
+  authService: { login: mockAuthLogin },
 }));
 
 const { RgpdService } = await import('./rgpd.service.js');
@@ -98,6 +103,7 @@ describe('RgpdService', () => {
     mockAuthSignOut.mockResolvedValue({ error: null } as never);
     mockStorageRemove.mockResolvedValue({ error: null } as never);
     mockStorageFrom.mockReturnValue({ remove: mockStorageRemove });
+    mockAuthLogin.mockResolvedValue({ user: { id: USER_ID } } as never);
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -221,7 +227,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(mockUserForAnonymize)) // select user
         .mockReturnValueOnce(chain(null));                // update → OK
 
-      const result = await service.anonymize(USER_ID, USER_ID, 'client');
+      const result = await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
       expect(result.user_id).toBe(USER_ID);
       expect(result.anonymized_at).toBeDefined();
@@ -233,7 +239,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(mockUserForAnonymize))
         .mockReturnValueOnce(chain(null));
 
-      await service.anonymize(USER_ID, USER_ID, 'client');
+      await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
       expect(mockUpdateUserById).toHaveBeenCalledWith(
         USER_ID,
@@ -246,7 +252,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(mockUserForAnonymize))
         .mockReturnValueOnce(chain(null));
 
-      await service.anonymize(USER_ID, USER_ID, 'client');
+      await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
       expect(mockAuthSignOut).toHaveBeenCalledWith(USER_ID, 'global');
     });
@@ -256,7 +262,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(mockUserForAnonymize))
         .mockReturnValueOnce(chain(null));
 
-      await service.anonymize(USER_ID, USER_ID, 'client');
+      await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
       expect(mockStorageFrom).toHaveBeenCalledWith('profile-photos');
       expect(mockStorageRemove).toHaveBeenCalled();
@@ -267,7 +273,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain({ ...mockUserForAnonymize, profile_photo_url: null }))
         .mockReturnValueOnce(chain(null));
 
-      await service.anonymize(USER_ID, USER_ID, 'client');
+      await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
       expect(mockStorageFrom).not.toHaveBeenCalled();
     });
@@ -276,7 +282,7 @@ describe('RgpdService', () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'not found' }));
 
       await expect(
-        service.anonymize(USER_ID, USER_ID, 'client'),
+        service.anonymize(USER_ID, USER_ID, 'client', 'password123'),
       ).rejects.toMatchObject({ status: 404 });
     });
 
@@ -286,7 +292,7 @@ describe('RgpdService', () => {
       );
 
       await expect(
-        service.anonymize(USER_ID, USER_ID, 'client'),
+        service.anonymize(USER_ID, USER_ID, 'client', 'password123'),
       ).rejects.toMatchObject({ status: 422 });
     });
 
@@ -296,7 +302,7 @@ describe('RgpdService', () => {
       );
 
       await expect(
-        service.anonymize(USER_ID, ADMIN_ID, 'admin'),
+        service.anonymize(USER_ID, ADMIN_ID, 'admin', 'password123'),
       ).rejects.toMatchObject({ status: 403 });
     });
 
@@ -306,13 +312,13 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(null, { message: 'DB error' }));
 
       await expect(
-        service.anonymize(USER_ID, USER_ID, 'client'),
+        service.anonymize(USER_ID, USER_ID, 'client', 'password123'),
       ).rejects.toMatchObject({ status: 500 });
     });
 
     it('lève 403 si un utilisateur tente d\'anonymiser le compte d\'un autre', async () => {
       await expect(
-        service.anonymize(USER_ID, OTHER_ID, 'client'),
+        service.anonymize(USER_ID, OTHER_ID, 'client', 'password123'),
       ).rejects.toMatchObject({ status: 403 });
     });
 
@@ -321,7 +327,7 @@ describe('RgpdService', () => {
         .mockReturnValueOnce(chain(mockUserForAnonymize))
         .mockReturnValueOnce(chain(null));
 
-      const result = await service.anonymize(USER_ID, ADMIN_ID, 'admin');
+      const result = await service.anonymize(USER_ID, ADMIN_ID, 'admin', 'password123');
 
       expect(result.user_id).toBe(USER_ID);
     });
@@ -335,7 +341,7 @@ describe('RgpdService', () => {
       mockUpdateUserById.mockRejectedValue(new Error('Auth unreachable') as never);
       mockAuthSignOut.mockRejectedValue(new Error('Auth unreachable') as never);
 
-      const result = await service.anonymize(USER_ID, USER_ID, 'client');
+      const result = await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
       // Laisser les promesses fire-and-forget se terminer avant d'asserter
       await new Promise((r) => setTimeout(r, 0));
 
@@ -356,7 +362,7 @@ describe('RgpdService', () => {
 
     it('un manager ne peut pas accéder aux données d\'un autre utilisateur', async () => {
       await expect(
-        service.anonymize(USER_ID, OTHER_ID, 'manager'),
+        service.anonymize(USER_ID, OTHER_ID, 'manager', 'password123'),
       ).rejects.toMatchObject({ status: 403 });
     });
   });

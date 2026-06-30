@@ -14,4 +14,5 @@ export default {
     ],
   },
   testMatch: ['**/*.test.ts'],
+  setupFiles: ['./src/tests/setup.ts'],
 };
