@@ -33,7 +33,10 @@ const mailtrapTransporter = nodemailer.createTransport({
 // ── sendMail : dual-path SendGrid (prod) / Mailtrap (dev) ─────────────────────
 async function sendMail(to: string, subject: string, html: string): Promise<void> {
   if (env.SENDGRID_API_KEY) {
-    await sgMail.send({ to, from: env.MAIL_FROM, subject, html });
+    const from = env.SENDGRID_FROM_EMAIL
+      ? { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME ?? 'EazyVTC' }
+      : env.MAIL_FROM;
+    await sgMail.send({ to, from, subject, html });
   } else {
     await mailtrapTransporter.sendMail({
       from: `"EasyVTC" <${env.MAIL_FROM}>`,

@@ -22,7 +22,9 @@ const envSchema = z
     FIREBASE_CLIENT_EMAIL: z.string().optional(),
 
     // ── SendGrid (production) ────────────────────────────────────────────────
-    SENDGRID_API_KEY: z.string().optional(),
+    SENDGRID_API_KEY:    z.string().optional(),
+    SENDGRID_FROM_EMAIL: z.string().email().optional(),
+    SENDGRID_FROM_NAME:  z.string().optional(),
 
     // ── Mailtrap ────────────────────────────────────────────────────────────
     MAILTRAP_HOST: z.string().default('sandbox.smtp.mailtrap.io'),
