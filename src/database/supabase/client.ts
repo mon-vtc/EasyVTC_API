@@ -9,4 +9,11 @@ export const supabaseAdmin = createClient(env.SUPABASE_URL, supabaseServerKey, {
     autoRefreshToken: false,
     persistSession: false,
   },
+  // Force le header Authorization avec la service_role key
+ 
+  global: {
+    headers: {
+      Authorization: `Bearer ${supabaseServerKey}`,
+    },
+  },
 });

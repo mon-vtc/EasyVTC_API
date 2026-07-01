@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { supabaseAdmin } from '../database/supabase/client.js';
 import type { AuthUser, UserRole } from '../modules/auth/auth.types.js';
+import type { ManagerPermission } from '../modules/admin/admin.types.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH MIDDLEWARE — Vérifie le JWT Supabase et injecte req.user
@@ -40,7 +41,7 @@ export async function authMiddleware(
   // Récupérer le profil depuis public.users
   const { data: profile, error: profileError } = await supabaseAdmin
     .from('users')
-    .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+    .select('id, email, role, first_name, last_name, phone, status, deleted_at, created_at')
     .eq('id', user.id)
     .single();
 
@@ -49,13 +50,22 @@ export async function authMiddleware(
     return;
   }
 
-  // Vérifier soft delete (deleted_at remplace is_active)
-  if (profile.deleted_at !== null) {
-    res.status(403).json({ ok: false, message: 'Compte désactivé' });
+  // Vérifier soft delete et statut actif
+  if (profile.deleted_at !== null || profile.status !== 'active') {
+    res.status(403).json({ ok: false, message: 'Compte désactivé. Contactez le support.' });
     return;
   }
 
-  req.user = profile as AuthUser;
+  let permissions: ManagerPermission[] = [];
+  if (profile.role === 'manager') {
+    const { data: permsData } = await supabaseAdmin
+      .from('manager_permissions')
+      .select('permission')
+      .eq('manager_id', profile.id);
+    permissions = (permsData ?? []).map(r => r.permission as ManagerPermission);
+  }
+
+  req.user = { ...profile, permissions } as AuthUser;
   next();
 }
 

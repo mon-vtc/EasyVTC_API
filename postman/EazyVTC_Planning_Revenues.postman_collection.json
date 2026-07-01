@@ -1,0 +1,905 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-planning-revenues-sprint6",
+    "name": "EazyVTC API — Planning & Revenus (Sprint 6)",
+    "description": "# EazyVTC — Module Planning & Revenus Chauffeur\n\n## Endpoints couverts\n\n### Chauffeur (self)\n- `GET /drivers/me/planning`             → Son planning hebdo ou mensuel\n- `GET /drivers/me/revenues`             → Ses revenus (semaine / mois / tout)\n\n### Admin / Manager\n- `GET /admin/drivers/:id/planning`      → Planning d'un chauffeur spécifique\n- `GET /admin/drivers/:id/revenues`      → Revenus d'un chauffeur spécifique\n\n## Paramètres communs\n| Query param | Valeurs           | Défaut  |\n|-------------|-------------------|---------|\n| `period`    | `week` \\| `month` \\| `all` (revenus seulement) | `week` (planning) / `month` (revenus) |\n| `date`      | `YYYY-MM-DD`      | Aujourd'hui |\n\n## Structure de la réponse — Planning\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"week\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-07T23:59:59.999Z\",\n    \"total\": 3,\n    \"reservations\": [\n      {\n        \"id\": \"uuid\",\n        \"status\": \"assigned\",\n        \"scheduled_at\": \"2026-06-02T09:00:00Z\",\n        \"pickup_address\": \"12 rue de Rivoli\",\n        \"dest_address\": \"Aéroport CDG T2\",\n        \"vehicle_type\": \"berline\",\n        \"price_estimated\": 78,\n        \"price_final\": null,\n        \"country\": \"france\",\n        \"client\": { \"first_name\": \"Marie\", \"last_name\": \"Martin\", \"phone\": \"+33600000002\" },\n        \"trip\": null\n      }\n    ]\n  }\n}\n```\n\n## Structure de la réponse — Revenus\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"month\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-30T23:59:59.999Z\",\n    \"total_trips\": 12,\n    \"total_revenue\": 624.50,\n    \"currency\": \"EUR\",\n    \"revenue_by_currency\": { \"EUR\": 624.50, \"XOF\": 0 },\n    \"trips\": [\n      {\n        \"reservation_id\": \"uuid\",\n        \"scheduled_at\": \"2026-06-15T10:00:00Z\",\n        \"pickup_address\": \"Gare de Lyon\",\n        \"dest_address\": \"Orly T4\",\n        \"price_final\": 62,\n        \"currency\": \"EUR\"\n      }\n    ]\n  }\n}\n```\n\n## Prérequis\n1. Lancer l'API : `npm run dev` (port 4000)\n2. Avoir en base : un compte driver avec profil `drivers` validé (status = active)\n3. Avoir des réservations assignées/terminées liées à ce driver\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Tokens\n2. 🔍 Setup — IDs\n3. 📅 Chauffeur — Planning\n4. 💰 Chauffeur — Revenus\n5. 👨‍💼 Admin — Planning par driver ID\n6. 👨‍💼 Admin — Revenus par driver ID\n7. 🔒 Contrôle d'accès\n\n## Variables sauvegardées automatiquement\n- `driver_token`, `admin_token`\n- `driver_id` (drivers.id — PK de la table drivers, pas le user_id)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",     "value": "http://localhost:4000", "type": "string" },
+    { "key": "driver_token", "value": "", "type": "string" },
+    { "key": "admin_token",  "value": "", "type": "string" },
+    { "key": "driver_id",    "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "description": "Connexion Driver et Admin. Les tokens sont sauvegardés en variables de collection.",
+      "item": [
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('driver_token', data.access_token);",
+            "  console.log('driver_token OK — user_id:', data.user?.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('admin_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('admin_token', data.access_token);",
+            "  console.log('admin_token OK');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔍 Setup — IDs (driver_id)",
+      "description": "Récupère le driver_id (PK de la table drivers) nécessaire pour les routes admin.\n⚠️ Ne pas confondre avec user_id — c'est bien l'ID de la table `drivers`.",
+      "item": [
+        {
+          "name": "GET /admin/drivers — récupérer driver_id",
+          "description": "Sauvegarde l'id du premier chauffeur retourné (drivers.id, pas user_id).\nSi votre driver de test n'est pas en tête de liste, entrez driver_id manuellement dans les variables de collection.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers?status=active&limit=10",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers"],
+              "query": [
+                { "key": "status", "value": "active" },
+                { "key": "limit",  "value": "10" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_id sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  const list = data.drivers ?? data.data ?? (Array.isArray(data) ? data : []);",
+            "  if (Array.isArray(list) && list.length > 0) {",
+            "    const d = list[0];",
+            "    pm.collectionVariables.set('driver_id', d.id);",
+            "    console.log('driver_id (drivers.id):', d.id, '|', d.user?.first_name, d.user?.last_name);",
+            "  } else {",
+            "    console.warn('⚠️ Aucun chauffeur actif — saisir driver_id manuellement dans les variables de collection');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "GET /drivers/me — vérifier profil chauffeur connecté",
+          "description": "Vérifie que le driver_token correspond bien à un chauffeur avec un profil drivers existant.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/me", "host": ["{{base_url}}"], "path": ["drivers", "me"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Profil chauffeur valide', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.id).to.be.a('string');",
+            "  pm.expect(data.user).to.be.an('object');",
+            "  if (!pm.collectionVariables.get('driver_id')) {",
+            "    pm.collectionVariables.set('driver_id', data.id);",
+            "  }",
+            "  console.log('Driver:', data.user?.first_name, data.user?.last_name, '| status:', data.status, '| zone:', data.zone);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "📅 Chauffeur — Planning (self)",
+      "description": "GET /drivers/me/planning\nLe chauffeur consulte son propre planning. Les courses annulées sont exclues.",
+      "item": [
+        {
+          "name": "[Driver] GET planning — semaine courante (défaut)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure planning correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  pm.expect(data.date_from).to.be.a('string');",
+            "  pm.expect(data.date_to).to.be.a('string');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.reservations).to.be.an('array');",
+            "  pm.expect(data.reservations.length).to.equal(data.total);",
+            "  console.log('Semaine:', data.date_from?.slice(0,10), '→', data.date_to?.slice(0,10), '| courses:', data.total);",
+            "});",
+            "pm.test('Aucune réservation annulée', () => {",
+            "  const { data } = pm.response.json();",
+            "  const hasCancelled = data.reservations.some(r => r.status === 'cancelled');",
+            "  pm.expect(hasCancelled).to.be.false;",
+            "});",
+            "pm.test('Chaque réservation a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.reservations.length > 0) {",
+            "    const r = data.reservations[0];",
+            "    ['id','status','scheduled_at','pickup_address','dest_address','vehicle_type',",
+            "     'price_estimated','price_final','country','client','trip'].forEach(k => {",
+            "      pm.expect(r, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    if (r.client) {",
+            "      pm.expect(r.client).to.have.property('first_name');",
+            "      pm.expect(r.client).to.have.property('last_name');",
+            "    }",
+            "  }",
+            "});",
+            "pm.test('Réservations triées par scheduled_at ASC', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.reservations.length >= 2) {",
+            "    const t1 = new Date(data.reservations[0].scheduled_at).getTime();",
+            "    const t2 = new Date(data.reservations[1].scheduled_at).getTime();",
+            "    pm.expect(t1).to.be.at.most(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET planning — semaine spécifique (2026-06-09)",
+          "description": "Le 9 juin 2026 est un mardi → semaine du lundi 8 juin au dimanche 14 juin.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=week&date=2026-06-09",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "2026-06-09" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Semaine lundi→dimanche correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  // Lundi 8 juin 2026",
+            "  pm.expect(data.date_from).to.include('2026-06-08');",
+            "  // Dimanche 14 juin 2026",
+            "  pm.expect(data.date_to).to.include('2026-06-14');",
+            "  console.log('Semaine:', data.date_from?.slice(0,10), '→', data.date_to?.slice(0,10));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET planning — mois courant",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=month",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"],
+              "query": [{ "key": "period", "value": "month" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Période mensuelle', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('month');",
+            "  const from = new Date(data.date_from);",
+            "  pm.expect(from.getUTCDate()).to.equal(1, 'date_from doit être le 1er du mois');",
+            "  console.log('Mois:', data.date_from?.slice(0,7), '| courses:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET planning — mois spécifique (2026-05-01)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=month&date=2026-05-01",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date",   "value": "2026-05-01" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Mois de mai 2026', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.date_from).to.include('2026-05-01');",
+            "  pm.expect(data.date_to).to.include('2026-05-31');",
+            "  console.log('Mai 2026 | courses:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] period invalide",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=day",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"],
+              "query": [{ "key": "period", "value": "day" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — period invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "pm.test('Erreur sur le champ period', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.errors?.period ?? body.message).to.exist;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] date format invalide",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/planning?period=week&date=09-06-2026",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "09-06-2026" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — format date invalide (doit être YYYY-MM-DD)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "💰 Chauffeur — Revenus (self)",
+      "description": "GET /drivers/me/revenues\nLe chauffeur consulte ses revenus sur les courses terminées (status = completed).\nprice_adjusted écrase price_final si un ajustement admin existe.\nLes montants XOF (Sénégal) et EUR (France) sont agrégés séparément dans revenue_by_currency.",
+      "item": [
+        {
+          "name": "[Driver] GET revenus — mois courant (défaut)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure revenus correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('month');",
+            "  pm.expect(data.total_trips).to.be.a('number');",
+            "  pm.expect(data.total_revenue).to.be.a('number');",
+            "  pm.expect(data.currency).to.be.oneOf(['EUR', 'XOF']);",
+            "  pm.expect(data.revenue_by_currency).to.be.an('object');",
+            "  pm.expect(data.revenue_by_currency.EUR).to.be.a('number');",
+            "  pm.expect(data.revenue_by_currency.XOF).to.be.a('number');",
+            "  pm.expect(data.trips).to.be.an('array');",
+            "  pm.expect(data.trips.length).to.equal(data.total_trips);",
+            "  console.log('Mois courant | courses complétées:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "});",
+            "pm.test('date_from est le 1er du mois', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.date_from) {",
+            "    const d = new Date(data.date_from);",
+            "    pm.expect(d.getUTCDate()).to.equal(1);",
+            "  }",
+            "});",
+            "pm.test('Chaque trip a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.trips.length > 0) {",
+            "    const t = data.trips[0];",
+            "    ['reservation_id','scheduled_at','pickup_address','dest_address','price_final','currency'].forEach(k => {",
+            "      pm.expect(t, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(t.currency).to.be.oneOf(['EUR', 'XOF']);",
+            "    pm.expect(t.price_final).to.be.a('number');",
+            "    pm.expect(t.price_final).to.be.at.least(0);",
+            "  }",
+            "});",
+            "pm.test('total_revenue >= 0', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.total_revenue).to.be.at.least(0);",
+            "  pm.expect(data.revenue_by_currency.EUR).to.be.at.least(0);",
+            "  pm.expect(data.revenue_by_currency.XOF).to.be.at.least(0);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET revenus — semaine spécifique",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=week&date=2026-06-09",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "2026-06-09" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Période semaine 8→14 juin 2026', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  pm.expect(data.date_from).to.include('2026-06-08');",
+            "  pm.expect(data.date_to).to.include('2026-06-14');",
+            "  console.log('Semaine 8–14 juin | CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET revenus — mois passé (2026-05-01)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=month&date=2026-05-01",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date",   "value": "2026-05-01" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Mois de mai 2026', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.date_from).to.include('2026-05-01');",
+            "  pm.expect(data.date_to).to.include('2026-05-31');",
+            "  console.log('Mai 2026 | courses:', data.total_trips, '| CA:', data.total_revenue, data.currency);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET revenus — tout (period=all, sans filtre de date)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=all",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"],
+              "query": [{ "key": "period", "value": "all" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('period=all → date_from et date_to null', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('all');",
+            "  pm.expect(data.date_from).to.be.null;",
+            "  pm.expect(data.date_to).to.be.null;",
+            "  pm.expect(data.trips).to.be.an('array');",
+            "  console.log('Tout | courses totales:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "});",
+            "pm.test('Trips triés DESC par scheduled_at', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.trips.length >= 2) {",
+            "    const t1 = new Date(data.trips[0].scheduled_at).getTime();",
+            "    const t2 = new Date(data.trips[1].scheduled_at).getTime();",
+            "    pm.expect(t1).to.be.at.least(t2);",
+            "  }",
+            "});",
+            "pm.test('revenue_by_currency cohérent avec total_revenue', () => {",
+            "  const { data } = pm.response.json();",
+            "  const { EUR, XOF } = data.revenue_by_currency;",
+            "  if (EUR > 0 || XOF === 0) {",
+            "    pm.expect(data.currency).to.equal('EUR');",
+            "    pm.expect(data.total_revenue).to.be.closeTo(EUR, 0.01);",
+            "  } else {",
+            "    pm.expect(data.currency).to.equal('XOF');",
+            "    pm.expect(data.total_revenue).to.equal(XOF);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] period invalide pour revenus",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=year",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"],
+              "query": [{ "key": "period", "value": "year" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — period invalide (valeurs: week, month, all)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);",
+            "pm.test('Erreur sur le champ period', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.errors?.period ?? body.message).to.exist;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] date format invalide pour revenus",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/me/revenues?period=month&date=juin-2026",
+              "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date",   "value": "juin-2026" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — format date invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Planning par driver ID",
+      "description": "GET /admin/drivers/:id/planning\nL'admin ou manager consulte le planning d'un chauffeur identifié par son drivers.id.\nNécessite la permission `view_drivers`.",
+      "item": [
+        {
+          "name": "[Admin] GET planning driver — semaine courante",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure planning correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  pm.expect(data.date_from).to.be.a('string');",
+            "  pm.expect(data.date_to).to.be.a('string');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.reservations).to.be.an('array');",
+            "  console.log('Driver', pm.collectionVariables.get('driver_id'), '| Semaine:', data.date_from?.slice(0,10), '→', data.date_to?.slice(0,10), '| courses:', data.total);",
+            "});",
+            "pm.test('Aucune réservation annulée', () => {",
+            "  const { data } = pm.response.json();",
+            "  const hasCancelled = data.reservations.some(r => r.status === 'cancelled');",
+            "  pm.expect(hasCancelled).to.be.false;",
+            "});",
+            "pm.test('Données client présentes', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.reservations.length > 0) {",
+            "    const r = data.reservations[0];",
+            "    pm.expect(r.client).to.not.be.undefined;",
+            "    pm.expect(r.pickup_address).to.be.a('string');",
+            "    pm.expect(r.dest_address).to.be.a('string');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET planning driver — semaine spécifique (2026-06-09)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning?period=week&date=2026-06-09",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "2026-06-09" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Semaine 8–14 juin 2026', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.date_from).to.include('2026-06-08');",
+            "  pm.expect(data.date_to).to.include('2026-06-14');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET planning driver — mois complet",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning?period=month&date=2026-06-01",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"],
+              "query": [
+                { "key": "period", "value": "month" },
+                { "key": "date",   "value": "2026-06-01" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Juin 2026 complet', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('month');",
+            "  pm.expect(data.date_from).to.include('2026-06-01');",
+            "  pm.expect(data.date_to).to.include('2026-06-30');",
+            "  console.log('Juin 2026 | courses:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[404] driver_id inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/00000000-0000-0000-0000-000000000000/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "00000000-0000-0000-0000-000000000000", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — chauffeur inconnu', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] driver_id pas un UUID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/not-a-uuid/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "not-a-uuid", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — ID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] period invalide (admin planning)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning?period=all",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"],
+              "query": [{ "key": "period", "value": "all" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — period=all non autorisé pour le planning (week|month seulement)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Revenus par driver ID",
+      "description": "GET /admin/drivers/:id/revenues\nL'admin ou manager consulte les revenus d'un chauffeur spécifique.\nMêmes paramètres que l'endpoint chauffeur self (week | month | all).",
+      "item": [
+        {
+          "name": "[Admin] GET revenus driver — mois courant",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure revenus correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('month');",
+            "  pm.expect(data.total_trips).to.be.a('number');",
+            "  pm.expect(data.total_revenue).to.be.a('number');",
+            "  pm.expect(data.currency).to.be.oneOf(['EUR', 'XOF']);",
+            "  pm.expect(data.revenue_by_currency).to.be.an('object');",
+            "  pm.expect(data.revenue_by_currency.EUR).to.be.a('number');",
+            "  pm.expect(data.revenue_by_currency.XOF).to.be.a('number');",
+            "  pm.expect(data.trips).to.be.an('array');",
+            "  console.log('Driver', pm.collectionVariables.get('driver_id'), '| Mois courant | CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "});",
+            "pm.test('revenue_by_currency cohérent avec total_revenue', () => {",
+            "  const { data } = pm.response.json();",
+            "  const { EUR, XOF } = data.revenue_by_currency;",
+            "  if (EUR > 0 || XOF === 0) {",
+            "    pm.expect(data.currency).to.equal('EUR');",
+            "    pm.expect(data.total_revenue).to.be.closeTo(EUR, 0.01);",
+            "  } else {",
+            "    pm.expect(data.currency).to.equal('XOF');",
+            "    pm.expect(data.total_revenue).to.equal(XOF);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET revenus driver — semaine",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues?period=week&date=2026-06-09",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"],
+              "query": [
+                { "key": "period", "value": "week" },
+                { "key": "date",   "value": "2026-06-09" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Semaine 8–14 juin 2026', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('week');",
+            "  pm.expect(data.date_from).to.include('2026-06-08');",
+            "  pm.expect(data.date_to).to.include('2026-06-14');",
+            "  console.log('Semaine 8–14 juin | courses:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET revenus driver — tout (period=all)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues?period=all",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"],
+              "query": [{ "key": "period", "value": "all" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('period=all → date_from et date_to null', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.period).to.equal('all');",
+            "  pm.expect(data.date_from).to.be.null;",
+            "  pm.expect(data.date_to).to.be.null;",
+            "  console.log('Total career | courses:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[404] driver_id inconnu (revenus)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/00000000-0000-0000-0000-000000000000/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "00000000-0000-0000-0000-000000000000", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — chauffeur inconnu', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] driver_id pas un UUID (revenus)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/abc123/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "abc123", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — ID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] period invalide (admin revenus)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues?period=quarter",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"],
+              "query": [{ "key": "period", "value": "quarter" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — period invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "description": "Vérifications 401 (sans token) et 403 (mauvais rôle).\nUn client ne peut pas accéder aux données des chauffeurs.",
+      "item": [
+        {
+          "name": "[401] GET /drivers/me/planning sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/drivers/me/planning", "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /drivers/me/revenues sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/drivers/me/revenues", "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /admin/drivers/:id/planning sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /admin/drivers/:id/revenues sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /drivers/me/planning (rôle driver requis)",
+          "description": "Un utilisateur avec le rôle client ne peut pas appeler les endpoints réservés aux drivers.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/me/planning", "host": ["{{base_url}}"], "path": ["drivers", "me", "planning"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — rôle driver requis', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /drivers/me/revenues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/me/revenues", "host": ["{{base_url}}"], "path": ["drivers", "me", "revenues"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — rôle driver requis', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/drivers/:id/planning",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — admin/manager requis', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/drivers/:id/revenues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — admin/manager requis', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver accède à /admin/drivers/:id/planning (rôle insuffisant)",
+          "description": "Un driver peut consulter son propre planning via /me/planning, mais pas via la route admin.",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/planning",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "planning"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — route admin non accessible au driver', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver accède à /admin/drivers/:id/revenues",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/drivers/{{driver_id}}/revenues",
+              "host": ["{{base_url}}"], "path": ["admin", "drivers", "{{driver_id}}", "revenues"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — route admin non accessible au driver', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

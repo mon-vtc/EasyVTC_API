@@ -1,0 +1,1251 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-chat-sprint5",
+    "name": "EazyVTC API — Chat",
+    "description": "# EazyVTC — Module Chat (Sprint 5)\n\n## Endpoints couverts\n\n### chat:reservation\n- `GET  /chat/conversations`                         → Liste  (client / driver)\n- `GET  /chat/reservations/:id/messages`             → Historique paginé\n- `POST /chat/reservations/:id/messages`             → Envoyer un message\n\n### chat:support\n- `POST /support/tickets`                            → Ouvrir un ticket (client, driver)\n- `GET  /support/tickets`                            → Mes tickets / tous (admin)\n- `GET  /support/tickets/:ticketId`                  → Détail + messages\n- `PUT  /support/tickets/:ticketId/status`           → Changer statut / priorité (admin)\n- `POST /support/tickets/:ticketId/messages`         → Envoyer un message dans le ticket\n\n### Admin\n- `GET  /admin/chat`                                 → Conversations course actives\n- `GET  /admin/chat/support`                         → Tous les tickets support\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase : un compte client, driver (assigné à une réservation), admin\n3. Avoir une réservation en statut `assigned` ou `in_progress` avec au moins un message\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Tokens\n2. 🔍 Setup — Réservation\n3. 💬 Client — Envoyer un message (course)\n4. 📱 Chat — Liste conversations \n5. 📖 Client — Historique des messages\n6. 🚗 Driver & Admin — Envoyer un message\n7. 👨‍💼 Admin — Vue conversations course\n8. 🎫 Support — Ouvrir un ticket\n9. 🎫 Support — Fil de conversation\n10. 👨‍💼 Admin — Gestion tickets support\n11. 🔒 Contrôle d'accès\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `client_user_id`, `reservation_id`, `message_id`\n- `ticket_id`, `support_message_id`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",           "value": "http://localhost:4000", "type": "string" },
+    { "key": "client_token",       "value": "", "type": "string" },
+    { "key": "driver_token",       "value": "", "type": "string" },
+    { "key": "admin_token",        "value": "", "type": "string" },
+    { "key": "client_user_id",     "value": "", "type": "string" },
+    { "key": "reservation_id",     "value": "", "type": "string" },
+    { "key": "message_id",         "value": "", "type": "string" },
+    { "key": "ticket_id",          "value": "", "type": "string" },
+    { "key": "support_message_id", "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "item": [
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('client_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('client_token', data.access_token);",
+            "  if (data.user?.id) pm.collectionVariables.set('client_user_id', data.user.id);",
+            "  console.log('client_token OK — user_id:', data.user?.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('driver_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('driver_token', data.access_token);",
+            "  console.log('driver_token OK');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('admin_token sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.collectionVariables.set('admin_token', data.access_token);",
+            "  console.log('admin_token OK');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔍 Setup — Réservation test",
+      "description": "Trouver une réservation assigned appartenant au client. Sauvegarde reservation_id.",
+      "item": [
+        {
+          "name": "Get mes réservations assigned (client)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/reservations?status=assigned&limit=5",
+              "host": ["{{base_url}}"], "path": ["reservations"],
+              "query": [{ "key": "status", "value": "assigned" }, { "key": "limit", "value": "5" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('reservation_id sauvegardé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  const list = data.reservations ?? data.data ?? data;",
+            "  if (Array.isArray(list) && list.length > 0) {",
+            "    pm.collectionVariables.set('reservation_id', list[0].id);",
+            "    console.log('reservation_id:', list[0].id);",
+            "  } else {",
+            "    console.warn('Aucune réservation assigned — saisir reservation_id manuellement');",
+            "  }",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "💬 Client — Envoyer un message (course)",
+      "item": [
+        {
+          "name": "[Client] POST message — OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Bonjour, je serai en bas dans 5 minutes.\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('ChatMessage retourné', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.have.property('id');",
+            "  pm.expect(data).to.have.property('reservation_id');",
+            "  pm.expect(data.sender_role).to.equal('client');",
+            "  pm.expect(data.read_at).to.be.null;",
+            "  pm.collectionVariables.set('message_id', data.id);",
+            "  console.log('message_id:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] POST deuxième message",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Je suis au niveau de la porte principale.\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Deuxième message envoyé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.content).to.equal('Je suis au niveau de la porte principale.');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "📱 Chat — Liste conversations ",
+      "description": "GET /chat/conversations — retourne les conversations de l'utilisateur triées par dernier message DESC, sans itération côté client.",
+      "item": [
+        {
+          "name": "[Client] GET conversations — page 1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["chat", "conversations"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.conversations).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "});",
+            "pm.test('Chaque conversation a tous les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length > 0) {",
+            "    const conv = data.conversations[0];",
+            "    ['reservation_id','status','scheduled_at','pickup_address','dest_address',",
+            "     'other_party','last_message','unread_count'].forEach(k => {",
+            "      pm.expect(conv, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.expect(conv.unread_count).to.be.a('number');",
+            "  }",
+            "});",
+            "pm.test('other_party a role = driver pour un client', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length > 0 && data.conversations[0].other_party) {",
+            "    pm.expect(data.conversations[0].other_party.role).to.equal('driver');",
+            "    ['id','first_name','last_name','profile_photo_url'].forEach(k => {",
+            "      pm.expect(data.conversations[0].other_party).to.have.property(k);",
+            "    });",
+            "  }",
+            "});",
+            "pm.test('last_message a is_mine (booléen)', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length > 0 && data.conversations[0].last_message) {",
+            "    const lm = data.conversations[0].last_message;",
+            "    pm.expect(lm).to.have.property('content');",
+            "    pm.expect(lm).to.have.property('created_at');",
+            "    pm.expect(lm).to.have.property('sender_role');",
+            "    pm.expect(lm.is_mine).to.be.a('boolean');",
+            "  }",
+            "});",
+            "pm.test('Conversations triées par dernier message DESC', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length >= 2) {",
+            "    const t1 = new Date(data.conversations[0].last_message?.created_at ?? 0).getTime();",
+            "    const t2 = new Date(data.conversations[1].last_message?.created_at ?? 0).getTime();",
+            "    pm.expect(t1).to.be.at.least(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] GET conversations — OK",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations",
+              "host": ["{{base_url}}"], "path": ["chat", "conversations"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('other_party a role = client pour un driver', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length > 0 && data.conversations[0].other_party) {",
+            "    pm.expect(data.conversations[0].other_party.role).to.equal('client');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] GET conversations — pagination limit=1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations?page=1&limit=1",
+              "host": ["{{base_url}}"], "path": ["chat", "conversations"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "1" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('1 seule conversation dans la page', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.conversations.length).to.be.at.most(1);",
+            "  pm.expect(data.limit).to.equal(1);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[403] Admin ne peut pas utiliser /chat/conversations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/conversations",
+              "host": ["{{base_url}}"], "path": ["chat", "conversations"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — admin utilise /admin/chat', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "📖 Client — Historique des messages (course)",
+      "item": [
+        {
+          "name": "[Client] GET historique — page 1 défaut",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.messages).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(50);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "});",
+            "pm.test('Messages triés ASC par created_at', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.messages.length >= 2) {",
+            "    const t1 = new Date(data.messages[0].created_at).getTime();",
+            "    const t2 = new Date(data.messages[1].created_at).getTime();",
+            "    pm.expect(t1).to.be.at.most(t2);",
+            "  }",
+            "});",
+            "pm.test('Chaque message a tous ses champs', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.messages.length > 0) {",
+            "    const msg = data.messages[0];",
+            "    ['id','reservation_id','sender_id','sender_role','content','read_at','created_at'].forEach(k => {",
+            "      pm.expect(msg).to.have.property(k);",
+            "    });",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] GET historique — pagination limit=1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages?page=1&limit=1",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "1" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Limite appliquée', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.messages.length).to.be.at.most(1);",
+            "  pm.expect(data.limit).to.equal(1);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 Driver & Admin — Envoyer un message (course)",
+      "item": [
+        {
+          "name": "[Driver] POST message — OK",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Je suis en route, j'arrive dans 10 minutes.\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('sender_role = driver', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.sender_role).to.equal('driver');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] POST message dans la conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Message support : tout se passe bien ?\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('sender_role = admin', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.sender_role).to.equal('admin');",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Vue conversations course",
+      "item": [
+        {
+          "name": "[Admin] GET /admin/chat — page 1",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat?page=1&limit=10",
+              "host": ["{{base_url}}"], "path": ["admin", "chat"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.conversations).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(10);",
+            "});",
+            "pm.test('Chaque conversation a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.conversations.length > 0) {",
+            "    const conv = data.conversations[0];",
+            "    ['reservation_id','pickup_address','dest_address',",
+            "     'last_message','last_message_at','unread_count','client','driver'].forEach(k => {",
+            "      pm.expect(conv).to.have.property(k);",
+            "    });",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/chat — page 2",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat?page=2&limit=5",
+              "host": ["{{base_url}}"], "path": ["admin", "chat"],
+              "query": [{ "key": "page", "value": "2" }, { "key": "limit", "value": "5" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('page = 2 dans la réponse', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.page).to.equal(2);",
+            "  pm.expect(data.limit).to.equal(5);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🎫 Support — Ouvrir un ticket",
+      "description": "POST /support/tickets — Création d'un ticket par client ou driver, avec message initial.",
+      "item": [
+        {
+          "name": "[Client] POST /support/tickets — catégorie reservation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets",
+              "host": ["{{base_url}}"], "path": ["support", "tickets"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"reservation\",\n  \"subject\": \"Mon chauffeur n'est pas arrivé\",\n  \"message\": \"Bonjour, j'ai une réservation prévue à 10h et mon chauffeur n'est toujours pas arrivé.\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Ticket créé avec message initial', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.have.property('id');",
+            "  pm.expect(data.status).to.equal('pending');",
+            "  pm.expect(data.priority).to.equal('normal');",
+            "  pm.expect(data.category).to.equal('reservation');",
+            "  pm.expect(data.user_role).to.equal('client');",
+            "  pm.expect(data.closed_at).to.be.null;",
+            "  pm.expect(data.messages).to.be.an('array').with.length(1);",
+            "  pm.expect(data.messages[0].sender_role).to.equal('client');",
+            "  pm.collectionVariables.set('ticket_id', data.id);",
+            "  console.log('ticket_id:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] POST /support/tickets — catégorie payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets",
+              "host": ["{{base_url}}"], "path": ["support", "tickets"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"payment\",\n  \"subject\": \"Question sur la facturation\",\n  \"message\": \"Je n'ai pas reçu ma facture pour le trajet du 15 mai.\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Ticket payment créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.category).to.equal('payment');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Driver] POST /support/tickets — catégorie technical",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets",
+              "host": ["{{base_url}}"], "path": ["support", "tickets"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"technical\",\n  \"subject\": \"Problème avec l'application\",\n  \"message\": \"L'application se ferme quand j'essaie de valider une course.\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Ticket driver créé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.user_role).to.equal('driver');",
+            "  pm.expect(data.category).to.equal('technical');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] GET /support/tickets — mes tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["support", "tickets"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.tickets).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "});",
+            "pm.test('Chaque ticket a les champs attendus', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.tickets.length > 0) {",
+            "    const t = data.tickets[0];",
+            "    ['id','user_id','user_role','category','subject','status','priority','created_at','updated_at','closed_at'].forEach(k => {",
+            "      pm.expect(t).to.have.property(k);",
+            "    });",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] GET /support/tickets?status=pending — filtré",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets?status=pending",
+              "host": ["{{base_url}}"], "path": ["support", "tickets"],
+              "query": [{ "key": "status", "value": "pending" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les tickets ont status = pending', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.tickets.forEach(t => pm.expect(t.status).to.equal('pending'));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] POST ticket — catégorie invalide",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/support/tickets", "host": ["{{base_url}}"], "path": ["support", "tickets"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"mauvaise_categorie\",\n  \"subject\": \"Test\",\n  \"message\": \"Test\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — catégorie invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] POST ticket — sujet trop court",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/support/tickets", "host": ["{{base_url}}"], "path": ["support", "tickets"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"other\",\n  \"subject\": \"AB\",\n  \"message\": \"Message valide\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — sujet < 3 chars', () => pm.response.to.have.status(400));",
+            "pm.test('Erreur sur le champ subject', () => {",
+            "  const body = pm.response.json();",
+            "  pm.expect(body.ok).to.be.false;",
+            "  pm.expect(body.errors?.subject ?? body.message).to.exist;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[403] Admin tente d'ouvrir un ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/support/tickets", "host": ["{{base_url}}"], "path": ["support", "tickets"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"other\",\n  \"subject\": \"Sujet test admin\",\n  \"message\": \"Test\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — admin ne peut pas ouvrir un ticket', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🎫 Support — Fil de conversation",
+      "description": "GET détail + POST messages dans un ticket. Nécessite ticket_id sauvegardé.",
+      "item": [
+        {
+          "name": "[Client] GET /support/tickets/:ticketId — détail + messages",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Ticket complet avec messages', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.have.property('id');",
+            "  pm.expect(data).to.have.property('messages');",
+            "  pm.expect(data.messages).to.be.an('array');",
+            "  pm.expect(data.messages.length).to.be.at.least(1);",
+            "  pm.expect(data.messages[0].sender_role).to.equal('client');",
+            "});",
+            "pm.test('Champs ticket complets', () => {",
+            "  const { data } = pm.response.json();",
+            "  ['id','user_id','user_role','category','subject','status','priority','created_at','updated_at','closed_at'].forEach(k => {",
+            "    pm.expect(data).to.have.property(k);",
+            "  });",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] POST message dans le ticket — réponse support",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Bonjour, nous avons bien reçu votre demande. Nous la traitons en priorité.\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Message admin dans le ticket', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.have.property('id');",
+            "  pm.expect(data.ticket_id).to.equal(pm.collectionVariables.get('ticket_id'));",
+            "  pm.expect(data.sender_role).to.equal('admin');",
+            "  pm.expect(data.read_at).to.be.null;",
+            "  pm.collectionVariables.set('support_message_id', data.id);",
+            "  console.log('support_message_id:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] POST message de suivi",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "messages"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Merci, avez-vous une estimation de délai ?\"\n}"
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Message client envoyé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.sender_role).to.equal('client');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET détail ticket — historique complet",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Historique contient ≥ 3 messages (initial + admin + client)', () => {",
+            "  const { data } = pm.response.json();",
+            "  pm.expect(data.messages.length).to.be.at.least(3);",
+            "});",
+            "pm.test('Messages triés ASC par created_at', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.messages.length >= 2) {",
+            "    const t1 = new Date(data.messages[0].created_at).getTime();",
+            "    const t2 = new Date(data.messages[1].created_at).getTime();",
+            "    pm.expect(t1).to.be.at.most(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] POST message vide dans ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — message vide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] Ticket inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — ticket inconnu', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Gestion tickets support",
+      "description": "PUT statut, GET liste admin, filtres.",
+      "item": [
+        {
+          "name": "[Admin] PUT statut → in_progress",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"in_progress\",\n  \"priority\": \"urgent\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Ticket mis à jour in_progress urgent', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.status).to.equal('in_progress');",
+            "  pm.expect(data.priority).to.equal('urgent');",
+            "  pm.expect(data.closed_at).to.be.null;",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] PUT statut → resolved (fermeture)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"resolved\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Ticket résolu avec closed_at renseigné', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.status).to.equal('resolved');",
+            "  pm.expect(data.closed_at).to.not.be.null;",
+            "  pm.expect(new Date(data.closed_at).getTime()).to.be.a('number');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Client] POST message sur ticket résolu → réouverture auto",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Le problème n'est pas encore résolu, je reviens vers vous.\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — message accepté malgré ticket résolu', () => pm.response.to.have.status(201));",
+            "pm.test('Message envoyé', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.sender_role).to.equal('client');",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/chat/support — tous les tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat/support?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin", "chat", "support"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.tickets).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "});",
+            "pm.test('Chaque ticket a user (join)', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.tickets.length > 0) {",
+            "    pm.expect(data.tickets[0]).to.have.property('user');",
+            "    if (data.tickets[0].user) {",
+            "      pm.expect(data.tickets[0].user).to.have.property('first_name');",
+            "    }",
+            "  }",
+            "});",
+            "pm.test('Tickets triés par updated_at DESC', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.tickets.length >= 2) {",
+            "    const t1 = new Date(data.tickets[0].updated_at).getTime();",
+            "    const t2 = new Date(data.tickets[1].updated_at).getTime();",
+            "    pm.expect(t1).to.be.at.least(t2);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/chat/support?status=pending",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat/support?status=pending",
+              "host": ["{{base_url}}"], "path": ["admin", "chat", "support"],
+              "query": [{ "key": "status", "value": "pending" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les tickets retournés sont pending', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.tickets.forEach(t => pm.expect(t.status).to.equal('pending'));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/chat/support?status=in_progress",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat/support?status=in_progress",
+              "host": ["{{base_url}}"], "path": ["admin", "chat", "support"],
+              "query": [{ "key": "status", "value": "in_progress" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les tickets sont in_progress', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.tickets.forEach(t => pm.expect(t.status).to.equal('in_progress'));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[Admin] GET /admin/chat/support?status=resolved",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/chat/support?status=resolved",
+              "host": ["{{base_url}}"], "path": ["admin", "chat", "support"],
+              "query": [{ "key": "status", "value": "resolved" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tickets résolus ont closed_at renseigné', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.tickets.forEach(t => {",
+            "    pm.expect(t.status).to.equal('resolved');",
+            "    pm.expect(t.closed_at).to.not.be.null;",
+            "  });",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[400] PUT statut invalide",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"statut_invalide\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — statut invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] PUT statut ticket inconnu",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/00000000-0000-0000-0000-000000000000/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "00000000-0000-0000-0000-000000000000", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"resolved\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — ticket inconnu', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "item": [
+        {
+          "name": "[401] POST /chat sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Test sans token\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /chat/conversations sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/chat/conversations", "host": ["{{base_url}}"], "path": ["chat", "conversations"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /admin/chat sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/chat", "host": ["{{base_url}}"], "path": ["admin", "chat"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] GET /admin/chat/support sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/chat/support", "host": ["{{base_url}}"], "path": ["admin", "chat", "support"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[401] POST /support/tickets sans token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/support/tickets", "host": ["{{base_url}}"], "path": ["support", "tickets"] },
+            "body": { "mode": "raw", "raw": "{\n  \"category\": \"other\",\n  \"subject\": \"Test\",\n  \"message\": \"Test\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/chat",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/chat", "host": ["{{base_url}}"], "path": ["admin", "chat"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client accède à /admin/chat/support",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/chat/support", "host": ["{{base_url}}"], "path": ["admin", "chat", "support"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver accède à /admin/chat/support",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/chat/support", "host": ["{{base_url}}"], "path": ["admin", "chat", "support"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client change le statut d'un ticket",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"resolved\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — seuls admin/manager peuvent changer le statut', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver change le statut d'un ticket",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{driver_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/{{ticket_id}}/status",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "{{ticket_id}}", "status"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"resolved\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[400] Message vide (course)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/{{reservation_id}}/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "{{reservation_id}}", "messages"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — message vide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] reservationId invalide (pas un UUID)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/not-a-valid-uuid/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "not-a-valid-uuid", "messages"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] ticketId invalide (pas un UUID)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/support/tickets/not-a-valid-uuid",
+              "host": ["{{base_url}}"], "path": ["support", "tickets", "not-a-valid-uuid"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — UUID invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] Réservation inexistante (UUID valide inconnu)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/chat/reservations/00000000-0000-0000-0000-000000000000/messages",
+              "host": ["{{base_url}}"], "path": ["chat", "reservations", "00000000-0000-0000-0000-000000000000", "messages"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 ou 404 — réservation inconnue', () => {",
+            "  pm.expect(pm.response.code).to.be.oneOf([403, 404]);",
+            "});",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

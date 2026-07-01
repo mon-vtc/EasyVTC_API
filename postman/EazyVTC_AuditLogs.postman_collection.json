@@ -1,0 +1,259 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-audit-logs-sprint7",
+    "name": "EazyVTC API — Audit Logs (Sprint 7)",
+    "description": "# EazyVTC — Module Audit Logs\n\n## Endpoints couverts (admin uniquement)\n- `GET /admin/audit-logs`      → Liste paginée avec filtres\n- `GET /admin/audit-logs/:id`  → Détail d'un log\n\n## Filtres disponibles\n| Paramètre | Description |\n|---|---|\n| `action` | Ex: `COMMISSION_SETTING_CREATED`, `INVOICE_PRICE_ADJUSTED` |\n| `entity_type` | Ex: `commission_setting`, `invoice`, `reservation` |\n| `entity_id` | UUID de l'entité concernée |\n| `performed_by` | UUID de l'admin ayant effectué l'action |\n| `from` / `to` | Plage de dates ISO 8601 |\n| `page` / `limit` | Pagination |\n\n## Actions auditées\nLes actions sont loguées automatiquement lors des opérations sensibles :\n- `COMMISSION_SETTING_CREATED` / `COMMISSION_SETTING_DELETED`\n- `INVOICE_PRICE_ADJUSTED`\n- (autres actions selon les modules)\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `log_id`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",    "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token", "value": "", "type": "string" },
+    { "key": "client_token","value": "", "type": "string" },
+    { "key": "driver_token","value": "", "type": "string" },
+    { "key": "log_id",      "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('admin_token', data.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.collectionVariables.set('client_token', data.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.collectionVariables.set('driver_token', data.access_token);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "📋 Lecture des logs (admin)",
+      "item": [
+        {
+          "name": "① GET /admin/audit-logs — tous les logs (page 1)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Structure paginée correcte', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.logs).to.be.an('array');",
+            "  pm.expect(data.total).to.be.a('number');",
+            "  pm.expect(data.page).to.equal(1);",
+            "  pm.expect(data.limit).to.equal(20);",
+            "  pm.expect(data.total_pages).to.be.a('number');",
+            "  console.log('Total logs:', data.total, '| pages:', data.total_pages);",
+            "});",
+            "pm.test('Chaque log a les champs requis', () => {",
+            "  const { data } = pm.response.json();",
+            "  if (data.logs.length > 0) {",
+            "    const l = data.logs[0];",
+            "    ['id','action','entity_type','entity_id','created_at'].forEach(k => {",
+            "      pm.expect(l, `champ manquant: ${k}`).to.have.property(k);",
+            "    });",
+            "    pm.collectionVariables.set('log_id', l.id);",
+            "    console.log('Premier log:', l.action, '|', l.entity_type, '|', l.created_at);",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② GET /admin/audit-logs?action=COMMISSION_SETTING_CREATED",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs?action=COMMISSION_SETTING_CREATED&page=1&limit=10",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs"],
+              "query": [
+                { "key": "action", "value": "COMMISSION_SETTING_CREATED" },
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "10" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les logs filtrés ont l\\'action attendue', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.logs.forEach(l => pm.expect(l.action).to.equal('COMMISSION_SETTING_CREATED'));",
+            "  console.log('Logs COMMISSION_SETTING_CREATED:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② GET /admin/audit-logs?entity_type=commission_setting",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs?entity_type=commission_setting&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs"],
+              "query": [
+                { "key": "entity_type", "value": "commission_setting" },
+                { "key": "page",        "value": "1" },
+                { "key": "limit",       "value": "20" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tous les logs sont pour commission_setting', () => {",
+            "  const { data } = pm.response.json();",
+            "  data.logs.forEach(l => pm.expect(l.entity_type).to.equal('commission_setting'));",
+            "  console.log('Logs commission_setting:', data.total);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② GET /admin/audit-logs — filtré par période",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs?from=2026-06-01T00:00:00Z&to=2026-06-30T23:59:59Z&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs"],
+              "query": [
+                { "key": "from",  "value": "2026-06-01T00:00:00Z" },
+                { "key": "to",    "value": "2026-06-30T23:59:59Z" },
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "console.log('Logs juin 2026:', pm.response.json().data.total);"
+          ]}}]
+        },
+        {
+          "name": "③ GET /admin/audit-logs/:id — détail d'un log",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs/{{log_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs","{{log_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Détail complet du log', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.id).to.equal(pm.collectionVariables.get('log_id'));",
+            "  ['action','entity_type','entity_id','created_at'].forEach(k => {",
+            "    pm.expect(data, `champ manquant: ${k}`).to.have.property(k);",
+            "  });",
+            "  console.log('Log:', data.action, '| entité:', data.entity_type, data.entity_id);",
+            "  if (data.performer) console.log('Effectué par:', data.performer.first_name, data.performer.last_name);",
+            "  if (data.old_value) console.log('Ancienne valeur:', JSON.stringify(data.old_value));",
+            "  if (data.new_value) console.log('Nouvelle valeur:', JSON.stringify(data.new_value));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[404] GET /admin/audit-logs/:id — ID inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/audit-logs/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["admin","audit-logs","00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — log introuvable', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "item": [
+        {
+          "name": "[401] GET /admin/audit-logs sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/admin/audit-logs", "host": ["{{base_url}}"], "path": ["admin","audit-logs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client — GET /admin/audit-logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/audit-logs", "host": ["{{base_url}}"], "path": ["admin","audit-logs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver — GET /admin/audit-logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/audit-logs", "host": ["{{base_url}}"], "path": ["admin","audit-logs"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

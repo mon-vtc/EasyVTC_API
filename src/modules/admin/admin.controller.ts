@@ -1,0 +1,325 @@
+import type { Request, Response } from 'express';
+import { adminService } from './admin.service.js';
+import { reservationsService } from '../reservations/reservations.service.js';
+import { auditLog } from '../../utils/audit.service.js';
+import { reservationListFiltersSchema, assignDriverSchema, reservationIdParamSchema } from '../reservations/reservations.validator.js';
+import {
+  createManagerSchema,
+  updateManagerSchema,
+  changeManagerStatusSchema,
+  setManagerPermissionsSchema,
+  adminStatsFiltersSchema,
+  adminDashboardFiltersSchema,
+  idParamSchema,
+} from './admin.validator.js';
+
+export class AdminController {
+
+  // POST /admin/managers
+  async createManager(req: Request, res: Response): Promise<void> {
+    const parsed = createManagerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+
+    try {
+      const manager = await adminService.createManager(parsed.data);
+
+      void auditLog(req, {
+        action:     'MANAGER_CREATED',
+        entityType: 'user',
+        entityId:   manager.id,
+        newValue:   { email: manager.email, first_name: manager.first_name, last_name: manager.last_name },
+      });
+
+      res.status(201).json({
+        ok: true,
+        message: 'Compte gestionnaire créé avec succès',
+        data: manager,
+      });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/managers
+  async listManagers(req: Request, res: Response): Promise<void> {
+    const filters = {
+      status: req.query.status as any,
+      search: req.query.search as string | undefined,
+      page:   req.query.page  ? Number(req.query.page)  : undefined,
+      limit:  req.query.limit ? Number(req.query.limit) : undefined,
+    };
+    try {
+      const result = await adminService.listManagers(filters);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/managers/:id
+  async getManagerById(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    try {
+      const manager = await adminService.getManagerById(paramParsed.data.id);
+      res.json({ ok: true, data: manager });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /admin/managers/:id
+  async updateManager(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    const parsed = updateManagerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+    try {
+      const manager = await adminService.updateManager(paramParsed.data.id, parsed.data);
+      res.json({ ok: true, data: manager });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /admin/managers/:id/status
+  async changeManagerStatus(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    const parsed = changeManagerStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+    try {
+      const managerId = paramParsed.data.id;
+      const manager = await adminService.changeManagerStatus(managerId, parsed.data, req.user!.id);
+
+      void auditLog(req, {
+        action:     'MANAGER_STATUS_CHANGED',
+        entityType: 'user',
+        entityId:   managerId,
+        newValue:   { status: parsed.data.status },
+      });
+
+      res.json({ ok: true, data: manager });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/managers/:id/permissions
+  async getManagerPermissions(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    try {
+      const result = await adminService.getManagerPermissions(paramParsed.data.id);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PUT /admin/managers/:id/permissions
+  async setManagerPermissions(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    const parsed = setManagerPermissionsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({
+        ok: false,
+        message: 'Données invalides',
+        errors: parsed.error.flatten().fieldErrors,
+      });
+      return;
+    }
+    try {
+      const managerId = paramParsed.data.id;
+      const result = await adminService.setManagerPermissions(managerId, parsed.data as any, req.user!.id);
+
+      void auditLog(req, {
+        action:     'MANAGER_PERMISSIONS_UPDATED',
+        entityType: 'user',
+        entityId:   managerId,
+        newValue:   { permissions: parsed.data },
+      });
+
+      res.json({ ok: true, message: 'Permissions mises à jour', data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // DELETE /admin/managers/:id
+  async deleteManager(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID gestionnaire invalide' }); return; }
+    try {
+      const managerId = paramParsed.data.id;
+      await adminService.deleteManager(managerId);
+
+      void auditLog(req, {
+        action:     'MANAGER_DELETED',
+        entityType: 'user',
+        entityId:   managerId,
+      });
+
+      res.json({ ok: true, message: 'Gestionnaire supprimé' });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/clients
+  async listClients(req: Request, res: Response): Promise<void> {
+    const filters = {
+      status: req.query.status as any,
+      search: req.query.search as string | undefined,
+      page:   req.query.page  ? Number(req.query.page)  : undefined,
+      limit:  req.query.limit ? Number(req.query.limit) : undefined,
+    };
+    try {
+      const result = await adminService.listClients(filters);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/clients/:id
+  async getClientById(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID client invalide' }); return; }
+    try {
+      const client = await adminService.getClientById(paramParsed.data.id);
+      res.json({ ok: true, data: client });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/stats — filters: period=day|week|month|all, date=YYYY-MM-DD or DD-MM-YYYY, date_from=YYYY-MM-DD or DD-MM-YYYY, date_to=YYYY-MM-DD or DD-MM-YYYY
+  async getStats(req: Request, res: Response): Promise<void> {
+    const parsed = adminStatsFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    try {
+      const stats = await adminService.getStats(parsed.data);
+      res.json({ ok: true, data: stats });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/reservations
+  async listReservations(req: Request, res: Response): Promise<void> {
+    const parsed = reservationListFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const result = await reservationsService.listReservations(parsed.data);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PUT /admin/reservations/:id/assign
+  async assignReservation(req: Request, res: Response): Promise<void> {
+    const paramParsed = reservationIdParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID invalide' });
+      return;
+    }
+    const bodyParsed = assignDriverSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: bodyParsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const reservation = await reservationsService.assignDriver(
+        paramParsed.data.id,
+        bodyParsed.data,
+        req.user!.id,
+      );
+
+      void auditLog(req, {
+        action:     'RESERVATION_ASSIGNED',
+        entityType: 'reservation',
+        entityId:   paramParsed.data.id,
+        newValue:   { driver_id: bodyParsed.data.driver_id },
+      });
+
+      res.json({ ok: true, message: 'Chauffeur assigné avec succès', data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/dashboard
+  async getDashboard(req: Request, res: Response): Promise<void> {
+    const parsed = adminDashboardFiltersSchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Filtres invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const data = await adminService.getDashboard(parsed.data.period, parsed.data.date);
+      res.json({ ok: true, data });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // GET /admin/clients/:id/trips
+  async getClientTrips(req: Request, res: Response): Promise<void> {
+    const page  = req.query.page  ? Number(req.query.page)  : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : 20;
+    try {
+      const result = await adminService.getClientTrips(req.params['id'] as string, page, limit);
+      res.json({ ok: true, data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+}
+
+export const adminController = new AdminController();

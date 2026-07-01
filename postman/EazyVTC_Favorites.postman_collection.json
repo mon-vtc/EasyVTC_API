@@ -1,0 +1,329 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-favorites-sprint6",
+    "name": "EazyVTC API — Destinations Favorites (Sprint 6)",
+    "description": "# EazyVTC — Module Destinations Favorites\n\n## Endpoints couverts\n- `GET    /users/:id/favorites`          → Lister les favoris (client soi-même ou admin)\n- `POST   /users/:id/favorites`          → Ajouter un favori (max 20 par client)\n- `DELETE /users/:id/favorites/:favId`   → Supprimer un favori\n\n## Logique métier\n- Seul le client propriétaire ou un admin peut accéder aux favoris\n- Maximum 20 favoris par utilisateur (erreur 422 si dépassé)\n- Les coordonnées GPS (`lat`, `lng`) sont optionnelles\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `client_user_id`\n- `fav_id_1`, `fav_id_2`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",    "value": "", "type": "string" },
+    { "key": "client_token",   "value": "", "type": "string" },
+    { "key": "driver_token",   "value": "", "type": "string" },
+    { "key": "client_user_id", "value": "", "type": "string" },
+    { "key": "fav_id_1",       "value": "", "type": "string" },
+    { "key": "fav_id_2",       "value": "", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('admin_token', data.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Login Client — récupère client_user_id",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('client_token', data.access_token);",
+            "pm.collectionVariables.set('client_user_id', data.user.id);",
+            "console.log('client_user_id:', data.user.id);"
+          ]}}]
+        },
+        {
+          "name": "Login Driver",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.collectionVariables.set('driver_token', data.access_token);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "⭐ Client — Gestion des favoris",
+      "item": [
+        {
+          "name": "① GET /users/:id/favorites — liste initiale (vide)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tableau de favoris retourné', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.be.an('array');",
+            "  console.log('Favoris existants:', data.length);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② POST — Ajouter favori 1 (avec coordonnées GPS)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Domicile\",\n  \"address\": \"12 rue de la Paix, 75001 Paris\",\n  \"lat\": 48.8698,\n  \"lng\": 2.3309\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Favori créé avec coordonnées', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.label).to.equal('Domicile');",
+            "  pm.expect(data.address).to.be.a('string');",
+            "  pm.expect(data.lat).to.equal(48.8698);",
+            "  pm.expect(data.lng).to.equal(2.3309);",
+            "  pm.expect(data.id).to.be.a('string');",
+            "  pm.collectionVariables.set('fav_id_1', data.id);",
+            "  console.log('fav_id_1:', data.id, '|', data.label);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② POST — Ajouter favori 2 (sans coordonnées)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Bureau\",\n  \"address\": \"Tour Montparnasse, 33 Avenue du Maine, 75015 Paris\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201', () => pm.response.to.have.status(201));",
+            "pm.test('Favori créé sans coordonnées', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.label).to.equal('Bureau');",
+            "  pm.expect(data.lat).to.be.null;",
+            "  pm.expect(data.lng).to.be.null;",
+            "  pm.collectionVariables.set('fav_id_2', data.id);",
+            "  console.log('fav_id_2:', data.id, '|', data.label);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "③ GET /users/:id/favorites — liste après ajouts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('2 favoris minimum dans la liste', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.length).to.be.at.least(2);",
+            "  const ids = data.map(f => f.id);",
+            "  pm.expect(ids).to.include(pm.collectionVariables.get('fav_id_1'));",
+            "  pm.expect(ids).to.include(pm.collectionVariables.get('fav_id_2'));",
+            "  console.log('Favoris:', data.map(f => f.label).join(', '));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ DELETE — Supprimer favori 2 (Bureau)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites/{{fav_id_2}}",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites","{{fav_id_2}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — supprimé', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "pm.collectionVariables.set('fav_id_2', '');"
+          ]}}]
+        },
+        {
+          "name": "⑤ GET — Vérification suppression (fav_id_2 absent)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('fav_id_1 toujours présent', () => {",
+            "  const { data } = pm.response.json();",
+            "  const ids = data.map(f => f.id);",
+            "  pm.expect(ids).to.include(pm.collectionVariables.get('fav_id_1'));",
+            "  console.log('Favoris restants:', data.length);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Accès aux favoris d'un client",
+      "item": [
+        {
+          "name": "GET /users/:id/favorites — vue admin",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — admin peut voir les favoris du client', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "const { data } = pm.response.json();",
+            "console.log('Favoris du client (vue admin):', data.length);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔴 Cas d'erreur",
+      "item": [
+        {
+          "name": "[400] POST — label manquant",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"address\": \"10 rue Test, 75001 Paris\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — label requis', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] POST — adresse trop courte",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{client_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"label\": \"Test\",\n  \"address\": \"ab\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — adresse trop courte (min 5 chars)', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] DELETE — favId inconnu",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites","00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — favori introuvable', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "item": [
+        {
+          "name": "[401] GET sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver — GET favoris d'un client",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/users/{{client_user_id}}/favorites",
+              "host": ["{{base_url}}"], "path": ["users","{{client_user_id}}","favorites"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — driver ne peut pas accéder aux favoris client', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

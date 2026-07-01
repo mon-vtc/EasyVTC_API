@@ -1,0 +1,455 @@
+{
+  "info": {
+    "_postman_id": "eazyvtc-driver-documents-sprint2",
+    "name": "EazyVTC API — Documents Chauffeur (Sprint 2)",
+    "description": "# EazyVTC — Module Documents Chauffeur\n\n## Endpoints couverts\n\n### Chauffeur (self)\n- `POST   /drivers/documents`          → Upload un document (multipart/form-data)\n- `GET    /drivers/documents`          → Lister mes documents\n- `GET    /drivers/documents/:id`      → Détail + URL signée (1h)\n- `DELETE /drivers/documents/:id`      → Supprimer un document\n\n### Admin / Manager\n- `GET    /admin/documents`            → Liste tous les documents (filtrable)\n- `GET    /admin/documents/stats`      → Statistiques des documents\n- `GET    /admin/documents/:id`        → Détail d'un document\n- `PATCH  /admin/documents/:id/validate` → Valider un document\n- `PATCH  /admin/documents/:id/reject`   → Rejeter un document (motif obligatoire)\n\n### CRON\n- `POST /cron/documents/check-expiry` → Déclencher la vérification des expirations\n\n## Types de documents acceptés\n`permis_conduire` | `assurance` | `carte_vtc` | `kbis` | `visite_medicale` | `autre`\n\n## Statuts\n`pending` → `validated` / `rejected`\n\n## Formats acceptés\nPDF, JPG, PNG, WebP — max 10 Mo\n\n## Variables sauvegardées\n- `admin_token`, `driver_token`, `client_token`\n- `doc_id` (document uploadé)\n- `driver_user_id`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url",       "value": "http://localhost:4000", "type": "string" },
+    { "key": "admin_token",    "value": "", "type": "string" },
+    { "key": "driver_token",   "value": "", "type": "string" },
+    { "key": "client_token",   "value": "", "type": "string" },
+    { "key": "doc_id",         "value": "", "type": "string" },
+    { "key": "driver_user_id", "value": "", "type": "string" },
+    { "key": "cron_secret",    "value": "votre_cron_secret_ici", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Setup — Tokens",
+      "item": [
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"Admin1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('admin_token', data.access_token);"
+          ]}}]
+        },
+        {
+          "name": "Login Driver — récupère driver_user_id",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"driver@test.com\",\n  \"password\": \"Driver1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.expect(ok).to.be.true;",
+            "pm.collectionVariables.set('driver_token', data.access_token);",
+            "pm.collectionVariables.set('driver_user_id', data.user.id);",
+            "console.log('driver_user_id:', data.user.id);"
+          ]}}]
+        },
+        {
+          "name": "Login Client",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"client@test.com\",\n  \"password\": \"Client1234!\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const { ok, data } = pm.response.json();",
+            "pm.collectionVariables.set('client_token', data.access_token);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🚗 Chauffeur — Gestion de ses documents",
+      "item": [
+        {
+          "name": "① GET /drivers/documents — liste initiale",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/documents", "host": ["{{base_url}}"], "path": ["drivers","documents"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Tableau de documents retourné', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data).to.be.an('array');",
+            "  console.log('Documents existants:', data.length);",
+            "  data.forEach(d => console.log(' -', d.document_type, '|', d.status));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② POST /drivers/documents — Upload permis (multipart)",
+          "description": "Upload d'un fichier via form-data.\n\nDans Postman :\n1. Sélectionner Body → form-data\n2. Ajouter le champ `file` (type File) → choisir un PDF ou image\n3. Ajouter le champ `document_type` (type Text) → `permis_conduire`\n4. Ajouter optionnellement `expires_at` → `2028-01-01`",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/documents", "host": ["{{base_url}}"], "path": ["drivers","documents"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",          "type": "file",  "src": [],  "description": "Fichier PDF/JPG/PNG/WebP — max 10 Mo" },
+                { "key": "document_type", "type": "text",  "value": "permis_conduire" },
+                { "key": "expires_at",    "type": "text",  "value": "2028-01-01", "description": "Optionnel — date d'expiration YYYY-MM-DD" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 201 — document uploadé', () => pm.response.to.have.status(201));",
+            "pm.test('Document créé avec statut pending', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.document_type).to.equal('permis_conduire');",
+            "  pm.expect(data.status).to.equal('pending');",
+            "  pm.expect(data.id).to.be.a('string');",
+            "  pm.collectionVariables.set('doc_id', data.id);",
+            "  console.log('doc_id:', data.id, '| type:', data.document_type, '| statut:', data.status);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "③ GET /drivers/documents/:id — détail + URL signée",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/documents/{{doc_id}}",
+              "host": ["{{base_url}}"], "path": ["drivers","documents","{{doc_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Détail avec URL signée', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.id).to.equal(pm.collectionVariables.get('doc_id'));",
+            "  pm.expect(data.document_type).to.be.a('string');",
+            "  pm.expect(data.status).to.be.oneOf(['pending','validated','rejected']);",
+            "  if (data.signed_url) {",
+            "    pm.expect(data.signed_url).to.be.a('string');",
+            "    console.log('URL signée (1h):', data.signed_url.substring(0, 80) + '...');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ DELETE /drivers/documents/:id — supprimer le document",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/documents/{{doc_id}}",
+              "host": ["{{base_url}}"], "path": ["drivers","documents","{{doc_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — supprimé', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "pm.collectionVariables.set('doc_id', '');"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "👨‍💼 Admin — Gestion et validation des documents",
+      "item": [
+        {
+          "name": "① GET /admin/documents/stats — statistiques globales",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents/stats", "host": ["{{base_url}}"], "path": ["admin","documents","stats"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Statistiques retournées', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  console.log('Stats documents:', JSON.stringify(data));",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② GET /admin/documents — liste tous les documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents?page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","documents"],
+              "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Liste paginée', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  console.log('Total documents:', data.total ?? data.length);",
+            "  // Sauvegarder le premier doc_id pour les tests validate/reject",
+            "  const docs = data.documents ?? data;",
+            "  if (Array.isArray(docs) && docs.length > 0) {",
+            "    const pending = docs.find(d => d.status === 'pending');",
+            "    if (pending) {",
+            "      pm.collectionVariables.set('doc_id', pending.id);",
+            "      console.log('doc_id (pending):', pending.id, '| type:', pending.document_type);",
+            "    }",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "② GET /admin/documents?status=pending — filtrer en attente",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents?status=pending&page=1&limit=20",
+              "host": ["{{base_url}}"], "path": ["admin","documents"],
+              "query": [{ "key": "status", "value": "pending" }, { "key": "page", "value": "1" }, { "key": "limit", "value": "20" }]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('ok = true', () => pm.expect(pm.response.json().ok).to.be.true);",
+            "const { data } = pm.response.json();",
+            "const docs = data.documents ?? data;",
+            "if (Array.isArray(docs)) docs.forEach(d => pm.expect(d.status).to.equal('pending'));",
+            "console.log('Documents en attente:', docs?.length ?? 0);"
+          ]}}]
+        },
+        {
+          "name": "③ GET /admin/documents/:id — détail",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{doc_id}}",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{doc_id}}"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Détail complet du document', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.id).to.equal(pm.collectionVariables.get('doc_id'));",
+            "  ['document_type','status','created_at'].forEach(k => pm.expect(data, k).to.have.property(k));",
+            "  console.log('Document:', data.document_type, '| statut:', data.status);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ PATCH /admin/documents/:id/validate — valider",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{doc_id}}/validate",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{doc_id}}","validate"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — validé', () => pm.response.to.have.status(200));",
+            "pm.test('Statut = validated', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.status).to.equal('validated');",
+            "  console.log('Document validé:', data.id);",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "④ PATCH /admin/documents/:id/reject — rejeter (avec motif)",
+          "description": "Le motif de rejet est obligatoire.",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{doc_id}}/reject",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{doc_id}}","reject"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"reason\": \"Document illisible — veuillez fournir un fichier de meilleure qualité.\"\n}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 — rejeté', () => pm.response.to.have.status(200));",
+            "pm.test('Statut = rejected + motif présent', () => {",
+            "  const { ok, data } = pm.response.json();",
+            "  pm.expect(ok).to.be.true;",
+            "  pm.expect(data.status).to.equal('rejected');",
+            "  pm.expect(data.rejection_reason).to.be.a('string');",
+            "  console.log('Document rejeté:', data.id, '| motif:', data.rejection_reason);",
+            "});"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "⏰ CRON — Vérification des expirations",
+      "item": [
+        {
+          "name": "POST /cron/documents/check-expiry — déclencher le cron",
+          "description": "Endpoint sécurisé par le header X-Cron-Secret.\nEnvoie des notifications push + email aux chauffeurs dont les documents expirent dans 30 ou 7 jours.",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Cron-Secret", "value": "{{cron_secret}}" }],
+            "url": { "raw": "{{base_url}}/cron/documents/check-expiry", "host": ["{{base_url}}"], "path": ["cron","documents","check-expiry"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200 ou 401 selon le secret', () => {",
+            "  pm.expect(pm.response.code).to.be.oneOf([200, 401]);",
+            "  if (pm.response.code === 200) {",
+            "    const { ok, data } = pm.response.json();",
+            "    pm.expect(ok).to.be.true;",
+            "    console.log('Cron exécuté | Notifications envoyées:', data?.sent ?? 0);",
+            "  } else {",
+            "    console.warn('401 — vérifier la variable cron_secret');",
+            "  }",
+            "});"
+          ]}}]
+        },
+        {
+          "name": "[401] POST /cron/documents/check-expiry — secret invalide",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "X-Cron-Secret", "value": "mauvais_secret" }],
+            "url": { "raw": "{{base_url}}/cron/documents/check-expiry", "host": ["{{base_url}}"], "path": ["cron","documents","check-expiry"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401 — secret invalide', () => pm.response.to.have.status(401));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔴 Cas d'erreur",
+      "item": [
+        {
+          "name": "[400] POST — document_type invalide",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/documents", "host": ["{{base_url}}"], "path": ["drivers","documents"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",          "type": "file",  "src": [] },
+                { "key": "document_type", "type": "text",  "value": "type_inconnu" }
+              ]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — type de document invalide', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[400] PATCH reject — motif manquant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{admin_token}}" },
+              { "key": "Content-Type",  "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{doc_id}}/reject",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{doc_id}}","reject"]
+            },
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 400 — motif de rejet obligatoire', () => pm.response.to.have.status(400));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        },
+        {
+          "name": "[404] GET /drivers/documents/:id — ID inconnu",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/drivers/documents/00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"], "path": ["drivers","documents","00000000-0000-0000-0000-000000000000"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 404 — document introuvable', () => pm.response.to.have.status(404));",
+            "pm.test('ok = false', () => pm.expect(pm.response.json().ok).to.be.false);"
+          ]}}]
+        }
+      ]
+    },
+
+    {
+      "name": "🔒 Contrôle d'accès",
+      "item": [
+        {
+          "name": "[401] GET /drivers/documents sans token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{base_url}}/drivers/documents", "host": ["{{base_url}}"], "path": ["drivers","documents"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 401', () => pm.response.to.have.status(401));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client — GET /drivers/documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/drivers/documents", "host": ["{{base_url}}"], "path": ["drivers","documents"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux chauffeurs', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Client — GET /admin/documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{client_token}}" }],
+            "url": { "raw": "{{base_url}}/admin/documents", "host": ["{{base_url}}"], "path": ["admin","documents"] }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — réservé aux admins et managers', () => pm.response.to.have.status(403));"
+          ]}}]
+        },
+        {
+          "name": "[403] Driver — PATCH /admin/documents/:id/validate",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{driver_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/admin/documents/{{doc_id}}/validate",
+              "host": ["{{base_url}}"], "path": ["admin","documents","{{doc_id}}","validate"]
+            }
+          },
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 403 — un driver ne peut pas valider de document', () => pm.response.to.have.status(403));"
+          ]}}]
+        }
+      ]
+    }
+
+  ]
+}

@@ -1,10 +1,62 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
-import { sendWelcomeEmail, sendResetPasswordEmail } from '../../utils/email.service.js';
+import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
+import { notificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config/env.js';
-import type { RegisterDto, LoginDto, AuthResponse, AuthUser } from './auth.types.js';
+import { logger } from '../../utils/logger.js';
+import type { Vehicle } from '../vehicles/vehicles.types.js'
+import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
+import type { ManagerPermission } from '../admin/admin.types.js';
 
 export class AuthService {
 
+  // ── HELPER PRIVÉ : récupérer le profil complet (users + driver si applicable) ──
+private async fetchFullProfile(userId: string): Promise<AuthUser> {
+  const { data: user, error } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error || !user) {
+    throw { status: 404, message: 'Profil utilisateur introuvable' };
+  }
+
+  let driver: DriverProfile | null = null;
+  let vehicle: Vehicle | null = null;
+  let permissions: ManagerPermission[] = [];
+
+  if (user.role === 'driver') {
+    const { data: driverData } = await supabaseAdmin
+      .from('drivers')
+      .select('id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at')
+      .eq('user_id', userId)
+      .single();
+
+    driver = driverData ?? null;
+
+    if (driverData?.id) {
+      const { data: vehicleData } = await supabaseAdmin
+        .from('vehicles')
+        .select('*')
+        .eq('driver_id', driverData.id)
+        .eq('is_active', true)
+        .single();
+
+      vehicle = vehicleData ?? null;
+    }
+  }
+
+  if (user.role === 'manager') {
+    const { data: permsData } = await supabaseAdmin
+      .from('manager_permissions')
+      .select('permission')
+      .eq('manager_id', userId);
+    permissions = (permsData ?? []).map(r => r.permission as ManagerPermission);
+  }
+
+  return { ...user, driver, vehicle, permissions } as AuthUser;
+}
+ 
   // ── REGISTER ──────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<AuthResponse> {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -36,21 +88,47 @@ export class AuthService {
     }
 
     // Retry : attendre que le trigger handle_new_user s'exécute
-    let userProfile: AuthUser | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    let profileExists = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
       const { data } = await supabaseAdmin
         .from('users')
-        .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+        .select('id')
         .eq('id', authData.user.id)
         .single();
 
-      if (data) { userProfile = data as AuthUser; break; }
-      await new Promise((r) => setTimeout(r, 300));
+      if (data) { profileExists = true; break; }
+      await new Promise((r) => setTimeout(r, 400));
     }
 
-    if (!userProfile) {
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      throw { status: 500, message: 'Erreur lors de la création du profil' };
+    // Fallback : si le trigger n'a pas créé le profil, on le crée manuellement
+    if (!profileExists) {
+      console.warn('[Register] Trigger handle_new_user timed out — fallback insert manuel');
+
+      const { error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id:              authData.user.id,
+          email:           dto.email,
+          first_name:      dto.first_name,
+          last_name:       dto.last_name,
+          phone:           dto.phone,
+          role:            dto.role,
+          rgpd_consent:    dto.rgpd_consent ?? false,
+          rgpd_consent_at: dto.rgpd_consent ? new Date().toISOString() : null,
+        });
+
+      if (insertError) {
+        console.error('[Register] Fallback insert échoué :', insertError?.message);
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw { status: 500, message: 'Erreur lors de la création du profil' };
+      }
+
+      // Si c'est un chauffeur, créer aussi le profil driver
+      if (dto.role === 'driver') {
+        await supabaseAdmin
+          .from('drivers')
+          .upsert({ user_id: authData.user.id }, { onConflict: 'user_id', ignoreDuplicates: true });
+      }
     }
 
     const { data: signIn, error: signInError } = await supabaseAdmin.auth.signInWithPassword({
@@ -62,9 +140,20 @@ export class AuthService {
       throw { status: 500, message: 'Compte créé mais impossible de générer le token' };
     }
 
+    const userProfile = await this.fetchFullProfile(authData.user.id);
+
     // ── Email de bienvenue (non bloquant) ──────────────────────────────────
     sendWelcomeEmail(dto.email, dto.first_name).catch((err) =>
       console.warn('[Email] Welcome email failed:', err)
+    );
+
+    // Alerte aux admins — nouveau compte créé (fire-and-forget)
+    const roleLabel = dto.role === 'driver' ? 'chauffeur' : 'client';
+    notificationsService.sendToAdmins(
+      'new_user_admin',
+      'Nouveau compte créé',
+      `Un nouveau compte ${roleLabel} vient de s'inscrire : ${dto.first_name} ${dto.last_name} (${dto.email}).`,
+      { user_id: authData.user.id, role: dto.role },
     );
 
     return {
@@ -86,32 +175,30 @@ export class AuthService {
       throw { status: 401, message: 'Email ou mot de passe incorrect' };
     }
 
-    const { data: userProfile, error: profileError } = await supabaseAdmin
-      .from('users')
-      .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
-      .eq('id', data.user.id)
-      .single();
-
-    if (profileError || !userProfile) {
-      throw { status: 404, message: 'Profil utilisateur introuvable' };
+    // Dans ton ExceptionFilter ou directement dans le service
+    try {
+      const userProfile = await this.fetchFullProfile(data.user.id);
+      if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
+        throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
+      }
+      return {
+        user: userProfile,
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        token_type: 'Bearer',
+      };
+    } catch (err) {
+      logger.error('auth', 'Erreur fetchFullProfile après login', err);
+      throw err;
     }
 
-    if (userProfile.deleted_at !== null) {
-      throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
-    }
 
-    return {
-      user: userProfile as AuthUser,
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      token_type: 'Bearer',
-    };
   }
 
   // ── LOGOUT ────────────────────────────────────────────────────────────────
   async logout(accessToken: string): Promise<void> {
     const { error } = await supabaseAdmin.auth.admin.signOut(accessToken);
-    if (error) console.warn('[Auth] Logout warning:', error.message);
+    if (error) logger.warn('auth', `Logout warning: ${error.message}`);
   }
 
   // ── REFRESH TOKEN ─────────────────────────────────────────────────────────
@@ -130,28 +217,25 @@ export class AuthService {
 
   // ── FORGOT PASSWORD ───────────────────────────────────────────────────────
   async forgotPassword(email: string): Promise<void> {
-    // 1. Vérifier si l'utilisateur existe (sans révéler l'info dans la réponse)
     const { data: userProfile } = await supabaseAdmin
       .from('users')
       .select('first_name')
       .eq('email', email)
       .single();
 
-    // 2. Générer le lien Supabase
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
       options: {
-        redirectTo: `${env.APP_URL}/auth/reset-password`,
+        redirectTo: `${env.MOBILE_DEEP_LINK_SCHEME}://reset-password`,
       },
     });
 
     if (error || !data) {
       console.warn('[Auth] Generate reset link warning:', error?.message);
-      return; // Ne pas révéler l'erreur
+      return;
     }
 
-    // 3. Envoyer l'email via Mailtrap (non bloquant si user inexistant)
     if (userProfile?.first_name) {
       sendResetPasswordEmail(
         email,
@@ -162,35 +246,245 @@ export class AuthService {
   }
 
   // ── RESET PASSWORD ────────────────────────────────────────────────────────
-  async resetPassword(accessToken: string, newPassword: string): Promise<void> {
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
+  async resetPassword(tokenOrJwt: string, newPassword: string): Promise<void> {
 
-    if (userError || !user) {
-      throw { status: 401, message: 'Token de réinitialisation invalide ou expiré' };
+    let userId: string | null = null;
+    let userEmail: string | null = null;
+    let userFirstName: string | null = null;
+
+    if (tokenOrJwt.startsWith('eyJ')) {
+      const { data: { user }, error } = await supabaseAdmin.auth.getUser(tokenOrJwt);
+      if (error || !user) {
+        throw { status: 401, message: 'Token invalide ou expiré' };
+      }
+      userId = user.id;
+      userEmail = user.email ?? null;
+    } else {
+      const { data, error } = await supabaseAdmin.auth.verifyOtp({
+        token_hash: tokenOrJwt,
+        type: 'recovery',
+      });
+      if (error || !data.user) {
+        throw { status: 401, message: 'Token de réinitialisation invalide ou expiré' };
+      }
+      userId = data.user.id;
+      userEmail = data.user.email ?? null;
     }
 
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+    const { data: profile } = await supabaseAdmin
+      .from('users')
+      .select('first_name')
+      .eq('id', userId)
+      .single();
+    userFirstName = profile?.first_name ?? null;
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
       password: newPassword,
     });
 
-    if (error) {
+    if (updateError) {
       throw { status: 400, message: 'Impossible de mettre à jour le mot de passe' };
+    }
+
+    if (userEmail && userFirstName) {
+      sendPasswordChangedEmail(userEmail, userFirstName).catch((err) =>
+        console.warn('[Email] Password changed email failed:', err)
+      );
     }
   }
 
   // ── ME ────────────────────────────────────────────────────────────────────
   async getMe(userId: string): Promise<AuthUser> {
-    const { data, error } = await supabaseAdmin
+    return this.fetchFullProfile(userId);
+  }
+
+  // ── GOOGLE AUTH — URL de redirection ─────────────────────────────────────
+  async getGoogleAuthUrl(redirectTo?: string): Promise<string> {
+    const defaultCallback = `${env.APP_URL}/auth/google/callback`;
+    const sanitized = this._sanitizeRedirectTo(redirectTo, defaultCallback);
+    const callbackUrl = encodeURIComponent(sanitized);
+    const supabaseUrl = env.SUPABASE_URL.replace(/\/$/, '');
+    return `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${callbackUrl}`;
+  }
+
+  private _sanitizeRedirectTo(redirectTo: string | undefined, fallback: string): string {
+    if (!redirectTo) return fallback;
+
+    // Origines autorisées : APP_URL, deep links mobile, localhost dev
+    const isAllowed =
+      redirectTo.startsWith(env.APP_URL) ||
+      redirectTo.startsWith(`${env.MOBILE_DEEP_LINK_SCHEME}://`) ||
+      redirectTo.startsWith('exp://') ||
+      (env.NODE_ENV !== 'production' && (
+        redirectTo.startsWith('http://localhost') ||
+        redirectTo.startsWith('http://10.0.2.2')
+      ));
+
+    if (!isAllowed) {
+      console.warn(`[Auth] redirect_to rejeté (open redirect) : ${redirectTo}`);
+      return fallback;
+    }
+    return redirectTo;
+  }
+
+  // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────
+  async handleGoogleCallback(code: string): Promise<AuthResponse> {
+    const { data, error } = await supabaseAdmin.auth.exchangeCodeForSession(code);
+
+    if (error || !data.session) {
+      throw { status: 401, message: 'Code Google invalide ou expiré' };
+    }
+
+    const supabaseUser = data.user;
+
+    // Vérifier si le profil existe déjà
+    const { data: existing } = await supabaseAdmin
       .from('users')
-      .select('id, email, role, first_name, last_name, phone, deleted_at, created_at')
+      .select('id')
+      .eq('id', supabaseUser.id)
+      .single();
+
+    if (!existing) {
+      const firstName = supabaseUser.user_metadata?.['given_name']
+                     ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
+                     ?? 'Utilisateur';
+      const lastName  = supabaseUser.user_metadata?.['family_name']
+                     ?? supabaseUser.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
+                     ?? '';
+
+      const { error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: supabaseUser.id, email: supabaseUser.email,
+          first_name: firstName, last_name: lastName,
+          phone: null, role: 'client', rgpd_consent: false,
+        });
+
+      if (insertError) {
+        throw { status: 500, message: 'Erreur lors de la création du profil Google' };
+      }
+      sendWelcomeEmail(supabaseUser.email!, firstName).catch((err) =>
+        console.warn('[Email] Welcome Google email failed:', err)
+      );
+      notificationsService.sendToAdmins(
+        'new_user_admin',
+        'Nouveau compte créé (Google)',
+        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${supabaseUser.email}).`,
+        { user_id: supabaseUser.id, role: 'client' },
+      );
+    }
+
+    const userProfile = await this.fetchFullProfile(supabaseUser.id);
+
+    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
+      throw { status: 403, message: 'Votre compte a été désactivé. Contactez le support.' };
+    }
+
+    return {
+      user: userProfile,
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      token_type: 'Bearer',
+    };
+  }
+
+  // ── GOOGLE AUTH — Depuis access_token fragment ────────────────────────────
+  async handleGoogleToken(accessToken: string, refreshToken?: string): Promise<AuthResponse> {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
+
+    if (error || !user) {
+      throw { status: 401, message: 'Token Google invalide ou expiré' };
+    }
+
+    // Vérifier si le profil existe déjà
+    const { data: existing } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .single();
+
+    if (!existing) {
+      const firstName = user.user_metadata?.['given_name']
+                     ?? user.user_metadata?.['full_name']?.split(' ')[0]
+                     ?? 'Utilisateur';
+      const lastName  = user.user_metadata?.['family_name']
+                     ?? user.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
+                     ?? '';
+
+      const { error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: user.id, email: user.email,
+          first_name: firstName, last_name: lastName,
+          phone: null, role: 'client', rgpd_consent: false,
+        });
+
+      if (insertError) {
+        throw { status: 500, message: 'Erreur lors de la création du profil Google' };
+      }
+      sendWelcomeEmail(user.email!, firstName).catch((err) =>
+        console.warn('[Email] Welcome Google email failed:', err)
+      );
+      notificationsService.sendToAdmins(
+        'new_user_admin',
+        'Nouveau compte créé (Google)',
+        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${user.email}).`,
+        { user_id: user.id, role: 'client' },
+      );
+    }
+
+    const userProfile = await this.fetchFullProfile(user.id);
+
+    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
+      throw { status: 403, message: 'Compte désactivé. Contactez le support.' };
+    }
+
+    return {
+      user: userProfile,
+      access_token: accessToken,
+      refresh_token: refreshToken ?? null,
+      token_type: 'Bearer',
+    };
+  }
+
+  // ── CHANGE PASSWORD (utilisateur connecté) ─────────────────────────────────
+  async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
+    // 1. Récupérer l'email de l'utilisateur
+    const { data: userProfile, error: profileError } = await supabaseAdmin
+      .from('users')
+      .select('email, first_name')
       .eq('id', userId)
       .single();
 
-    if (error || !data) {
+    if (profileError || !userProfile?.email) {
       throw { status: 404, message: 'Utilisateur introuvable' };
     }
 
-    return data as AuthUser;
+    // 2. Vérifier l'ancien mot de passe en tentant une connexion
+    const { error: signInError } = await supabaseAdmin.auth.signInWithPassword({
+      email: userProfile.email,
+      password: currentPassword,
+    });
+
+    if (signInError) {
+      throw { status: 401, message: 'Mot de passe actuel incorrect' };
+    }
+
+    // 3. Mettre à jour le mot de passe
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    });
+
+    if (updateError) {
+      throw { status: 400, message: 'Impossible de mettre à jour le mot de passe' };
+    }
+
+    // 4. Envoyer l'email de confirmation
+    if (userProfile.first_name) {
+      sendPasswordChangedEmail(userProfile.email, userProfile.first_name).catch((err) =>
+        console.warn('[Email] Password changed email failed:', err)
+      );
+    }
   }
 }
 
