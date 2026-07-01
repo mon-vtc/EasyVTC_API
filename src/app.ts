@@ -103,6 +103,26 @@ app.get('/api-docs.json', (_req: Request, res: Response) => {
   res.send(swaggerSpec);
 });
 
+// ── Fallback OAuth Google : Supabase redirige parfois vers / au lieu de /auth/google/callback
+// La page JS relaie le fragment #access_token=... vers la vraie route callback
+app.get('/', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>EazyVTC</title>
+  <script>
+    var h = window.location.hash;
+    if (h && h.includes('access_token')) {
+      window.location.replace('/auth/google/callback' + h);
+    }
+  </script>
+</head>
+<body></body>
+</html>`);
+});
+
 // ── Health checks ────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
