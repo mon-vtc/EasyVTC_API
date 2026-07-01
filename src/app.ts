@@ -57,7 +57,16 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ── Middlewares globaux ──────────────────────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'", "'unsafe-inline'"],
+      styleSrc:   ["'self'", "'unsafe-inline'"],
+      imgSrc:     ["'self'", "data:", "https:"],
+    },
+  },
+}));
 
 const baseOrigins = env.NODE_ENV === 'production'
   ? [env.APP_URL]
