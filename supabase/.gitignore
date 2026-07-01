@@ -8,3 +8,5 @@
 .env.*.local
 Claude.md
 .env.example
+.env copy
+.env

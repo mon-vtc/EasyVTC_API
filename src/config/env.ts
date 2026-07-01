@@ -26,11 +26,11 @@ const envSchema = z
     SENDGRID_FROM_EMAIL: z.string().email().optional(),
     SENDGRID_FROM_NAME:  z.string().optional(),
 
-    // ── Mailtrap ────────────────────────────────────────────────────────────
+    // ── Mailtrap (dev uniquement — optionnel si SendGrid est configuré) ─────────
     MAILTRAP_HOST: z.string().default('sandbox.smtp.mailtrap.io'),
     MAILTRAP_PORT: z.coerce.number().default(2525),
-    MAILTRAP_USER: z.string(),
-    MAILTRAP_PASS: z.string(),
+    MAILTRAP_USER: z.string().optional(),
+    MAILTRAP_PASS: z.string().optional(),
     MAIL_FROM:     z.string().email().default('noreply@easyvtc.com'),
 
     // ── Cron jobs ────────────────────────────────────────────────────────────

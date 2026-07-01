@@ -59,15 +59,21 @@ app.set('trust proxy', 1);
 // ── Middlewares globaux ──────────────────────────────────────────────────────
 app.use(helmet());
 
-const ALLOWED_ORIGINS = env.NODE_ENV === 'production'
+const baseOrigins = env.NODE_ENV === 'production'
   ? [env.APP_URL]
   : [
       'http://localhost:3000',
       'http://localhost:4000',
       'http://localhost:19000',
       'http://localhost:8081',
-      'http://10.0.2.2:4000',   // Android emulator → host
+      'http://10.0.2.2:4000',
     ];
+
+const extraOrigins = env.ALLOWED_ORIGINS
+  ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+  : [];
+
+const ALLOWED_ORIGINS = [...new Set([...baseOrigins, ...extraOrigins])];
 
 app.use(cors({
   origin: (origin, callback) => {
