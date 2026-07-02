@@ -13,6 +13,11 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
+// Mock du service email (non bloquant) — bulkAssign envoie un email par bénéficiaire
+jest.unstable_mockModule('../../utils/email.service.js', () => ({
+  sendPromoCodeEmail: jest.fn().mockResolvedValue(undefined as never),
+}));
+
 const { PromoCodesService } = await import('./promo-codes.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -20,6 +20,11 @@ jest.unstable_mockModule('../notifications/notifications.service.js', () => ({
   notificationsService: { sendToUser: mockSendToUser, sendToAdmins: jest.fn() },
 }));
 
+// Mock du service email (non bloquant) — createReservation envoie un email de confirmation
+jest.unstable_mockModule('../../utils/email.service.js', () => ({
+  sendReservationConfirmedEmail: jest.fn().mockResolvedValue(undefined as never),
+}));
+
 // Référence nommée pour pouvoir asserter les appels dans les tests
 const mockSetOnTripStatus = jest.fn().mockResolvedValue(undefined as never);
 

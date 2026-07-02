@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
+import { sendPromoCodeEmail } from '../../utils/email.service.js';
 import type {
   PromoCode,
   CreatePromoCodeDto,
@@ -224,10 +225,49 @@ export class PromoCodesService {
 
     const created = (data as PromoCode[]);
 
+    // Email de notification à chaque bénéficiaire (fire-and-forget)
+    this._notifyPromoCodeAssignees(created);
+
     return {
       created: created.length,
       codes:   created,
     };
+  }
+
+  /**
+   * Envoie un email à chaque utilisateur ayant reçu un nouveau code promo assigné.
+   * Fire-and-forget — un échec d'envoi ne doit jamais faire échouer l'attribution.
+   */
+  private _notifyPromoCodeAssignees(codes: PromoCode[]): void {
+    (async () => {
+      const userIds = codes.map((c) => c.assigned_user_id).filter(Boolean) as string[];
+      if (userIds.length === 0) return;
+
+      const { data: users } = await supabaseAdmin
+        .from('users')
+        .select('id, email, first_name')
+        .in('id', userIds);
+
+      const userById = new Map(
+        ((users ?? []) as Array<{ id: string; email: string; first_name: string }>)
+          .map((u) => [u.id, u]),
+      );
+
+      for (const promoCode of codes) {
+        const user = promoCode.assigned_user_id ? userById.get(promoCode.assigned_user_id) : undefined;
+        if (!user) continue;
+
+        const discountLabel = promoCode.discount_type === 'percent'
+          ? `${promoCode.discount_value}% de réduction`
+          : `${promoCode.discount_value} € de réduction`;
+        const validUntil = promoCode.valid_until
+          ? new Date(promoCode.valid_until).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+          : null;
+
+        sendPromoCodeEmail(user.email, user.first_name, promoCode.code, discountLabel, validUntil)
+          .catch((err) => console.error('[PromoCodes] Erreur envoi email code promo:', err));
+      }
+    })().catch((err: unknown) => console.error('[PromoCodes] Erreur _notifyPromoCodeAssignees:', err));
   }
 
   async update(id: string, dto: UpdatePromoCodeDto): Promise<PromoCode> {

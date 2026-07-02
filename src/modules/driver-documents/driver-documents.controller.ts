@@ -15,6 +15,7 @@ import {
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from './driver-documents.types.js';
 import { auditLog } from '../../utils/audit.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
+import { sendDocumentExpiryAlert } from '../../utils/email.service.js';
 
 const service = new DriverDocumentsService();
 
@@ -423,7 +424,7 @@ export async function checkDocumentExpiry(req: Request, res: Response) {
       const data = { document_id: doc.document_id, doc_type: doc.doc_type };
 
       notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
-      void notificationsService.send({ user_id: doc.driver.user_id, type: 'document_expiry', channel: 'email', title, body, data })
+      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
         .catch((err) => console.error('[CRON] Erreur envoi email alerte 30j:', err));
 
       await service.markAlertSent(doc.document_id, '30d');
@@ -437,7 +438,7 @@ export async function checkDocumentExpiry(req: Request, res: Response) {
       const data = { document_id: doc.document_id, doc_type: doc.doc_type };
 
       notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
-      void notificationsService.send({ user_id: doc.driver.user_id, type: 'document_expiry', channel: 'email', title, body, data })
+      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
         .catch((err) => console.error('[CRON] Erreur envoi email alerte 7j:', err));
 
       await service.markAlertSent(doc.document_id, '7d');

@@ -16,6 +16,7 @@ import { ratingsService } from '../ratings/ratings.service.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
 import { pricingService } from '../pricing/pricing.service.js';
 import { notificationsService } from '../notifications/notifications.service.js';
+import { sendReservationConfirmedEmail } from '../../utils/email.service.js';
 import { driversService } from '../drivers/drivers.service.js';
 import { ordersService } from '../orders/orders.service.js';
 import { invoicesService } from '../invoices/invoices.service.js';
@@ -141,7 +142,7 @@ export class ReservationsService {
       promoCodesService.incrementUsage(promoCodeId);
     }
 
-    // Notification de confirmation au client (fire-and-forget)
+    // Notification push de confirmation au client (fire-and-forget)
     notificationsService.sendToUser(
       clientId,
       'reservation_confirmed',
@@ -149,6 +150,20 @@ export class ReservationsService {
       `Votre course du ${this._formatDate(dto.scheduled_at)} est enregistrée. Prix estimé : ${priceAfterPromo} ${currency}.`,
       { reservation_id: reservation.id, status: 'pending' },
     );
+
+    // Email détaillé de confirmation au client (fire-and-forget)
+    if (reservation.client?.email) {
+      sendReservationConfirmedEmail(
+        reservation.client.email,
+        reservation.client.first_name,
+        reservation.id,
+        this._formatDate(dto.scheduled_at),
+        dto.pickup_address,
+        dto.dest_address,
+        dto.vehicle_type,
+        priceAfterPromo,
+      ).catch((err) => console.error('[Reservations] Erreur envoi email confirmation:', err));
+    }
 
     // Alerte aux admins — nouvelle réservation en attente d'attribution (fire-and-forget)
     notificationsService.sendToAdmins(
@@ -297,12 +312,13 @@ export class ReservationsService {
       .single();
 
     if (!driver) throw { status: 404, message: 'Chauffeur introuvable' };
-    if (driver.status !== 'active') {
+    if (driver.status !== 'active' && driver.status !== 'probationary') {
       const statusLabels: Record<string, string> = {
-        pending:   'dossier en attente de validation',
-        on_trip:   'en cours de mission',
-        rejected:  'dossier rejeté',
-        suspended: 'suspendu',
+        pending:      'dossier en attente de validation',
+        probationary: 'dossier partiellement validé',
+        on_trip:      'en cours de mission',
+        rejected:     'dossier rejeté',
+        suspended:    'suspendu',
       };
       const label = statusLabels[driver.status] ?? driver.status;
       throw { status: 400, message: `Ce chauffeur ne peut pas être assigné (${label})` };
