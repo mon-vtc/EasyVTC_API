@@ -135,7 +135,7 @@ export class DriversService {
       };
     }
 
-    if (isOnline && driver.status !== 'active') {
+    if (isOnline && driver.status !== 'active' && driver.status !== 'probationary') {
       throw {
         status: 403,
         message: 'Votre profil chauffeur doit être validé avant de pouvoir passer en ligne',
@@ -1054,13 +1054,17 @@ export class DriversService {
 
   // ────────────────────────────────────────────────────────────────────────────
   // INTERNE — Basculer le statut on_trip (appelé par le module reservations)
-  //   onTrip = true  → active → on_trip  (affectation d'une course)
-  //   onTrip = false → on_trip → active  (course terminée / annulée)
+  //   onTrip = true  → active|probationary → on_trip  (affectation d'une course)
+  //   onTrip = false → on_trip → active|probationary  (course terminée / annulée)
+  //
+  //   pre_trip_status mémorise le statut d'origine (active ou probationary) pour
+  //   le restaurer correctement à la fin de la course — sans quoi un chauffeur
+  //   probationary repasserait à tort en 'active'.
   // ────────────────────────────────────────────────────────────────────────────
   async setOnTripStatus(driverId: string, onTrip: boolean): Promise<void> {
     const { data: driver, error: fetchError } = await supabaseAdmin
       .from('drivers')
-      .select('id, status')
+      .select('id, status, pre_trip_status')
       .eq('id', driverId)
       .single();
 
@@ -1068,7 +1072,7 @@ export class DriversService {
       throw { status: 404, message: 'Chauffeur non trouvé' };
     }
 
-    if (onTrip && driver.status !== 'active') {
+    if (onTrip && driver.status !== 'active' && driver.status !== 'probationary') {
       throw {
         status: 400,
         message: `Impossible de mettre en mission un chauffeur au statut "${driver.status}"`,
@@ -1080,11 +1084,15 @@ export class DriversService {
       return;
     }
 
-    const newStatus = onTrip ? 'on_trip' : 'active';
+    const newStatus = onTrip ? 'on_trip' : (driver.pre_trip_status ?? 'active');
 
     const { error } = await supabaseAdmin
       .from('drivers')
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .update({
+        status: newStatus,
+        pre_trip_status: onTrip ? driver.status : null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', driverId);
 
     if (error) {

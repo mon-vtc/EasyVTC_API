@@ -65,7 +65,7 @@ export interface UpdateDriverDto {
 
 // ── DTO changement de statut (par l'admin) ────────────────────────────────────
 export interface ChangeDriverStatusDto {
-  status: 'active' | 'rejected' | 'suspended';
+  status: 'pending' | 'probationary' | 'active' | 'rejected' | 'suspended';
   reason: string;
 }
 

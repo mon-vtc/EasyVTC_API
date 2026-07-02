@@ -56,6 +56,10 @@ const app = express();
 // Nécessaire derrière Railway/proxy : permet de lire X-Forwarded-For pour rate limiting et logs
 app.set('trust proxy', 1);
 
+// Désactive les ETag/304 : API REST authentifiée dont le client mobile ne gère pas
+// les réponses 304 (corps vide) — il tente toujours de parser le JSON, ce qui échoue.
+app.disable('etag');
+
 // ── Middlewares globaux ──────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
