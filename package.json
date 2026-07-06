@@ -1,5 +1,5 @@
 {
-  "name": "eazyvtc_api",
+  "name": "easyvtc_api",
   "version": "1.0.0",
   "type": "module",
   "main": "dist/server.js",
@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/InfinitiaX/EazyVTC_API.git"
+    "url": "git+https://github.com/InfinitiaX/EasyVTC_API.git"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -27,9 +27,9 @@
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/InfinitiaX/EazyVTC_API/issues"
+    "url": "https://github.com/InfinitiaX/EasyVTC_API/issues"
   },
-  "homepage": "https://github.com/InfinitiaX/EazyVTC_API#readme",
+  "homepage": "https://github.com/InfinitiaX/EasyVTC_API#readme",
   "dependencies": {
     "@sendgrid/mail": "^8.1.6",
     "@supabase/supabase-js": "^2.99.1",

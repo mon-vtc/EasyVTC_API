@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 6 — EazyVTC
+-- Migration Sprint 6 — EasyVTC
 -- Date: 2026-05-29
 -- Description:
 --   Table ratings — évaluations des chauffeurs par les clients (note 1–5 étoiles)

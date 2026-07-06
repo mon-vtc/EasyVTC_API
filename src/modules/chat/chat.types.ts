@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Chat
-// Sprint 5 — EazyVTC
+// Sprint 5 — EasyVTC
 //
 // Architecture :
 //   - Les messages sont stockés dans la table `chat_messages` (Supabase).

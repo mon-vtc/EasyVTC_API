@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Marketing (Base clients + Campagnes)
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 export type CampaignType   = 'email' | /* 'sms' | */ 'push'; // SMS non intégré

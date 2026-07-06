@@ -1,5 +1,5 @@
 /**
- * SMOKE TEST — EazyVTC API (v2)
+ * SMOKE TEST — EasyVTC API (v2)
  *
  * 1 VU, 3 min — couverture exhaustive de tous les endpoints GET implémentés.
  * Rôles testés : client, admin, driver (65+ endpoints).

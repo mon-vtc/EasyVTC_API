@@ -11,7 +11,7 @@ function sanitizeError(err: unknown): string {
   if (err instanceof Error) return `${err.name}: ${err.message}`;
   if (typeof err === 'string') return err.substring(0, 500);
   if (typeof err === 'object' && err !== null) {
-    // Extraire seulement le message métier si présent (pattern service EazyVTC)
+    // Extraire seulement le message métier si présent (pattern service EasyVTC)
     const e = err as Record<string, unknown>;
     if (typeof e['message'] === 'string') return e['message'].substring(0, 500);
     return '[objet non-sérialisable]';

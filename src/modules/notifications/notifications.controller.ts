@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTROLLER — Module Notifications
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';

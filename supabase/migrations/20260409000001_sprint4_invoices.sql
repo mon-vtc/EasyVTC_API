@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 4 — EazyVTC
+-- Migration Sprint 4 — EasyVTC
 -- Date: 2026-04-09
 -- Description:
 --   1. Index supplémentaires sur la table invoices

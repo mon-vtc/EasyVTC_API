@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Bons de commande (Orders)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 //
 // Règle CDC absolue (p.26) : les formules de calcul et détails tarifaires
 // ne doivent JAMAIS apparaître sur le bon de commande. Seul le montant final
@@ -40,7 +40,7 @@ export interface TripSnapshot {
   scheduled_at: string;             // ISO 8601
   nb_passengers: number;
   comment: string | null;
-  via: string;                      // Canal/source, ex: "EazyVTC"
+  via: string;                      // Canal/source, ex: "EasyVTC"
   pricing_type: PricingType;
   /** Montant final affiché UNIQUEMENT pour les forfaits (jamais la formule) */
   final_price: number | null;

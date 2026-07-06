@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS public.app_config (
 -- Valeurs initiales : coordonnées du support
 INSERT INTO public.app_config (key, value) VALUES
   ('support_phone',   ''),
-  ('support_email',   'support@eazyvtc.com'),
+  ('support_email',   'support@easyvtc.com'),
   ('support_address', ''),
   ('support_hours',   'Lun–Ven 9h–18h')
 ON CONFLICT (key) DO NOTHING;

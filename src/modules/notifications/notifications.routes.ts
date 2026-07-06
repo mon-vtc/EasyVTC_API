@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Notifications
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 //
 // Toutes les routes sont protégées (authMiddleware).
 // Les notifications sont personnelles : chaque utilisateur ne voit que les siennes.

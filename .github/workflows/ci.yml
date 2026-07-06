@@ -1,6 +1,6 @@
 # .github/workflows/ci.yml
-# Repo : EazyVTC_API — Node.js + Express
-name: CI/CD — EazyVTC API
+# Repo : EasyVTC_API — Node.js + Express
+name: CI/CD — EasyVTC API
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
           MAILTRAP_PORT: '2525'
           MAILTRAP_USER: ${{ secrets.MAILTRAP_USER }}
           MAILTRAP_PASS: ${{ secrets.MAILTRAP_PASS }}
-          MAIL_FROM: noreply@eazyvtc.com
+          MAIL_FROM: noreply@easyvtc.com
           CRON_SECRET: ci-cron-secret-placeholder-for-tests-only
 
   # ── Job 2 : Deploy to Railway (main branch uniquement) ──────────────────────

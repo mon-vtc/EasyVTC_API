@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-admin-managers-collection",
-    "name": "EazyVTC — Module Admin (Gestionnaires & Dashboard)",
-    "description": "# EazyVTC — Module Admin complet\n\n## Setup\n1. Importer cette collection **et** l'environnement `EazyVTC_Local`\n2. Vérifier que `admin_email` / `admin_password` sont renseignés dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Exécuter **🔐 Authentification** en premier\n5. Suivre les dossiers dans l'ordre numéroté\n\n## Variables sauvegardées automatiquement\n- `admin_token` — après le login admin\n- `manager_id` — après `POST /admin/managers`\n- `target_user_id` — après la liste des users (premier résultat non-admin)\n- `reservation_id` — à renseigner manuellement (UUID d'une réservation en statut `pending`)\n- `driver_record_id` — à renseigner manuellement (UUID de la table `public.drivers`)\n\n## Routes couvertes\n```\nPOST  /admin/managers\nGET   /admin/users\nGET   /admin/users/:id\nPUT   /admin/users/:id/status\nGET   /admin/reservations\nGET   /admin/reservations/:id\nPUT   /admin/reservations/:id/assign\nGET   /admin/stats\n```\n\n## Rôles\n- Routes `/admin/users`, `/admin/managers`, `/admin/stats` : **admin uniquement**\n- Routes `/admin/reservations` : **admin + manager**",
+    "_postman_id": "easyvtc-admin-managers-collection",
+    "name": "EasyVTC — Module Admin (Gestionnaires & Dashboard)",
+    "description": "# EasyVTC — Module Admin complet\n\n## Setup\n1. Importer cette collection **et** l'environnement `EasyVTC_Local`\n2. Vérifier que `admin_email` / `admin_password` sont renseignés dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Exécuter **🔐 Authentification** en premier\n5. Suivre les dossiers dans l'ordre numéroté\n\n## Variables sauvegardées automatiquement\n- `admin_token` — après le login admin\n- `manager_id` — après `POST /admin/managers`\n- `target_user_id` — après la liste des users (premier résultat non-admin)\n- `reservation_id` — à renseigner manuellement (UUID d'une réservation en statut `pending`)\n- `driver_record_id` — à renseigner manuellement (UUID de la table `public.drivers`)\n\n## Routes couvertes\n```\nPOST  /admin/managers\nGET   /admin/users\nGET   /admin/users/:id\nPUT   /admin/users/:id/status\nGET   /admin/reservations\nGET   /admin/reservations/:id\nPUT   /admin/reservations/:id/assign\nGET   /admin/stats\n```\n\n## Rôles\n- Routes `/admin/users`, `/admin/managers`, `/admin/stats` : **admin uniquement**\n- Routes `/admin/reservations` : **admin + manager**",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -72,7 +72,7 @@
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\",\n  \"email\": \"manager.test@eazyvtc.fr\",\n  \"phone\": \"+33612345678\"\n}"
+              "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\",\n  \"email\": \"manager.test@easyvtc.fr\",\n  \"phone\": \"+33612345678\"\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -118,7 +118,7 @@
               { "key": "Authorization", "value": "Bearer {{admin_token}}" }
             ],
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
-            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"A\",\n  \"last_name\": \"Martin\",\n  \"email\": \"mgr2@eazyvtc.fr\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"A\",\n  \"last_name\": \"Martin\",\n  \"email\": \"mgr2@easyvtc.fr\"\n}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "pm.test('Status 400 — prénom trop court', () => pm.response.to.have.status(400));",
@@ -138,7 +138,7 @@
               { "key": "Authorization", "value": "Bearer {{admin_token}}" }
             ],
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
-            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\",\n  \"email\": \"manager.test@eazyvtc.fr\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Sophie\",\n  \"last_name\": \"Martin\",\n  \"email\": \"manager.test@easyvtc.fr\"\n}" }
           },
           "event": [{ "listen": "test", "script": { "exec": [
             "pm.test('Status 409 — email dupliqué', () => pm.response.to.have.status(409));",
@@ -235,9 +235,9 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{admin_token}}" }],
             "url": {
-              "raw": "{{base_url}}/admin/users?search=eazyvtc",
+              "raw": "{{base_url}}/admin/users?search=easyvtc",
               "host": ["{{base_url}}"], "path": ["admin","users"],
-              "query": [{ "key": "search", "value": "eazyvtc" }]
+              "query": [{ "key": "search", "value": "easyvtc" }]
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [

@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-favorites-sprint6",
-    "name": "EazyVTC API — Destinations Favorites (Sprint 6)",
-    "description": "# EazyVTC — Module Destinations Favorites\n\n## Endpoints couverts\n- `GET    /users/:id/favorites`          → Lister les favoris (client soi-même ou admin)\n- `POST   /users/:id/favorites`          → Ajouter un favori (max 20 par client)\n- `DELETE /users/:id/favorites/:favId`   → Supprimer un favori\n\n## Logique métier\n- Seul le client propriétaire ou un admin peut accéder aux favoris\n- Maximum 20 favoris par utilisateur (erreur 422 si dépassé)\n- Les coordonnées GPS (`lat`, `lng`) sont optionnelles\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `client_user_id`\n- `fav_id_1`, `fav_id_2`",
+    "_postman_id": "easyvtc-favorites-sprint6",
+    "name": "EasyVTC API — Destinations Favorites (Sprint 6)",
+    "description": "# EasyVTC — Module Destinations Favorites\n\n## Endpoints couverts\n- `GET    /users/:id/favorites`          → Lister les favoris (client soi-même ou admin)\n- `POST   /users/:id/favorites`          → Ajouter un favori (max 20 par client)\n- `DELETE /users/:id/favorites/:favId`   → Supprimer un favori\n\n## Logique métier\n- Seul le client propriétaire ou un admin peut accéder aux favoris\n- Maximum 20 favoris par utilisateur (erreur 422 si dépassé)\n- Les coordonnées GPS (`lat`, `lng`) sont optionnelles\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `client_user_id`\n- `fav_id_1`, `fav_id_2`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

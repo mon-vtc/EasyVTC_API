@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTROLLER — Module Bons de commande (Orders)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Réservations
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { PricingCountry, PricingType, PriceBreakdown } from '../pricing/pricing.types.js';

@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-sprint4-orders",
-    "name": "EazyVTC API — Sprint 4 — Bons de commande",
-    "description": "# EazyVTC — Module Orders (Bons de commande)\n\n## Prérequis\n1. Importer cette collection **et** l'environnement `EazyVTC_Local`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n   - Un forfait tarifaire actif (country: france)\n3. Lancer l'API : `npm run dev`\n4. Créer le bucket Supabase Storage `orders-pdfs` (privé)\n\n## Ordre d'exécution\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens\n2. **⚙️ Prérequis** : créer une réservation + assigner le chauffeur (déclenche la génération du bon)\n3. **📋 Lecture des bons** : tester toutes les routes GET\n4. **🔒 Contrôle d'accès** : vérifier les 401/403/404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `reservation_id` — après création de la réservation\n- `order_id` — après récupération du bon\n- `flat_rate_id` — depuis la liste des forfaits",
+    "_postman_id": "easyvtc-sprint4-orders",
+    "name": "EasyVTC API — Sprint 4 — Bons de commande",
+    "description": "# EasyVTC — Module Orders (Bons de commande)\n\n## Prérequis\n1. Importer cette collection **et** l'environnement `EasyVTC_Local`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n   - Un forfait tarifaire actif (country: france)\n3. Lancer l'API : `npm run dev`\n4. Créer le bucket Supabase Storage `orders-pdfs` (privé)\n\n## Ordre d'exécution\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens\n2. **⚙️ Prérequis** : créer une réservation + assigner le chauffeur (déclenche la génération du bon)\n3. **📋 Lecture des bons** : tester toutes les routes GET\n4. **🔒 Contrôle d'accès** : vérifier les 401/403/404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `reservation_id` — après création de la réservation\n- `order_id` — après récupération du bon\n- `flat_rate_id` — depuis la liste des forfaits",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -546,7 +546,7 @@
                     "  const { data } = pm.response.json();",
                     "  pm.expect(data.driver_snapshot).to.include.keys(['first_name','last_name']);",
                     "  pm.expect(data.passenger_snapshot).to.include.keys(['first_name','last_name']);",
-                    "  pm.expect(data.trip_snapshot.via).to.equal('EazyVTC');",
+                    "  pm.expect(data.trip_snapshot.via).to.equal('EasyVTC');",
                     "  console.log('Conducteur:', data.driver_snapshot.first_name, data.driver_snapshot.last_name);",
                     "  console.log('Passager:', data.passenger_snapshot.first_name, data.passenger_snapshot.last_name);",
                     "  console.log('Trajet:', data.trip_snapshot.pickup_address, '→', data.trip_snapshot.dest_address);",

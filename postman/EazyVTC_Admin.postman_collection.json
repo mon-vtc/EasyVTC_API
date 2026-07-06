@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "EazyVTC — Admin Module",
-    "_postman_id": "eazyvtc-admin-module",
+    "name": "EasyVTC — Admin Module",
+    "_postman_id": "easyvtc-admin-module",
     "description": "Collection complète du module Admin : gestion des gestionnaires, utilisateurs, réservations et statistiques.\n\n**Prérequis**\n- Avoir un environnement Postman avec les variables `base_url` et `admin_token` renseignées.\n- `admin_token` : JWT obtenu via POST /auth/login avec un compte `role=admin`.\n- Les variables `manager_token` et `manager_id` sont auto-remplies par les tests.\n\n**Ordre recommandé**\n1. Créer un gestionnaire → récupère `manager_id`\n2. Lister / Détail / Changer statut gestionnaire\n3. Lister les utilisateurs\n4. Lister les réservations → récupère `reservation_id`\n5. Récupérer les chauffeurs disponibles → récupère `driver_id`\n6. Affecter un chauffeur\n7. Statistiques",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

@@ -39,7 +39,7 @@ const mockDraftCampaign = {
   name:        'Offre Nouvel An',
   type:        'email',
   status:      'draft',
-  subject:     'Bonne année avec EazyVTC !',
+  subject:     'Bonne année avec EasyVTC !',
   body:        'Profitez de 20% de réduction ce mois-ci.',
   sent_at:     null,
   sent_count:  0,
@@ -196,7 +196,7 @@ describe('MarketingService', () => {
       const result = await service.createCampaign({
         name:    'Offre Nouvel An',
         type:    'email',
-        subject: 'Bonne année avec EazyVTC !',
+        subject: 'Bonne année avec EasyVTC !',
         body:    'Profitez de 20% de réduction ce mois-ci.',
       }, ADMIN_ID);
 

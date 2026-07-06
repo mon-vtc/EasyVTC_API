@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- SEED — Chauffeurs de test pour valider le filtre vehicle_type
--- Sprint 3 — EazyVTC
+-- Sprint 3 — EasyVTC
 --
 -- Mot de passe de tous les comptes : Driver1234!
 --
@@ -78,56 +78,56 @@ VALUES
   -- #1 Mamadou Diallo — standard, online
   ('d1aa0001-0000-0000-0000-000000000001',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.standard1@test.eazyvtc.com',
+   'driver.standard1@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #2 Fatou Sow — standard, online
   ('d1aa0001-0000-0000-0000-000000000002',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.standard2@test.eazyvtc.com',
+   'driver.standard2@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #3 Pierre Martin — berline, online
   ('d1aa0001-0000-0000-0000-000000000003',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.berline1@test.eazyvtc.com',
+   'driver.berline1@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #4 Sophie Dubois — berline, online
   ('d1aa0001-0000-0000-0000-000000000004',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.berline2@test.eazyvtc.com',
+   'driver.berline2@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #5 Ahmed Traoré — van, online
   ('d1aa0001-0000-0000-0000-000000000005',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.van1@test.eazyvtc.com',
+   'driver.van1@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #6 Claire Bernard — van, online
   ('d1aa0001-0000-0000-0000-000000000006',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.van2@test.eazyvtc.com',
+   'driver.van2@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #7 Luc Moreau — standard, OFFLINE 
   ('d1aa0001-0000-0000-0000-000000000007',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.offline@test.eazyvtc.com',
+   'driver.offline@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now()),
 
   -- #8 Nina Petit — berline, SUSPENDU 
   ('d1aa0001-0000-0000-0000-000000000008',
    '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-   'driver.suspended@test.eazyvtc.com',
+   'driver.suspended@test.easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now());
 
@@ -135,14 +135,14 @@ VALUES
 
 INSERT INTO public.users (id, email, phone, role, first_name, last_name, status, rgpd_consent, rgpd_consent_at)
 VALUES
-  ('d1aa0001-0000-0000-0000-000000000001', 'driver.standard1@test.eazyvtc.com', '+33600000001', 'driver', 'Mamadou', 'Diallo',  'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000002', 'driver.standard2@test.eazyvtc.com', '+33600000002', 'driver', 'Fatou',   'Sow',     'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000003', 'driver.berline1@test.eazyvtc.com',  '+33600000003', 'driver', 'Pierre',  'Martin',  'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000004', 'driver.berline2@test.eazyvtc.com',  '+33600000004', 'driver', 'Sophie',  'Dubois',  'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000005', 'driver.van1@test.eazyvtc.com',      '+33600000005', 'driver', 'Ahmed',   'Traoré',  'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000006', 'driver.van2@test.eazyvtc.com',      '+33600000006', 'driver', 'Claire',  'Bernard', 'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000007', 'driver.offline@test.eazyvtc.com',   '+33600000007', 'driver', 'Luc',     'Moreau',  'active', true, now()),
-  ('d1aa0001-0000-0000-0000-000000000008', 'driver.suspended@test.eazyvtc.com', '+33600000008', 'driver', 'Nina',    'Petit',   'active', true, now());
+  ('d1aa0001-0000-0000-0000-000000000001', 'driver.standard1@test.easyvtc.com', '+33600000001', 'driver', 'Mamadou', 'Diallo',  'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000002', 'driver.standard2@test.easyvtc.com', '+33600000002', 'driver', 'Fatou',   'Sow',     'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000003', 'driver.berline1@test.easyvtc.com',  '+33600000003', 'driver', 'Pierre',  'Martin',  'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000004', 'driver.berline2@test.easyvtc.com',  '+33600000004', 'driver', 'Sophie',  'Dubois',  'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000005', 'driver.van1@test.easyvtc.com',      '+33600000005', 'driver', 'Ahmed',   'Traoré',  'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000006', 'driver.van2@test.easyvtc.com',      '+33600000006', 'driver', 'Claire',  'Bernard', 'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000007', 'driver.offline@test.easyvtc.com',   '+33600000007', 'driver', 'Luc',     'Moreau',  'active', true, now()),
+  ('d1aa0001-0000-0000-0000-000000000008', 'driver.suspended@test.easyvtc.com', '+33600000008', 'driver', 'Nina',    'Petit',   'active', true, now());
 
 -- ── 3. public.drivers ────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTROLLER — Module Factures (Invoices)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';

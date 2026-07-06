@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Marketing
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 //
 // Montage dans app.ts :
 //   app.use('/admin/marketing', adminMarketingRouter)

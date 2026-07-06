@@ -10,7 +10,7 @@ import { api, apiAs } from '../helpers/api.js';
 import { deleteTestUser, uniqueTestId } from '../helpers/cleanup.js';
 
 const UID        = uniqueTestId();
-const TEST_EMAIL = `e2e.users.${UID}@test.eazyvtc.com`;
+const TEST_EMAIL = `e2e.users.${UID}@test.easyvtc.com`;
 
 let accessToken = '';
 let userId      = '';

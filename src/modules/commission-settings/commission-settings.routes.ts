@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Commission Settings
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 //
 // Montage dans app.ts :
 //   app.use('/admin/commission-settings', commissionSettingsRouter);

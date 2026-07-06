@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : ajout de la colonne status_reason sur public.drivers
--- Sprint 3 — EazyVTC
+-- Sprint 3 — EasyVTC
 --
 -- Contexte : le champ `reason` était collecté par le validator
 -- (PATCH /admin/drivers/:id/status) mais jamais persisté, faute de colonne.

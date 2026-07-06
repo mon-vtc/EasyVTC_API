@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration — EazyVTC
+-- Migration — EasyVTC
 -- Date: 2026-03-31
 -- Description:
 --   Ajout de la colonne pickup_surcharge sur pricing_flat_rates.

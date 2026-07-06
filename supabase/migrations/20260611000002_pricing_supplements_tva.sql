@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : Suppléments aéroport/nuit + TVA sur tarifs + TVA sur commissions
--- Sprint 7 — EazyVTC
+-- Sprint 7 — EasyVTC
 --
 -- Colonnes ajoutées :
 --   pricing_grids        → tva_rate, airport_supplement, night_supplement_rate,

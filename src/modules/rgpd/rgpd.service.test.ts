@@ -243,7 +243,7 @@ describe('RgpdService', () => {
 
       expect(mockUpdateUserById).toHaveBeenCalledWith(
         USER_ID,
-        expect.objectContaining({ email: `anonymized_${USER_ID}@deleted.eazyvtc.fr` }),
+        expect.objectContaining({ email: `anonymized_${USER_ID}@deleted.easyvtc.fr` }),
       );
     });
 

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTROLLER — Module Marketing
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';

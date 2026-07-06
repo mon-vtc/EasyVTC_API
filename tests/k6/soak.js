@@ -1,5 +1,5 @@
 /**
- * SOAK TEST (endurance) — EazyVTC API
+ * SOAK TEST (endurance) — EasyVTC API
  *
  * 20 VUs pendant 30 min pour détecter :
  *   - Fuites mémoire (montée progressive de la latence)
@@ -23,11 +23,11 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:4000';
 
 const CREDENTIALS = {
   client: {
-    email:    __ENV.TEST_CLIENT_EMAIL    || 'perf.client@eazyvtc.test',
+    email:    __ENV.TEST_CLIENT_EMAIL    || 'perf.client@easyvtc.test',
     password: __ENV.TEST_CLIENT_PASSWORD || 'PerfTest1234!',
   },
   admin: {
-    email:    __ENV.TEST_ADMIN_EMAIL    || 'perf.admin@eazyvtc.test',
+    email:    __ENV.TEST_ADMIN_EMAIL    || 'perf.admin@easyvtc.test',
     password: __ENV.TEST_ADMIN_PASSWORD || 'PerfTest1234!',
   },
 };

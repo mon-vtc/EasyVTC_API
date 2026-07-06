@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Véhicules
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { VehicleType } from '../auth/auth.types.js';

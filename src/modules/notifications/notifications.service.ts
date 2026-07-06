@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Notifications
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 //
 // Architecture push :
 //   - Stockage systématique en BDD (table notifications)
@@ -474,7 +474,7 @@ export class NotificationsService {
 
     this.sendToAdmins(
       'weekly_digest_admin',
-      'Bilan hebdomadaire EazyVTC',
+      'Bilan hebdomadaire EasyVTC',
       lines,
       { period: 'weekly', generated_at: new Date().toISOString() },
     );

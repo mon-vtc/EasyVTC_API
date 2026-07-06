@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Évaluations (Ratings)
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';

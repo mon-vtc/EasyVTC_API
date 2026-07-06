@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-audit-logs-sprint7",
-    "name": "EazyVTC API — Audit Logs (Sprint 7)",
-    "description": "# EazyVTC — Module Audit Logs\n\n## Endpoints couverts (admin uniquement)\n- `GET /admin/audit-logs`      → Liste paginée avec filtres\n- `GET /admin/audit-logs/:id`  → Détail d'un log\n\n## Filtres disponibles\n| Paramètre | Description |\n|---|---|\n| `action` | Ex: `COMMISSION_SETTING_CREATED`, `INVOICE_PRICE_ADJUSTED` |\n| `entity_type` | Ex: `commission_setting`, `invoice`, `reservation` |\n| `entity_id` | UUID de l'entité concernée |\n| `performed_by` | UUID de l'admin ayant effectué l'action |\n| `from` / `to` | Plage de dates ISO 8601 |\n| `page` / `limit` | Pagination |\n\n## Actions auditées\nLes actions sont loguées automatiquement lors des opérations sensibles :\n- `COMMISSION_SETTING_CREATED` / `COMMISSION_SETTING_DELETED`\n- `INVOICE_PRICE_ADJUSTED`\n- (autres actions selon les modules)\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `log_id`",
+    "_postman_id": "easyvtc-audit-logs-sprint7",
+    "name": "EasyVTC API — Audit Logs (Sprint 7)",
+    "description": "# EasyVTC — Module Audit Logs\n\n## Endpoints couverts (admin uniquement)\n- `GET /admin/audit-logs`      → Liste paginée avec filtres\n- `GET /admin/audit-logs/:id`  → Détail d'un log\n\n## Filtres disponibles\n| Paramètre | Description |\n|---|---|\n| `action` | Ex: `COMMISSION_SETTING_CREATED`, `INVOICE_PRICE_ADJUSTED` |\n| `entity_type` | Ex: `commission_setting`, `invoice`, `reservation` |\n| `entity_id` | UUID de l'entité concernée |\n| `performed_by` | UUID de l'admin ayant effectué l'action |\n| `from` / `to` | Plage de dates ISO 8601 |\n| `page` / `limit` | Pagination |\n\n## Actions auditées\nLes actions sont loguées automatiquement lors des opérations sensibles :\n- `COMMISSION_SETTING_CREATED` / `COMMISSION_SETTING_DELETED`\n- `INVOICE_PRICE_ADJUSTED`\n- (autres actions selon les modules)\n\n## Variables sauvegardées\n- `admin_token`, `client_token`, `driver_token`\n- `log_id`",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

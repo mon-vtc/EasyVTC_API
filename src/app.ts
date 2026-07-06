@@ -108,7 +108,7 @@ app.use(globalLimiter);
 
 // ── Documentation OpenAPI ────────────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
-  customSiteTitle: 'EazyVTC API Docs',
+  customSiteTitle: 'EasyVTC API Docs',
   swaggerOptions: { persistAuthorization: true },
 }));
 app.get('/api-docs.json', (_req: Request, res: Response) => {
@@ -124,7 +124,7 @@ app.get('/', (_req: Request, res: Response) => {
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <title>EazyVTC</title>
+  <title>EasyVTC</title>
   <script>
     var h = window.location.hash;
     if (h && h.includes('access_token')) {
@@ -140,7 +140,7 @@ app.get('/', (_req: Request, res: Response) => {
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     ok: true,
-    service: 'EazyVTC API',
+    service: 'EasyVTC API',
     timestamp: new Date().toISOString(),
   });
 });

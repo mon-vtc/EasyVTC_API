@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 5 — EazyVTC
+-- Migration Sprint 5 — EasyVTC
 -- Date: 2026-05-21
 -- Description:
 --   Canal support chat (chat:support:{ticketId}) — S5

@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- MIGRATION : Sécurité avancée des codes promo
--- Sprint 6 — EazyVTC
+-- Sprint 6 — EasyVTC
 --
 -- Ajouts :
 --   max_uses_per_user  → limite le nombre de fois qu'un même client peut utiliser

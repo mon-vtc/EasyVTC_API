@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 5 — EazyVTC
+-- Migration Sprint 5 — EasyVTC
 -- Date: 2026-05-12
 -- Description:
 --   Ajout de deux types de notification pour le workflow de validation
