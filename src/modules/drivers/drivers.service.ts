@@ -383,7 +383,7 @@ export class DriversService {
     let dateTo:   string | null = null;
 
     if (period !== 'all') {
-      const range = this._computeDateRange(period as PlanningPeriod, date);
+      const range = this._computeDateRange(period, date);
       dateFrom = range.dateFrom;
       dateTo   = range.dateTo;
     }
@@ -790,10 +790,22 @@ export class DriversService {
   // PRIVÉ — Calcul des bornes de date selon la période
   // ────────────────────────────────────────────────────────────────────────────
   private _computeDateRange(
-    period: PlanningPeriod,
+    period: PlanningPeriod | 'day',
     date?:  string,
   ): { dateFrom: string; dateTo: string } {
     const ref = date ? new Date(`${date}T00:00:00.000Z`) : new Date();
+
+    if (period === 'day') {
+      const start = new Date(ref);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(ref);
+      end.setUTCHours(23, 59, 59, 999);
+
+      return {
+        dateFrom: start.toISOString(),
+        dateTo:   end.toISOString(),
+      };
+    }
 
     if (period === 'week') {
       // Lundi–dimanche de la semaine contenant la date de référence

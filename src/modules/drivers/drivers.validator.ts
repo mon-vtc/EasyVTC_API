@@ -61,7 +61,7 @@ export const adminUpdateDriverSchema = z.object({
 
 // ── Filtres liste (admin) ─────────────────────────────────────────────────────
 export const driverListFiltersSchema = z.object({
-  status: z.enum(['pending', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
+  status: z.enum(['pending', 'probationary', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
   zone: z.enum(zoneTypes).optional(),
   vehicle_type: z.string().min(1).max(50).optional(),
   is_online: z
@@ -99,8 +99,8 @@ export const planningQuerySchema = z.object({
 
 // ── Revenus query ─────────────────────────────────────────────────────────────
 export const revenuesQuerySchema = z.object({
-  period: z.enum(['week', 'month', 'all'] as const, {
-    error: 'Période invalide. Valeurs acceptées: week, month, all',
+  period: z.enum(['day', 'week', 'month', 'all'] as const, {
+    error: 'Période invalide. Valeurs acceptées: day, week, month, all',
   }).default('month'),
   date: z
     .string()
