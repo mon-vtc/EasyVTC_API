@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SEED RUNNER — Chauffeurs de test (filtre vehicle_type)
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 //
 // Le trigger on_auth_user_created crée automatiquement public.users + public.drivers
 // depuis raw_user_meta_data. Ce script passe les métadonnées lors de la création
@@ -34,15 +34,15 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 
 const DRIVERS = [
   //  Éligibles : active + is_online
-  { email: 'driver.standard1@test.eazyvtc.com', firstName: 'Mamadou', lastName: 'Diallo',  phone: '+33699990001', vehicleType: 'standard', isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-001-FR', brand: 'Toyota',     model: 'Yaris',        year: 2022, color: 'blanc',  type: 'standard' } },
-  { email: 'driver.standard2@test.eazyvtc.com', firstName: 'Fatou',   lastName: 'Sow',     phone: '+33699990002', vehicleType: 'standard', isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-002-FR', brand: 'Renault',    model: 'Clio',         year: 2021, color: 'gris',   type: 'standard' } },
-  { email: 'driver.berline1@test.eazyvtc.com',  firstName: 'Pierre',  lastName: 'Martin',  phone: '+33699990003', vehicleType: 'berline',  isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-003-FR', brand: 'Mercedes',   model: 'Classe E',     year: 2023, color: 'noir',   type: 'berline'  } },
-  { email: 'driver.berline2@test.eazyvtc.com',  firstName: 'Sophie',  lastName: 'Dubois',  phone: '+33699990004', vehicleType: 'berline',  isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-004-FR', brand: 'BMW',        model: 'Série 5',      year: 2022, color: 'blanc',  type: 'berline'  } },
-  { email: 'driver.van1@test.eazyvtc.com',      firstName: 'Ahmed',   lastName: 'Traoré',  phone: '+33699990005', vehicleType: 'van',      isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-005-FR', brand: 'Mercedes',   model: 'V-Class',      year: 2023, color: 'noir',   type: 'van'      } },
-  { email: 'driver.van2@test.eazyvtc.com',      firstName: 'Claire',  lastName: 'Bernard', phone: '+33699990006', vehicleType: 'van',      isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-006-FR', brand: 'Volkswagen', model: 'Transporter',  year: 2021, color: 'argent', type: 'van'      } },
+  { email: 'driver.standard1@test.easyvtc.com', firstName: 'Mamadou', lastName: 'Diallo',  phone: '+33699990001', vehicleType: 'standard', isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-001-FR', brand: 'Toyota',     model: 'Yaris',        year: 2022, color: 'blanc',  type: 'standard' } },
+  { email: 'driver.standard2@test.easyvtc.com', firstName: 'Fatou',   lastName: 'Sow',     phone: '+33699990002', vehicleType: 'standard', isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-002-FR', brand: 'Renault',    model: 'Clio',         year: 2021, color: 'gris',   type: 'standard' } },
+  { email: 'driver.berline1@test.easyvtc.com',  firstName: 'Pierre',  lastName: 'Martin',  phone: '+33699990003', vehicleType: 'berline',  isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-003-FR', brand: 'Mercedes',   model: 'Classe E',     year: 2023, color: 'noir',   type: 'berline'  } },
+  { email: 'driver.berline2@test.easyvtc.com',  firstName: 'Sophie',  lastName: 'Dubois',  phone: '+33699990004', vehicleType: 'berline',  isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-004-FR', brand: 'BMW',        model: 'Série 5',      year: 2022, color: 'blanc',  type: 'berline'  } },
+  { email: 'driver.van1@test.easyvtc.com',      firstName: 'Ahmed',   lastName: 'Traoré',  phone: '+33699990005', vehicleType: 'van',      isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-005-FR', brand: 'Mercedes',   model: 'V-Class',      year: 2023, color: 'noir',   type: 'van'      } },
+  { email: 'driver.van2@test.easyvtc.com',      firstName: 'Claire',  lastName: 'Bernard', phone: '+33699990006', vehicleType: 'van',      isOnline: true,  status: 'active'    as const, vehicle: { plate: 'AB-006-FR', brand: 'Volkswagen', model: 'Transporter',  year: 2021, color: 'argent', type: 'van'      } },
   //  Exclus
-  { email: 'driver.offline@test.eazyvtc.com',   firstName: 'Luc',     lastName: 'Moreau',  phone: '+33699990007', vehicleType: 'standard', isOnline: false, status: 'active'    as const, vehicle: { plate: 'AB-007-FR', brand: 'Peugeot',    model: '308',          year: 2020, color: 'rouge',  type: 'standard' } },
-  { email: 'driver.suspended@test.eazyvtc.com', firstName: 'Nina',    lastName: 'Petit',   phone: '+33699990008', vehicleType: 'berline',  isOnline: true,  status: 'suspended' as const, vehicle: { plate: 'AB-008-FR', brand: 'Audi',       model: 'A6',           year: 2022, color: 'gris',   type: 'berline'  } },
+  { email: 'driver.offline@test.easyvtc.com',   firstName: 'Luc',     lastName: 'Moreau',  phone: '+33699990007', vehicleType: 'standard', isOnline: false, status: 'active'    as const, vehicle: { plate: 'AB-007-FR', brand: 'Peugeot',    model: '308',          year: 2020, color: 'rouge',  type: 'standard' } },
+  { email: 'driver.suspended@test.easyvtc.com', firstName: 'Nina',    lastName: 'Petit',   phone: '+33699990008', vehicleType: 'berline',  isOnline: true,  status: 'suspended' as const, vehicle: { plate: 'AB-008-FR', brand: 'Audi',       model: 'A6',           year: 2022, color: 'gris',   type: 'berline'  } },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

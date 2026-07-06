@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : Commission Settings + Commissions
--- Sprint 6 — EazyVTC
+-- Sprint 6 — EasyVTC
 --
 -- Tables créées :
 --   public.commission_settings  → paramétrage des taux par zone/type véhicule

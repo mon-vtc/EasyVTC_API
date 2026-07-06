@@ -1,4 +1,4 @@
-// Nettoyage global : supprime TOUS les utilisateurs de test (@test.eazyvtc.com)
+// Nettoyage global : supprime TOUS les utilisateurs de test (@test.easyvtc.com)
 // avant que les suites E2E s'exécutent — inclut les orphelins dans auth.users
 // qui n'ont plus de ligne dans public.users (résidu de cleanups partiels).
 //
@@ -30,7 +30,7 @@ export default async function globalSetup(): Promise<void> {
   const { data: publicUsers } = await supabase
     .from('users')
     .select('id, email')
-    .like('email', '%@test.eazyvtc.com');
+    .like('email', '%@test.easyvtc.com');
 
   if (publicUsers && publicUsers.length > 0) {
     console.log(`\n[E2E globalSetup] ${publicUsers.length} utilisateur(s) dans public.users — nettoyage...`);
@@ -56,7 +56,7 @@ export default async function globalSetup(): Promise<void> {
     if (!authData?.users?.length) break;
 
     for (const u of authData.users) {
-      if (u.email?.endsWith('@test.eazyvtc.com')) {
+      if (u.email?.endsWith('@test.easyvtc.com')) {
         orphanIds.push(u.id);
       }
     }

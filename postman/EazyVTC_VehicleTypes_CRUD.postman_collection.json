@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-vehicle-types-crud",
-    "name": "EazyVTC — Types de véhicule (CRUD)",
-    "description": "# EazyVTC — Module vehicle-types\n\n## Setup\n1. Importer cette collection **et** l'environnement `EazyVTC_Local`\n2. Vérifier que `admin_email` / `admin_password` sont renseignés dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Appliquer la migration : `20260422000001_vehicle_types_table.sql` (seed les 3 types standard/berline/van)\n5. Exécuter **🔐 Authentification** en premier, puis suivre l'ordre numéroté\n\n## Routes couvertes\n```\nGET    /vehicle-types                     (public)\nGET    /admin/vehicle-types               (admin)\nGET    /admin/vehicle-types/:id           (admin)\nPOST   /admin/vehicle-types              (admin)\nPATCH  /admin/vehicle-types/:id          (admin)\nDELETE /admin/vehicle-types/:id          (admin)\n```\n\n## Variables sauvegardées automatiquement\n- `admin_token` — après le login admin\n- `vehicle_type_id` — après `POST /admin/vehicle-types` (type de test `minibus-test`)",
+    "_postman_id": "easyvtc-vehicle-types-crud",
+    "name": "EasyVTC — Types de véhicule (CRUD)",
+    "description": "# EasyVTC — Module vehicle-types\n\n## Setup\n1. Importer cette collection **et** l'environnement `EasyVTC_Local`\n2. Vérifier que `admin_email` / `admin_password` sont renseignés dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Appliquer la migration : `20260422000001_vehicle_types_table.sql` (seed les 3 types standard/berline/van)\n5. Exécuter **🔐 Authentification** en premier, puis suivre l'ordre numéroté\n\n## Routes couvertes\n```\nGET    /vehicle-types                     (public)\nGET    /admin/vehicle-types               (admin)\nGET    /admin/vehicle-types/:id           (admin)\nPOST   /admin/vehicle-types              (admin)\nPATCH  /admin/vehicle-types/:id          (admin)\nDELETE /admin/vehicle-types/:id          (admin)\n```\n\n## Variables sauvegardées automatiquement\n- `admin_token` — après le login admin\n- `vehicle_type_id` — après `POST /admin/vehicle-types` (type de test `minibus-test`)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

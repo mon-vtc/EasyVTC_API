@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-rbac-managers-collection",
-    "name": "EazyVTC — RBAC & Permissions Gestionnaire",
-    "description": "# EazyVTC — RBAC & Permissions Gestionnaire\n\n## Setup\n1. Importer cette collection et l'environnement `EazyVTC_Local`\n2. Renseigner `admin_email` / `admin_password` dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Exécuter **🔐 Authentification › Login Admin** en premier\n5. Suivre les dossiers dans l'ordre numéroté\n\n## Variables gérées automatiquement\n- `admin_token` — après Login Admin\n- `manager_id` — après POST /admin/managers\n- `manager_token` — après Login Manager\n\n## Permissions disponibles\n```\nview_users        → GET /admin/users, GET /users\nview_drivers      → GET /admin/drivers\nview_clients      → GET /admin/clients\nview_pricing      → GET /pricing/grids\nview_documents    → GET /admin/documents\nview_reservations → GET /admin/reservations (S5)\nassign_reservation→ PUT /admin/reservations/:id/assign (S5)\ncancel_reservation→ PUT /admin/reservations/:id/cancel (S5)\nmanage_pricing    → POST/PATCH/DELETE pricing (S5)\nview_orders       → GET /orders (S4)\nview_invoices     → GET /invoices (S4)\n```\n\n## Règle fondamentale\n- Les **admins** passent toujours (bypass `requirePermission`)\n- Les **managers** doivent avoir la permission explicitement accordée\n- Les managers n'ont **jamais** accès aux routes d'écriture (create/update/delete)",
+    "_postman_id": "easyvtc-rbac-managers-collection",
+    "name": "EasyVTC — RBAC & Permissions Gestionnaire",
+    "description": "# EasyVTC — RBAC & Permissions Gestionnaire\n\n## Setup\n1. Importer cette collection et l'environnement `EasyVTC_Local`\n2. Renseigner `admin_email` / `admin_password` dans l'environnement\n3. Lancer l'API : `npm run dev`\n4. Exécuter **🔐 Authentification › Login Admin** en premier\n5. Suivre les dossiers dans l'ordre numéroté\n\n## Variables gérées automatiquement\n- `admin_token` — après Login Admin\n- `manager_id` — après POST /admin/managers\n- `manager_token` — après Login Manager\n\n## Permissions disponibles\n```\nview_users        → GET /admin/users, GET /users\nview_drivers      → GET /admin/drivers\nview_clients      → GET /admin/clients\nview_pricing      → GET /pricing/grids\nview_documents    → GET /admin/documents\nview_reservations → GET /admin/reservations (S5)\nassign_reservation→ PUT /admin/reservations/:id/assign (S5)\ncancel_reservation→ PUT /admin/reservations/:id/cancel (S5)\nmanage_pricing    → POST/PATCH/DELETE pricing (S5)\nview_orders       → GET /orders (S4)\nview_invoices     → GET /invoices (S4)\n```\n\n## Règle fondamentale\n- Les **admins** passent toujours (bypass `requirePermission`)\n- Les **managers** doivent avoir la permission explicitement accordée\n- Les managers n'ont **jamais** accès aux routes d'écriture (create/update/delete)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,7 +10,7 @@
     { "key": "admin_token",   "value": "", "type": "string" },
     { "key": "manager_token", "value": "", "type": "string" },
     { "key": "manager_id",    "value": "", "type": "string", "description": "Sauvegardé après POST /admin/managers" },
-    { "key": "manager_email", "value": "rbac.manager@eazyvtc.fr", "type": "string" },
+    { "key": "manager_email", "value": "rbac.manager@easyvtc.fr", "type": "string" },
     { "key": "manager_pass",  "value": "Manager123!", "type": "string", "description": "Mot de passe connu passé à la création pour pouvoir se connecter ensuite" },
     { "key": "target_user_id",   "value": "", "type": "string", "description": "Premier utilisateur non-admin récupéré lors du listing" },
     { "key": "target_driver_id", "value": "", "type": "string", "description": "UUID de public.drivers — à renseigner manuellement si la liste est vide" },
@@ -159,7 +159,7 @@
               { "key": "Authorization", "value": "Bearer {{admin_token}}" }
             ],
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
-            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"A\",\n  \"last_name\": \"Martin\",\n  \"email\": \"test@eazyvtc.fr\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"A\",\n  \"last_name\": \"Martin\",\n  \"email\": \"test@easyvtc.fr\"\n}" }
           }
         },
 
@@ -180,7 +180,7 @@
               { "key": "Authorization", "value": "Bearer {{admin_token}}" }
             ],
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
-            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Phone\",\n  \"email\": \"phone.test@eazyvtc.fr\",\n  \"phone\": \"0612345678\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Phone\",\n  \"email\": \"phone.test@easyvtc.fr\",\n  \"phone\": \"0612345678\"\n}" }
           }
         },
 
@@ -201,7 +201,7 @@
               { "key": "Authorization", "value": "Bearer {{admin_token}}" }
             ],
             "url": { "raw": "{{base_url}}/admin/managers", "host": ["{{base_url}}"], "path": ["admin","managers"] },
-            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Priority\",\n  \"email\": \"priority.test@eazyvtc.fr\",\n  \"priority_level\": 5\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"first_name\": \"Test\",\n  \"last_name\": \"Priority\",\n  \"email\": \"priority.test@easyvtc.fr\",\n  \"priority_level\": 5\n}" }
           }
         },
 

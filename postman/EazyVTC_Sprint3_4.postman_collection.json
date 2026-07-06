@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "EazyVTC — Sprint 3-4 (Drivers, Notifications, Invoices, Vehicles)",
-    "_postman_id": "eazyvtc-sprint3-4",
+    "name": "EasyVTC — Sprint 3-4 (Drivers, Notifications, Invoices, Vehicles)",
+    "_postman_id": "easyvtc-sprint3-4",
     "description": "Collection des endpoints ajoutés en S3-S4 : planning/revenus chauffeurs, notifications, factures, véhicules.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

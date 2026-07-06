@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration — EazyVTC
+-- Migration — EasyVTC
 -- Date: 2026-04-02
 -- Description:
 --   Ajout du statut 'on_trip' à l'enum driver_status.

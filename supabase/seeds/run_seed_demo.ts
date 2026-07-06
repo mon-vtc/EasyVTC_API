@@ -1,5 +1,5 @@
 /**
- * Seed — Comptes de démonstration EazyVTC
+ * Seed — Comptes de démonstration EasyVTC
  *
  * Usage :
  *   npx ts-node --esm supabase/seeds/run_seed_demo.ts
@@ -29,7 +29,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
 const ACCOUNTS = [
   {
     id:         'aa000000-0000-0000-0000-000000000001',
-    email:      'admin@eazyvtc.com',
+    email:      'admin@easyvtc.com',
     password:   'Admin1234!',
     first_name: 'Super',
     last_name:  'Admin',
@@ -38,7 +38,7 @@ const ACCOUNTS = [
   },
   {
     id:         'cc000000-0000-0000-0000-000000000001',
-    email:      'client@eazyvtc.com',
+    email:      'client@easyvtc.com',
     password:   'Client1234!',
     first_name: 'Marie',
     last_name:  'Dupont',
@@ -47,7 +47,7 @@ const ACCOUNTS = [
   },
   {
     id:         'dd000000-0000-0000-0000-000000000001',
-    email:      'driver@eazyvtc.com',
+    email:      'driver@easyvtc.com',
     password:   'Driver1234!',
     first_name: 'Ibrahima',
     last_name:  'Diallo',
@@ -56,7 +56,7 @@ const ACCOUNTS = [
   },
   {
     id:         'ee000000-0000-0000-0000-000000000001',
-    email:      'manager@eazyvtc.com',
+    email:      'manager@easyvtc.com',
     password:   'Manager1234!',
     first_name: 'Aissatou',
     last_name:  'Ndiaye',
@@ -168,7 +168,7 @@ async function updatePublicUsers() {
 
 async function updateDriver() {
   console.log('\n── Mise à jour public.drivers…');
-  const uid = await getUserId('driver@eazyvtc.com');
+  const uid = await getUserId('driver@easyvtc.com');
 
   const { error } = await supabase
     .from('drivers')
@@ -190,7 +190,7 @@ async function updateDriver() {
 
 async function insertVehicle() {
   console.log('\n── Insertion public.vehicles…');
-  const uid = await getUserId('driver@eazyvtc.com');
+  const uid = await getUserId('driver@easyvtc.com');
 
   const { data: driver, error: dErr } = await supabase
     .from('drivers')
@@ -221,8 +221,8 @@ async function insertVehicle() {
 
 async function insertManagerPermissions() {
   console.log('\n── Permissions manager…');
-  const managerUid = await getUserId('manager@eazyvtc.com');
-  const adminUid   = await getUserId('admin@eazyvtc.com');
+  const managerUid = await getUserId('manager@easyvtc.com');
+  const adminUid   = await getUserId('admin@easyvtc.com');
 
   const { error: delErr } = await supabase
     .from('manager_permissions')
@@ -247,7 +247,7 @@ async function insertManagerPermissions() {
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════');
-  console.log('  Seed — Comptes de démonstration EazyVTC');
+  console.log('  Seed — Comptes de démonstration EasyVTC');
   console.log('  Projet :', SUPABASE_URL);
   console.log('═══════════════════════════════════════════════════════');
 
@@ -260,10 +260,10 @@ async function main() {
 
   console.log('\n═══════════════════════════════════════════════════════');
   console.log('  Comptes prêts :');
-  console.log('    admin@eazyvtc.com    / Admin1234!');
-  console.log('    client@eazyvtc.com   / Client1234!');
-  console.log('    driver@eazyvtc.com   / Driver1234!');
-  console.log('    manager@eazyvtc.com  / Manager1234!');
+  console.log('    admin@easyvtc.com    / Admin1234!');
+  console.log('    client@easyvtc.com   / Client1234!');
+  console.log('    driver@easyvtc.com   / Driver1234!');
+  console.log('    manager@easyvtc.com  / Manager1234!');
   console.log('═══════════════════════════════════════════════════════\n');
 }
 

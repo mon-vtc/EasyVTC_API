@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Bons de commande (Orders)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 //
 // Flux :
 //   [Auto] reservationsService.assignDriver() → ordersService.createFromReservation()
@@ -31,10 +31,10 @@ const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
 // En-tête société affiché sur le PDF
 const COMPANY = {
-  name:    'EazyVTC',
+  name:    'EasyVTC',
   address: '1 rue de la Paix, 75001 Paris, France',
   phone:   '+33 1 00 00 00 00',
-  via:     'EazyVTC',
+  via:     'EasyVTC',
 };
 
 // ── Sélect enrichi ────────────────────────────────────────────────────────────

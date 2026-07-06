@@ -29,7 +29,7 @@ export default {
   // Uniquement les fichiers E2E
   testMatch: ['**/tests/e2e/flows/**/*.e2e.ts'],
 
-  // Supprime TOUS les utilisateurs @test.eazyvtc.com avant la suite (résidus de runs précédents)
+  // Supprime TOUS les utilisateurs @test.easyvtc.com avant la suite (résidus de runs précédents)
   globalSetup: './tests/e2e/global-setup.ts',
 
   // Charge les vraies credentials AVANT d'importer l'app

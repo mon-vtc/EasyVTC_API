@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- CLEANUP — Suppression des chauffeurs de test (vehicle_type filter)
--- Sprint 3 — EazyVTC
+-- Sprint 3 — EasyVTC
 --
 -- Usage : psql $DATABASE_URL -f supabase/seeds/cleanup_test_drivers.sql
 -- ══════════════════════════════════════════════════════════════════════════════

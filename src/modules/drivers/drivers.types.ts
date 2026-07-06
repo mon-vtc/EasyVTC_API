@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Drivers
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { DriverStatus, VehicleType, ZoneType } from '../auth/auth.types.js';

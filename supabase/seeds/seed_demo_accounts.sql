@@ -1,13 +1,13 @@
 -- ══════════════════════════════════════════════════════════════════════════════
--- SEED — Comptes de démonstration EazyVTC
+-- SEED — Comptes de démonstration EasyVTC
 --
 -- Crée 4 comptes : admin, client, chauffeur, gestionnaire
 --
 -- Identifiants :
---   admin@eazyvtc.com    / Admin1234!
---   client@eazyvtc.com   / Client1234!
---   driver@eazyvtc.com   / Driver1234!
---   manager@eazyvtc.com  / Manager1234!
+--   admin@easyvtc.com    / Admin1234!
+--   client@easyvtc.com   / Client1234!
+--   driver@easyvtc.com   / Driver1234!
+--   manager@easyvtc.com  / Manager1234!
 --
 -- Usage :
 --   psql $DATABASE_URL -f supabase/seeds/seed_demo_accounts.sql
@@ -59,7 +59,7 @@ VALUES
   ('aa000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated',
-   'admin@eazyvtc.com',
+   'admin@easyvtc.com',
    crypt('Admin1234!', gen_salt('bf', 10)),
    now(),
    '{"provider":"email","providers":["email"]}',
@@ -70,7 +70,7 @@ VALUES
   ('cc000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated',
-   'client@eazyvtc.com',
+   'client@easyvtc.com',
    crypt('Client1234!', gen_salt('bf', 10)),
    now(),
    '{"provider":"email","providers":["email"]}',
@@ -81,7 +81,7 @@ VALUES
   ('dd000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated',
-   'driver@eazyvtc.com',
+   'driver@easyvtc.com',
    crypt('Driver1234!', gen_salt('bf', 10)),
    now(),
    '{"provider":"email","providers":["email"]}',
@@ -92,7 +92,7 @@ VALUES
   ('ee000000-0000-0000-0000-000000000001',
    '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated',
-   'manager@eazyvtc.com',
+   'manager@easyvtc.com',
    crypt('Manager1234!', gen_salt('bf', 10)),
    now(),
    '{"provider":"email","providers":["email"]}',

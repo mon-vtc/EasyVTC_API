@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- MIGRATION : Assignation de codes promo par utilisateur
--- Sprint 6 — EazyVTC
+-- Sprint 6 — EasyVTC
 --
 -- Objectif : permettre à l'admin de générer des codes promo uniques par utilisateur
 -- à partir d'un radical (base lisible humainement).

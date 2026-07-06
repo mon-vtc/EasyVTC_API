@@ -1,8 +1,8 @@
 {
   "info": {
-    "_postman_id": "eazyvtc-notifications",
-    "name": "EazyVTC API — Notifications",
-    "description": "# EazyVTC — Module Notifications (Sprint 5)\n\n## Endpoints couverts\n- `POST   /notifications/token`         → Enregistrer le token FCM de l'appareil\n- `DELETE /notifications/token`         → Supprimer le token FCM\n- `GET    /notifications`               → Liste des notifications (paginée + filtres)\n- `PATCH  /notifications/read-all`      → Tout marquer comme lu\n- `PATCH  /notifications/:id/read`      → Marquer une notification comme lue\n- `POST   /notifications/send`          → Envoi manuel (admin/manager uniquement)\n- `POST   /cron/notifications/reminders`→ Rappels 1h avant course (CRON_SECRET)\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n3. Firebase optionnel en local — les notifications sont créées en base même sans FCM configuré\n\n## Ordre d'exécution recommandé\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens + sauvegarder client_user_id\n2. **👨‍💼 Admin — Envoi manuel** : créer une notification de test (sauvegarde notification_id)\n3. **📱 Token FCM** : tester enregistrement / suppression token\n4. **🔔 Lecture des notifications** : tester GET avec filtres et pagination\n5. **✅ Marquer comme lu** : tester markAsRead et markAllAsRead\n6. **⏰ Cron** : déclencher le rappel automatique\n7. **🔒 Contrôle d'accès** : vérifier 401 / 403 / 400 / 404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `client_user_id` — pour les requêtes admin (envoi ciblé)\n- `notification_id` — après envoi admin, réutilisé pour markAsRead",
+    "_postman_id": "easyvtc-notifications",
+    "name": "EasyVTC API — Notifications",
+    "description": "# EasyVTC — Module Notifications (Sprint 5)\n\n## Endpoints couverts\n- `POST   /notifications/token`         → Enregistrer le token FCM de l'appareil\n- `DELETE /notifications/token`         → Supprimer le token FCM\n- `GET    /notifications`               → Liste des notifications (paginée + filtres)\n- `PATCH  /notifications/read-all`      → Tout marquer comme lu\n- `PATCH  /notifications/:id/read`      → Marquer une notification comme lue\n- `POST   /notifications/send`          → Envoi manuel (admin/manager uniquement)\n- `POST   /cron/notifications/reminders`→ Rappels 1h avant course (CRON_SECRET)\n\n## Prérequis\n1. Lancer l'API : `npm run dev`\n2. Avoir dans Supabase :\n   - Un compte `client@test.com` (rôle client)\n   - Un compte `driver@test.com` (rôle driver, statut active)\n   - Un compte `admin@test.com` (rôle admin)\n3. Firebase optionnel en local — les notifications sont créées en base même sans FCM configuré\n\n## Ordre d'exécution recommandé\n1. **🔐 Setup — Tokens** : obtenir les 3 tokens + sauvegarder client_user_id\n2. **👨‍💼 Admin — Envoi manuel** : créer une notification de test (sauvegarde notification_id)\n3. **📱 Token FCM** : tester enregistrement / suppression token\n4. **🔔 Lecture des notifications** : tester GET avec filtres et pagination\n5. **✅ Marquer comme lu** : tester markAsRead et markAllAsRead\n6. **⏰ Cron** : déclencher le rappel automatique\n7. **🔒 Contrôle d'accès** : vérifier 401 / 403 / 400 / 404\n\n## Variables sauvegardées automatiquement\n- `client_token`, `driver_token`, `admin_token`\n- `client_user_id` — pour les requêtes admin (envoi ciblé)\n- `notification_id` — après envoi admin, réutilisé pour markAsRead",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -320,7 +320,7 @@
             "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EazyVTC_Local_Dev\"\n}"
+              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EasyVTC_Local_Dev\"\n}"
             }
           },
           "event": [{
@@ -431,7 +431,7 @@
             "url": { "raw": "{{base_url}}/notifications/token", "host": ["{{base_url}}"], "path": ["notifications", "token"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EazyVTC_Local_Dev\"\n}"
+              "raw": "{\n  \"device_token\": \"fGE3j_mKuC8:APA91bHPRgkFjJtmAeRwU5kG7QZk3xVyToken_Test_EasyVTC_Local_Dev\"\n}"
             }
           },
           "event": [{

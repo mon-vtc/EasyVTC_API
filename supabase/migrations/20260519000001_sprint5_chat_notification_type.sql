@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 5 — EazyVTC
+-- Migration Sprint 5 — EasyVTC
 -- Date: 2026-05-19
 -- Description:
 --   Ajout des types de notification manquants dans l'enum notification_type :

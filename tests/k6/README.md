@@ -1,4 +1,4 @@
-# Tests de performance k6 — EazyVTC API
+# Tests de performance k6 — EasyVTC API
 
 ## Prérequis
 
@@ -29,9 +29,9 @@ Créer trois comptes dans la base de données de test :
 
 | Rôle   | Email                        | Mot de passe   |
 |--------|------------------------------|----------------|
-| client | perf.client@eazyvtc.test     | PerfTest1234!  |
-| driver | perf.driver@eazyvtc.test     | PerfTest1234!  |
-| admin  | perf.admin@eazyvtc.test      | PerfTest1234!  |
+| client | perf.client@easyvtc.test     | PerfTest1234!  |
+| driver | perf.driver@easyvtc.test     | PerfTest1234!  |
+| admin  | perf.admin@easyvtc.test      | PerfTest1234!  |
 
 > Ces comptes sont créés **une seule fois** et réutilisés par tous les tests.
 
@@ -41,11 +41,11 @@ Toutes les valeurs ont des defaults pour l'env local. En surcharge :
 
 ```bash
 export BASE_URL=http://localhost:4000
-export TEST_CLIENT_EMAIL=perf.client@eazyvtc.test
+export TEST_CLIENT_EMAIL=perf.client@easyvtc.test
 export TEST_CLIENT_PASSWORD=PerfTest1234!
-export TEST_DRIVER_EMAIL=perf.driver@eazyvtc.test
+export TEST_DRIVER_EMAIL=perf.driver@easyvtc.test
 export TEST_DRIVER_PASSWORD=PerfTest1234!
-export TEST_ADMIN_EMAIL=perf.admin@eazyvtc.test
+export TEST_ADMIN_EMAIL=perf.admin@easyvtc.test
 export TEST_ADMIN_PASSWORD=PerfTest1234!
 ```
 
@@ -90,7 +90,7 @@ npm run k6:soak
 k6 run tests/k6/smoke.js
 
 # Load (avec URL personnalisée)
-k6 run -e BASE_URL=https://eazyvtc-api-staging.railway.app tests/k6/load.js
+k6 run -e BASE_URL=https://easyvtc-api-staging.railway.app tests/k6/load.js
 
 # Stress
 k6 run tests/k6/stress.js

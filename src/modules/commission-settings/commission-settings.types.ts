@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Commission Settings
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 export type CommissionRateType = 'percentage' | 'flat';

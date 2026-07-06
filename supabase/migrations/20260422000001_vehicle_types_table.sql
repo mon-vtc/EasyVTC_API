@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : Gestion dynamique des types de véhicule
--- Sprint 3 — EazyVTC
+-- Sprint 3 — EasyVTC
 --
 -- 1. Création de la table vehicle_types (remplace l'enum PostgreSQL statique)
 -- 2. Seed des 3 types existants

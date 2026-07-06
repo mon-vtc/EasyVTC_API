@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Chat
-// Sprint 5 — EazyVTC
+// Sprint 5 — EasyVTC
 //
 // ── chat:reservation ──────────────────────────────────────────────────────────
 // GET   /chat/conversations                              → Liste  (client / driver)

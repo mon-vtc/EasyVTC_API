@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module Factures (Invoices)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 //
 // Règle CDC absolue : les formules de calcul ne doivent JAMAIS apparaître
 // sur la facture. Seuls les montants finaux (HT, TVA, TTC) sont affichés.

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Destinations Favorites
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 //
 // Montage dans app.ts :
 //   app.use('/users', favoritesRouter)

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTROLLER — Module Commission Settings
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { Request, Response } from 'express';

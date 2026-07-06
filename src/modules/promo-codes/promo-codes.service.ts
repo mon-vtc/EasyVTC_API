@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Codes Promo
-// Sprint 6 — EazyVTC
+// Sprint 6 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';

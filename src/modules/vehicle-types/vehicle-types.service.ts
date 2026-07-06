@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Vehicle Types
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { supabaseAdmin } from '../../database/supabase/client.js';

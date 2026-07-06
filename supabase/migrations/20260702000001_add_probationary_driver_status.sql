@@ -1,6 +1,6 @@
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- Migration — EazyVTC
+-- Migration — EasyVTC
 -- Date: 2026-07-02
 -- Description:
 --   Ajout du statut 'probationary' à l'enum driver_status.

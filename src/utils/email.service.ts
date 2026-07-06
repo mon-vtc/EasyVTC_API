@@ -7,10 +7,10 @@ if (env.SENDGRID_API_KEY) {
   sgMail.setApiKey(env.SENDGRID_API_KEY);
 }
 
-// ── Logo EazyVTC (hébergé sur Supabase Storage, bucket public) ─────────────────
+// ── Logo EasyVTC (hébergé sur Supabase Storage, bucket public) ─────────────────
 const LOGO_SRC = 'https://gmeaptypqcgxytshadez.supabase.co/storage/v1/object/public/public-assets/email/logo-white.png';
 
-// ── Couleurs charte EazyVTC ───────────────────────────────────────────────────
+// ── Couleurs charte EasyVTC ───────────────────────────────────────────────────
 const C = {
   bordeaux:  '#4A1C1C',
   bordeauxL: '#6B2D2D',
@@ -43,12 +43,12 @@ const mailtrapTransporter = nodemailer.createTransport({
 async function sendMail(to: string, subject: string, html: string): Promise<void> {
   if (env.SENDGRID_API_KEY) {
     const from = env.SENDGRID_FROM_EMAIL
-      ? { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME ?? 'EazyVTC' }
+      ? { email: env.SENDGRID_FROM_EMAIL, name: env.SENDGRID_FROM_NAME ?? 'EasyVTC' }
       : env.MAIL_FROM;
     await sgMail.send({ to, from, subject, html });
   } else {
     await mailtrapTransporter.sendMail({
-      from: `"EazyVTC" <${env.MAIL_FROM}>`,
+      from: `"EasyVTC" <${env.MAIL_FROM}>`,
       to, subject, html,
     });
   }
@@ -61,7 +61,7 @@ function layout(content: string, preview = ''): string {
     <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
     <meta name="color-scheme" content="light"/>
     <meta name="supported-color-schemes" content="light"/>
-    <title>EazyVTC</title>
+    <title>EasyVTC</title>
     <style>
       body { -webkit-font-smoothing:antialiased; }
       a { color:${C.bordeaux}; }
@@ -82,7 +82,7 @@ function layout(content: string, preview = ''): string {
         <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
           <tr>
             <td class="evtc-header" style="background:${C.bordeaux};border-radius:14px 14px 0 0;padding:30px 40px;text-align:center;">
-              <img src="${LOGO_SRC}" alt="EazyVTC" width="100" style="display:inline-block;height:auto;border:0;"/>
+              <img src="${LOGO_SRC}" alt="EasyVTC" width="100" style="display:inline-block;height:auto;border:0;"/>
             </td>
           </tr>
           <tr>
@@ -93,13 +93,13 @@ function layout(content: string, preview = ''): string {
           <tr>
             <td class="evtc-footer" style="background:${C.bordeaux};border-radius:0 0 14px 14px;padding:22px 40px;text-align:center;">
               <p style="margin:0 0 6px;color:${C.beigeL};font-size:13px;">
-                © ${new Date().getFullYear()} EazyVTC — Tous droits réservés</p>
+                © ${new Date().getFullYear()} EasyVTC — Tous droits réservés</p>
               <p style="margin:0;color:${C.beige};font-size:12px;">
                 Paiement directement au chauffeur · Espèces ou CB en fin de course</p>
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 0;color:#B08A7A;font-size:11px;">EazyVTC · France &amp; Sénégal</p>
+        <p style="margin:16px 0 0;color:#B08A7A;font-size:11px;">EasyVTC · France &amp; Sénégal</p>
       </td></tr>
     </table>
     </body></html>`;
@@ -171,7 +171,7 @@ export async function sendWelcomeEmail(
   const html = layout(`
     ${header(`Bienvenue, ${firstName} ! 🎉`, 'Votre compte est activé')}
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
-      Votre compte EazyVTC a été créé avec succès. Vous pouvez dès maintenant
+      Votre compte EasyVTC a été créé avec succès. Vous pouvez dès maintenant
       vous connecter et réserver votre premier trajet.</p>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
            style="background:${C.lightGray};border-radius:8px;border-left:4px solid ${C.beige};margin:20px 0;">
@@ -184,16 +184,16 @@ export async function sendWelcomeEmail(
           3. Réglez directement au chauffeur (espèces ou CB)</p>
       </td></tr>
     </table>
-    ${btn('Se connecter à EazyVTC', loginUrl)}
+    ${btn('Se connecter à EasyVTC', loginUrl)}
     ${hr()}
     <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
       Compte créé par erreur ? Contactez-nous :
       <a href="mailto:support@easyvtc.com"
          style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
         support@easyvtc.com</a></p>
-  `, `Bienvenue ${firstName} ! Votre compte EazyVTC est prêt.`);
+  `, `Bienvenue ${firstName} ! Votre compte EasyVTC est prêt.`);
 
-  await sendMail(to, 'Bienvenue sur EazyVTC 🚗', html);
+  await sendMail(to, 'Bienvenue sur EasyVTC 🚗', html);
 }
 
 // =============================================================================
@@ -209,7 +209,7 @@ export async function sendManagerAccessEmail(
     ${header('Votre accès gestionnaire', 'Identifiants de connexion')}
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 20px;">
       Bonjour <strong>${firstName}</strong>,<br/>
-      Un compte gestionnaire a été créé pour vous sur la plateforme EazyVTC.
+      Un compte gestionnaire a été créé pour vous sur la plateforme EasyVTC.
       Voici vos identifiants de connexion :</p>
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
            style="background:${C.lightGray};border-radius:8px;border-left:4px solid ${C.bordeaux};margin:0 0 24px;">
@@ -227,16 +227,16 @@ export async function sendManagerAccessEmail(
       </td></tr>
     </table>
     ${callout('⚠️', '<strong style="color:' + C.bordeaux + ';">Important :</strong> Pour des raisons de sécurité, veuillez modifier votre mot de passe dès votre première connexion.', '#FFF8F0', C.beige, '#555')}
-    ${btn('Se connecter à EazyVTC', loginUrl)}
+    ${btn('Se connecter à EasyVTC', loginUrl)}
     ${hr()}
     <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
       Vous n'êtes pas à l'origine de cette demande ? Contactez-nous immédiatement :
       <a href="mailto:support@easyvtc.com"
          style="color:${C.bordeaux};text-decoration:none;font-weight:bold;">
         support@easyvtc.com</a></p>
-  `, `${firstName}, voici vos identifiants gestionnaire EazyVTC.`);
+  `, `${firstName}, voici vos identifiants gestionnaire EasyVTC.`);
 
-  await sendMail(to, 'Votre accès gestionnaire EazyVTC', html);
+  await sendMail(to, 'Votre accès gestionnaire EasyVTC', html);
 }
 
 // =============================================================================
@@ -258,9 +258,9 @@ export async function sendResetPasswordEmail(
     <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
       Si vous n'avez pas fait cette demande, ignorez cet email.
       Votre mot de passe restera inchangé.</p>
-  `, `${firstName}, réinitialisez votre mot de passe EazyVTC.`);
+  `, `${firstName}, réinitialisez votre mot de passe EasyVTC.`);
 
-  await sendMail(to, 'Réinitialisation de votre mot de passe EazyVTC', html);
+  await sendMail(to, 'Réinitialisation de votre mot de passe EasyVTC', html);
 }
 
 // =============================================================================
@@ -299,7 +299,7 @@ export async function sendDocumentExpiryAlert(
     ${footerSupport()}
   `, `${firstName}, votre document ${docType} expire dans ${daysLeft} jours.`);
 
-  await sendMail(to, `${emoji} Document expirant dans ${daysLeft} jours — EazyVTC`, html);
+  await sendMail(to, `${emoji} Document expirant dans ${daysLeft} jours — EasyVTC`, html);
 }
 
 // =============================================================================
@@ -389,7 +389,7 @@ export async function sendNotificationEmail(
     ${footerSupport()}
   `, `${firstName} — ${title}`);
 
-  await sendMail(to, `${title} — EazyVTC`, html);
+  await sendMail(to, `${title} — EasyVTC`, html);
 }
 
 // =============================================================================
@@ -405,15 +405,15 @@ export async function sendPasswordChangedEmail(
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
       Bonjour <strong>${firstName}</strong>,</p>
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 20px;">
-      Votre mot de passe EazyVTC a bien été modifié. Vous pouvez maintenant
+      Votre mot de passe EasyVTC a bien été modifié. Vous pouvez maintenant
       vous connecter avec votre nouveau mot de passe.</p>
     ${callout('🛡️', 'Si vous n\'êtes pas à l\'origine de cette modification, <strong>contactez immédiatement notre support</strong>.', C.successBg, C.success, C.successTx)}
-    ${btn('Se connecter à EazyVTC', loginUrl)}
+    ${btn('Se connecter à EasyVTC', loginUrl)}
     ${hr()}
     ${footerSupport()}
-  `, `${firstName}, votre mot de passe EazyVTC a été modifié avec succès.`);
+  `, `${firstName}, votre mot de passe EasyVTC a été modifié avec succès.`);
 
-  await sendMail(to, '✅ Mot de passe EazyVTC modifié avec succès', html);
+  await sendMail(to, '✅ Mot de passe EasyVTC modifié avec succès', html);
 }
 
 // =============================================================================
@@ -427,7 +427,7 @@ export async function sendPromoCodeEmail(
   validUntil?: string | null,
 ): Promise<void> {
   const html = layout(`
-    ${header('🎁 Un code promo pour vous !', 'Offre exclusive EazyVTC', C.success)}
+    ${header('🎁 Un code promo pour vous !', 'Offre exclusive EasyVTC', C.success)}
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 20px;">
       Bonjour <strong>${firstName}</strong>,<br/>
       Un code promo vient de vous être attribué. Profitez-en dès votre prochaine réservation !</p>
@@ -447,7 +447,7 @@ export async function sendPromoCodeEmail(
     ${footerSupport()}
   `, `${firstName}, votre code promo ${code} vous attend !`);
 
-  await sendMail(to, '🎁 Votre code promo EazyVTC', html);
+  await sendMail(to, '🎁 Votre code promo EasyVTC', html);
 }
 
 // =============================================================================
@@ -469,7 +469,7 @@ export async function sendMarketingEmail(
     ${hr()}
     <p style="color:${C.gray};font-size:12px;line-height:1.5;margin:0;">
       Vous recevez cet email car vous avez accepté nos communications marketing.
-      Pour vous désabonner, modifiez vos préférences dans l'application EazyVTC.</p>
+      Pour vous désabonner, modifiez vos préférences dans l'application EasyVTC.</p>
   `, `${firstName} — ${subject}`);
 
   await sendMail(to, subject, html);

@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module RGPD
-// Sprint 7 — EazyVTC
+// Sprint 7 — EasyVTC
 //
 // Conformité :
 //   - France  : RGPD (Règlement général sur la protection des données)
@@ -140,7 +140,7 @@ export class RgpdService {
       throw { status: 422, message: 'Ce compte a déjà été anonymisé' };
     }
 
-    const anonymizedEmail = `anonymized_${userId}@deleted.eazyvtc.fr`;
+    const anonymizedEmail = `anonymized_${userId}@deleted.easyvtc.fr`;
     const now = new Date().toISOString();
 
     // ── 1. Anonymiser la table users ─────────────────────────────────────────

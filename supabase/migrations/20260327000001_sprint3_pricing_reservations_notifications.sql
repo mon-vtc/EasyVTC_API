@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 3 — EazyVTC
+-- Migration Sprint 3 — EasyVTC
 -- Date: 2026-03-27
 -- Description:
 --   1. Tables pricing_grids et pricing_flat_rates (absentes du schéma initial)

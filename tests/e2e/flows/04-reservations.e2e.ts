@@ -19,9 +19,9 @@ import { deleteTestUser, deleteReservationsByClient, uniqueTestId } from '../hel
 // ── Utilisateurs de test ──────────────────────────────────────────────────────
 
 const UID          = uniqueTestId(); // timestamp + aléatoire → pas de collision entre runs
-const CLIENT_EMAIL = `e2e.client.resa.${UID}@test.eazyvtc.com`;
-const ADMIN_EMAIL  = `e2e.admin.resa.${UID}@test.eazyvtc.com`;
-const DRIVER_EMAIL = `e2e.driver.resa.${UID}@test.eazyvtc.com`;
+const CLIENT_EMAIL = `e2e.client.resa.${UID}@test.easyvtc.com`;
+const ADMIN_EMAIL  = `e2e.admin.resa.${UID}@test.easyvtc.com`;
+const DRIVER_EMAIL = `e2e.driver.resa.${UID}@test.easyvtc.com`;
 
 let clientToken = '';
 let adminToken  = '';

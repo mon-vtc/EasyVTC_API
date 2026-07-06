@@ -12,7 +12,7 @@ import { deleteTestUser, cleanupByEmail, uniqueTestId } from '../helpers/cleanup
 // ── Données du compte de test ─────────────────────────────────────────────────
 
 const UID        = uniqueTestId();
-const TEST_EMAIL = `e2e.auth.${UID}@test.eazyvtc.com`;
+const TEST_EMAIL = `e2e.auth.${UID}@test.easyvtc.com`;
 const TEST_PASS  = 'TestE2E2026!';
 // Téléphone unique par run — dérivé de l'UID (hex → int → 8 chiffres) pour un format E.164 valide.
 // Évite le conflit de contrainte d'unicité phone sur les orphelins auth.users.
@@ -83,7 +83,7 @@ describe('Auth E2E — inscription', () => {
   it('rejette un mot de passe trop faible', async () => {
     const res = await api.post('/auth/register').send({
       ...REGISTER_BODY,
-      email:    `e2e.weak.${UID}@test.eazyvtc.com`,
+      email:    `e2e.weak.${UID}@test.easyvtc.com`,
       password: 'abc',
     });
     expect(res.status).toBe(400);
@@ -93,7 +93,7 @@ describe('Auth E2E — inscription', () => {
   it('rejette sans accept_terms', async () => {
     const res = await api.post('/auth/register').send({
       ...REGISTER_BODY,
-      email:        `e2e.noterms.${UID}@test.eazyvtc.com`,
+      email:        `e2e.noterms.${UID}@test.easyvtc.com`,
       accept_terms: false,
     });
     expect(res.status).toBe(400);
@@ -126,7 +126,7 @@ describe('Auth E2E — connexion', () => {
 
   it('rejette un email inconnu', async () => {
     const res = await api.post('/auth/login').send({
-      email:    `e2e.ghost.${UID}@test.eazyvtc.com`,
+      email:    `e2e.ghost.${UID}@test.easyvtc.com`,
       password: TEST_PASS,
     });
     expect(res.status).toBe(401);

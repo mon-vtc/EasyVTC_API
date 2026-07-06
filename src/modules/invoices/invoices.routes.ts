@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Factures (Invoices)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 //
 // GET  /invoices            → Liste (filtrée par rôle : admin/client/driver)
 // GET  /invoices/:id        → Détail (accès restreint)

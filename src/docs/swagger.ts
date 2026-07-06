@@ -3,16 +3,16 @@ import type { OpenAPIV3 } from 'openapi-types';
 export const swaggerSpec: OpenAPIV3.Document = {
   openapi: '3.0.3',
   info: {
-    title: 'EazyVTC API',
+    title: 'EasyVTC API',
     version: '1.0.0',
     description:
-      'API backend pour la plateforme VTC EazyVTC — France. ' +
+      'API backend pour la plateforme VTC EasyVTC — France. ' +
       'Attribution 100% humaine, paiement hors application (espèces / CB au chauffeur).',
-    contact: { name: 'InfinitiaX', url: 'https://github.com/InfinitiaX/EazyVTC_API' },
+    contact: { name: 'InfinitiaX', url: 'https://github.com/InfinitiaX/EasyVTC_API' },
   },
   servers: [
     { url: 'http://localhost:4000', description: 'Développement local' },
-    { url: 'https://api.eazyvtc.com', description: 'Production Railway' },
+    { url: 'https://api.easyvtc.com', description: 'Production Railway' },
   ],
   tags: [
     { name: 'Health', description: 'Statut du service' },
@@ -745,7 +745,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         description: 'Coordonnées du service support affichées dans l\'application',
         properties: {
           support_phone:   { type: 'string', example: '+33 1 23 45 67 89', description: 'Numéro de téléphone du support' },
-          support_email:   { type: 'string', format: 'email', example: 'support@eazyvtc.com' },
+          support_email:   { type: 'string', format: 'email', example: 'support@easyvtc.com' },
           support_address: { type: 'string', example: '12 rue de la Paix, 75001 Paris', description: 'Adresse postale (optionnel)' },
           support_hours:   { type: 'string', example: 'Lun–Ven 9h–18h', description: 'Horaires d\'ouverture du support' },
         },

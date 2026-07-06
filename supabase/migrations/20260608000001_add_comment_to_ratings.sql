@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration Sprint 6 — EazyVTC
+-- Migration Sprint 6 — EasyVTC
 -- Date: 2026-06-08
 -- Description:
 --   Ajout de la colonne `comment` sur la table ratings (commentaire facultatif

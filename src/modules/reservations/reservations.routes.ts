@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module Réservations
-// Sprint 3 — EazyVTC
+// Sprint 3 — EasyVTC
 //
 // Circuit complet VTC (application mobile) :
 //

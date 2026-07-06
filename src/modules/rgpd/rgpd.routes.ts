@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // ROUTES — Module RGPD
-// Sprint 7 — EazyVTC
+// Sprint 7 — EasyVTC
 //
 // Montage dans app.ts :
 //   app.use('/users', rgpdRouter)

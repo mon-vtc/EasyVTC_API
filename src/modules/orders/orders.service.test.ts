@@ -113,7 +113,7 @@ const mockOrder: Record<string, unknown> = {
     country:        'france',
     scheduled_at:   '2026-04-15T09:00:00.000Z',
     comment:        'Siège enfant requis',
-    via:            'EazyVTC',
+    via:            'EasyVTC',
     pricing_type:   'formula',
     final_price:    null,
     currency:       'EUR',

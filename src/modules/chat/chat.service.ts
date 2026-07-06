@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Chat
-// Sprint 5 — EazyVTC
+// Sprint 5 — EasyVTC
 //
 // Les messages sont insérés dans `chat_messages`.
 // Supabase Realtime broadcast automatiquement chaque INSERT aux clients

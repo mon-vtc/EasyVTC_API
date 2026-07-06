@@ -1,6 +1,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // SERVICE — Module Factures (Invoices)
-// Sprint 4 — EazyVTC
+// Sprint 4 — EasyVTC
 //
 // Flux :
 //   [Auto] reservationsService.completeTrip() → invoicesService.createFromTrip(tripId)
@@ -34,7 +34,7 @@ const BUCKET_NAME       = 'invoices-pdfs';
 const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
 const COMPANY = {
-  name:    'EazyVTC',
+  name:    'EasyVTC',
   address: '1 rue de la Paix, 75001 Paris, France',
   phone:   '+33 1 00 00 00 00',
 };
@@ -599,7 +599,7 @@ export class InvoicesService {
       doc.fontSize(18).fillColor(BORDEAUX).font('Helvetica-Bold')
         .text('V', PW - 90, 43, { width: 36, align: 'center', lineBreak: false });
       doc.fontSize(6).fillColor(BORDEAUX).font('Helvetica')
-        .text('EazyVTC', PW - 97, 66, { width: 50, align: 'center', lineBreak: false });
+        .text('EasyVTC', PW - 97, 66, { width: 50, align: 'center', lineBreak: false });
 
       // ── 2. IDENTITÉS (À l'attention de | Chauffeur) ────────────────────
       let y  = 138;

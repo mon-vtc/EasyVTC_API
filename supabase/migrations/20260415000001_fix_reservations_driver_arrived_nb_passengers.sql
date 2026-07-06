@@ -1,6 +1,6 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : ajout du statut driver_arrived + colonne nb_passengers
--- Sprint 3 — EazyVTC
+-- Sprint 3 — EasyVTC
 --
 -- Contexte :
 --   1. Le statut `driver_arrived` existait uniquement en UI mobile (côté client),
