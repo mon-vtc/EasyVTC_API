@@ -626,11 +626,11 @@ export class DriversService {
       // Récupérer commission
       const { data: commData } = await supabaseAdmin
         .from('commissions')
-        .select('amount')
+        .select('commission_amount')
         .eq('reservation_id', res.id)
         .limit(1);
       if (commData?.length) {
-        totalCommission += commData[0].amount ?? 0;
+        totalCommission += commData[0].commission_amount ?? 0;
       }
 
       // Récupérer trip details
@@ -731,11 +731,11 @@ export class DriversService {
         // Récupérer commission
         const { data: commData } = await supabaseAdmin
           .from('commissions')
-          .select('amount')
+          .select('commission_amount')
           .eq('reservation_id', res.id)
           .limit(1);
 
-        const commissionAmount = commData?.[0]?.amount ?? 0;
+        const commissionAmount = commData?.[0]?.commission_amount ?? 0;
         const netAmount = (res.price_final ?? 0) - commissionAmount;
 
         // Récupérer évaluation client
