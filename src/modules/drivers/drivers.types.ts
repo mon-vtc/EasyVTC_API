@@ -212,7 +212,7 @@ export interface RevenuesFilters {
 
 // ── Revenus ───────────────────────────────────────────────────────────────────
 
-export type RevenuesPeriod = 'week' | 'month' | 'all';
+export type RevenuesPeriod = 'day' | 'week' | 'month' | 'all';
 
 export interface RevenueTrip {
   reservation_id:    string;
