@@ -80,11 +80,11 @@ export interface CreateSupportTicketDto {
 
 export interface SupportTicketDetail extends SupportTicket {
   messages: SupportMessage[];
-  user:     { id: string; first_name: string; last_name: string } | null;
+  user:     { id: string; first_name: string; last_name: string; profile_photo_url: string | null } | null;
 }
 
 export interface SupportTicketRow extends SupportTicket {
-  user: { id: string; first_name: string; last_name: string } | null;
+  user: { id: string; first_name: string; last_name: string; profile_photo_url: string | null } | null;
 }
 
 export interface SupportTicketListResult {
@@ -144,13 +144,15 @@ export interface ActiveConversation {
   last_message_at:  string | null;
   unread_count:     number;
   client: {
-    id:         string;
-    first_name: string;
-    last_name:  string;
+    id:                string;
+    first_name:        string;
+    last_name:         string;
+    profile_photo_url: string | null;
   } | null;
   driver: {
-    id:         string;
-    first_name: string;
-    last_name:  string;
+    id:                string;
+    first_name:        string;
+    last_name:         string;
+    profile_photo_url: string | null;
   } | null;
 }
