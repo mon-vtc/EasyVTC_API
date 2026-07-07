@@ -391,10 +391,11 @@ describe('DriversService', () => {
           Promise.resolve(resolved).then(resolve, reject),
       };
       mockFrom
-        .mockReturnValueOnce(chain(mockDriverRecord))  // resolveDriverId
-        .mockReturnValueOnce(revenuesChain)            // réservations
-        .mockReturnValueOnce(commChain())              // commissions (vides = non configurées)
-        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
+        .mockReturnValueOnce(chain(mockDriverRecord))     // resolveDriverId
+        .mockReturnValueOnce(chain({ zone: 'france' }))   // zone chauffeur (bornes de période)
+        .mockReturnValueOnce(revenuesChain)               // réservations
+        .mockReturnValueOnce(commChain())                 // commissions (vides = non configurées)
+        .mockReturnValueOnce(commChain());                // ratings (Promise.all parallèle)
 
       const result = await service.getRevenues(DRIVER_USER_ID, 'week', '2026-04-09');
       expect(result.total_trips).toBe(2);
@@ -445,6 +446,7 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(emptyChain);
       // Pas de mock commissions car early return si rows.length === 0
 
@@ -477,6 +479,7 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
+        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(revenuesChain)
         .mockReturnValueOnce(commChain())              // commissions
         .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
@@ -606,7 +609,8 @@ describe('DriversService', () => {
           Promise.resolve(resolved).then(resolve, reject),
       };
       mockFrom
-        .mockReturnValueOnce(chain({ id: DRIVER_ID }))  // vérification existence
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))   // vérification existence
+        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(revenuesChain)             // requête revenus
         .mockReturnValueOnce(commChain())               // commissions vides
         .mockReturnValueOnce(commChain());              // ratings (Promise.all parallèle)
