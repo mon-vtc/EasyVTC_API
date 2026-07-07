@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
+import { computeZonedDateRange, type Zone } from '../../utils/timezone.js';
 import type {
   DriverWithUser,
   DriverWithUserAndVehicle,
@@ -382,8 +383,21 @@ export class DriversService {
     let dateFrom: string | null = null;
     let dateTo:   string | null = null;
 
+    // Les revenus d'une course ne sont réels qu'à sa clôture : on filtre sur la
+    // date de clôture réelle (trips.ended_at), pas sur scheduled_at (heure de
+    // réservation demandée par le client), sans quoi une course clôturée un
+    // autre jour que son horaire prévu disparaît des revenus du jour concerné.
+    // Les courses annulées n'ont pas forcément de trip : on garde scheduled_at.
+    const filterByTripEnd = status !== 'cancelled';
+
     if (period !== 'all') {
-      const range = this._computeDateRange(period, date);
+      const { data: driverRow } = await supabaseAdmin
+        .from('drivers')
+        .select('zone')
+        .eq('id', driverId)
+        .single();
+      const zone = (driverRow?.zone as Zone | undefined) ?? 'france';
+      const range = computeZonedDateRange(zone, period, date);
       dateFrom = range.dateFrom;
       dateTo   = range.dateTo;
     }
@@ -391,7 +405,12 @@ export class DriversService {
     // 1. Réservations (filtrées par status) avec infos client
     let query = supabaseAdmin
       .from('reservations')
-      .select('id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)', { count: 'exact' })
+      .select(
+        filterByTripEnd
+          ? 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name), trips!inner(ended_at)'
+          : 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)',
+        { count: 'exact' },
+      )
       .eq('driver_id', driverId)
       .order('scheduled_at', { ascending: false });
 
@@ -405,8 +424,8 @@ export class DriversService {
       query = query.eq('status', 'completed');
     }
 
-    if (dateFrom) query = query.gte('scheduled_at', dateFrom);
-    if (dateTo)   query = query.lte('scheduled_at', dateTo);
+    if (dateFrom) query = query.gte(filterByTripEnd ? 'trips.ended_at' : 'scheduled_at', dateFrom);
+    if (dateTo)   query = query.lte(filterByTripEnd ? 'trips.ended_at' : 'scheduled_at', dateTo);
 
     // Pagination
     const offset = (page - 1) * limit;
