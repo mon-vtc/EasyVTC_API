@@ -124,8 +124,8 @@ export class ChatService {
       .from('reservations')
       .select(`
         id, scheduled_at, pickup_address, dest_address,
-        client:users!client_id(id, first_name, last_name),
-        driver:drivers!driver_id(user:users!user_id(id, first_name, last_name))
+        client:users!client_id(id, first_name, last_name, profile_photo_url),
+        driver:drivers!driver_id(user:users!user_id(id, first_name, last_name, profile_photo_url))
       `, { count: 'exact' })
       .in('status', ['assigned', 'driver_arrived', 'in_progress', 'completed'])
       .order('created_at', { ascending: false })
@@ -176,14 +176,16 @@ export class ChatService {
         last_message_at: last?.created_at ?? null,
         unread_count:    unreadMap.get(r.id) ?? 0,
         client: r.client ? {
-          id:         r.client.id,
-          first_name: r.client.first_name,
-          last_name:  r.client.last_name,
+          id:                r.client.id,
+          first_name:        r.client.first_name,
+          last_name:         r.client.last_name,
+          profile_photo_url: r.client.profile_photo_url ?? null,
         } : null,
         driver: driverUser ? {
-          id:         driverUser.id,
-          first_name: driverUser.first_name,
-          last_name:  driverUser.last_name,
+          id:                driverUser.id,
+          first_name:        driverUser.first_name,
+          last_name:         driverUser.last_name,
+          profile_photo_url: driverUser.profile_photo_url ?? null,
         } : null,
       };
     });
@@ -419,7 +421,7 @@ export class ChatService {
 
     let query = supabaseAdmin
       .from('support_tickets')
-      .select('*, user:users!user_id(id, first_name, last_name)', { count: 'exact' });
+      .select('*, user:users!user_id(id, first_name, last_name, profile_photo_url)', { count: 'exact' });
 
     if (requesterRole !== 'admin' && requesterRole !== 'manager') {
       query = query.eq('user_id', requesterId);
@@ -456,7 +458,7 @@ export class ChatService {
   ): Promise<SupportTicketDetail> {
     const { data: ticket, error } = await supabaseAdmin
       .from('support_tickets')
-      .select('*, user:users!user_id(id, first_name, last_name)')
+      .select('*, user:users!user_id(id, first_name, last_name, profile_photo_url)')
       .eq('id', ticketId)
       .single();
 
