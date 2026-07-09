@@ -13,6 +13,7 @@ const mockGetUser        = jest.fn() as any;
 const mockFrom           = jest.fn() as any;
 
 const mockGetForUser     = jest.fn() as any;
+const mockGetById        = jest.fn() as any;
 const mockMarkAsRead     = jest.fn() as any;
 const mockMarkAllAsRead  = jest.fn() as any;
 const mockSend           = jest.fn() as any;
@@ -30,6 +31,7 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
 jest.unstable_mockModule('./notifications.service.js', () => ({
   notificationsService: {
     getForUser:    mockGetForUser,
+    getById:       mockGetById,
     markAsRead:    mockMarkAsRead,
     markAllAsRead: mockMarkAllAsRead,
     send:          mockSend,
@@ -126,6 +128,44 @@ describe('Notifications routes', () => {
         .set('Authorization', 'Bearer driver-token');
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
+    });
+  });
+
+  // ── GET /notifications/:id ───────────────────────────────────────────────────
+
+  describe('GET /notifications/:id', () => {
+    it('retourne 401 sans token', async () => {
+      const res = await request(app).get(`/notifications/${NOTIF_ID}`);
+      expect(res.status).toBe(401);
+    });
+
+    it('retourne 200 avec la notification pour son propriétaire', async () => {
+      setupValidToken(MOCK_CLIENT);
+      mockGetById.mockResolvedValue(MOCK_NOTIFICATION);
+      const res = await request(app)
+        .get(`/notifications/${NOTIF_ID}`)
+        .set('Authorization', 'Bearer client-token');
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.id).toBe(NOTIF_ID);
+    });
+
+    it('retourne 403 si la notification appartient à un autre utilisateur', async () => {
+      setupValidToken(MOCK_DRIVER);
+      mockGetById.mockRejectedValue({ status: 403, message: 'Accès refusé' });
+      const res = await request(app)
+        .get(`/notifications/${NOTIF_ID}`)
+        .set('Authorization', 'Bearer driver-token');
+      expect(res.status).toBe(403);
+    });
+
+    it('retourne 404 si la notification est introuvable', async () => {
+      setupValidToken(MOCK_CLIENT);
+      mockGetById.mockRejectedValue({ status: 404, message: 'Notification introuvable' });
+      const res = await request(app)
+        .get('/notifications/99999999-0000-4000-8000-000000000000')
+        .set('Authorization', 'Bearer client-token');
+      expect(res.status).toBe(404);
     });
   });
 

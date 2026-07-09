@@ -157,7 +157,7 @@ describe('NotificationsService', () => {
       // fire-and-forget : on attend la micro-tâche suivante
       await Promise.resolve();
       expect(dispatch).toHaveBeenCalledWith(
-        NOTIF_ID, USER_ID, 'Test', 'Test body', { reservation_id: 'resa-123' },
+        NOTIF_ID, USER_ID, 'reservation_confirmed', 'Test', 'Test body', { reservation_id: 'resa-123' },
       );
     });
 
@@ -284,6 +284,32 @@ describe('NotificationsService', () => {
 
       await expect(service.getForUser(USER_ID, {}))
         .rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // getById()
+  // ────────────────────────────────────────────────────────────────────────────
+  describe('getById()', () => {
+    it('retourne la notification si elle appartient à l\'utilisateur', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockNotif));
+
+      const result = await service.getById(NOTIF_ID, USER_ID);
+      expect(result.id).toBe(NOTIF_ID);
+    });
+
+    it('lève 404 si la notification est introuvable', async () => {
+      mockFrom.mockReturnValueOnce(chain(null));
+      await expect(service.getById('unknown-id', USER_ID))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it('lève 403 si la notification appartient à un autre utilisateur', async () => {
+      const otherUserNotif = { ...mockNotif, user_id: 'other-user-uuid' };
+      mockFrom.mockReturnValueOnce(chain(otherUserNotif));
+
+      await expect(service.getById(NOTIF_ID, USER_ID))
+        .rejects.toMatchObject({ status: 403 });
     });
   });
 
