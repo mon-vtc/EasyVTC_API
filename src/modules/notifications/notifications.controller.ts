@@ -30,6 +30,22 @@ export class NotificationsController {
     }
   }
 
+  // GET /notifications/:id — Détail d'une notification
+  async getById(req: Request, res: Response): Promise<void> {
+    const parsed = notificationIdParamSchema.safeParse(req.params);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'ID invalide' });
+      return;
+    }
+    try {
+      const notif = await notificationsService.getById(parsed.data.id, req.user!.id);
+      res.status(200).json({ ok: true, data: notif });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   // PATCH /notifications/:id/read — Marquer une notification comme lue
   async markAsRead(req: Request, res: Response): Promise<void> {
     const parsed = notificationIdParamSchema.safeParse(req.params);

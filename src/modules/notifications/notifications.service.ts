@@ -56,7 +56,7 @@ export class NotificationsService {
 
     if (dto.channel === 'push') {
       // Fire-and-forget : l'échec FCM ne remonte pas au caller
-      this._dispatchPush(notif.id as string, dto.user_id, dto.title, dto.body, dto.data).catch(
+      this._dispatchPush(notif.id as string, dto.user_id, dto.type, dto.title, dto.body, dto.data).catch(
         (err) => console.error('[Notifications] Erreur dispatch push:', err),
       );
     } else if (dto.channel === 'email') {
@@ -168,6 +168,19 @@ export class NotificationsService {
       limit,
       unread_count:  unreadCount ?? 0,
     };
+  }
+
+  async getById(notificationId: string, userId: string): Promise<Notification> {
+    const { data: notif } = await supabaseAdmin
+      .from('notifications')
+      .select('*')
+      .eq('id', notificationId)
+      .single();
+
+    if (!notif) throw { status: 404, message: 'Notification introuvable' };
+    if (notif.user_id !== userId) throw { status: 403, message: 'Accès refusé' };
+
+    return notif as Notification;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -522,6 +535,7 @@ export class NotificationsService {
   private async _dispatchPush(
     notifId: string,
     userId:  string,
+    type:    NotificationType,
     title:   string,
     body:    string,
     data?:   Record<string, string>,
@@ -562,7 +576,7 @@ export class NotificationsService {
           to:       token,
           title,
           body,
-          data:     data ?? {},
+          data:     { ...(data ?? {}), notification_id: notifId, type },
           sound:    'default',
           badge:    1,
           priority: 'high',

@@ -8,6 +8,7 @@
 // POST   /notifications/token         → Enregistrer le token FCM de l'appareil
 // DELETE /notifications/token         → Supprimer le token FCM
 // GET    /notifications               → Liste des notifications (paginée)
+// GET    /notifications/:id           → Détail d'une notification
 // PATCH  /notifications/read-all      → Tout marquer comme lu
 // PATCH  /notifications/:id/read      → Marquer une notification comme lue
 // ══════════════════════════════════════════════════════════════════════════════
@@ -29,6 +30,7 @@ router.delete('/token', (req, res) => notificationsController.removeToken(req, r
 
 // Notifications — lecture et gestion
 router.get  ('/',            (req, res) => notificationsController.list(req, res));
+router.get  ('/:id',         (req, res) => notificationsController.getById(req, res));
 router.patch('/read-all',    (req, res) => notificationsController.markAllAsRead(req, res));
 router.patch('/:id/read',    (req, res) => notificationsController.markAsRead(req, res));
 
