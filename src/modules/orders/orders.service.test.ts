@@ -31,6 +31,9 @@ jest.unstable_mockModule('pdfkit', () => {
         strokeColor: jest.fn().mockReturnThis(),
         lineWidth:   jest.fn().mockReturnThis(),
         stroke:      jest.fn().mockReturnThis(),
+        rect:        jest.fn().mockReturnThis(),
+        fill:        jest.fn().mockReturnThis(),
+        heightOfString: jest.fn().mockReturnValue(10),
         on(event: string, handler: (...args: unknown[]) => void) {
           if (!handlers[event]) handlers[event] = [];
           handlers[event].push(handler);

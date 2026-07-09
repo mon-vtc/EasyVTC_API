@@ -2,9 +2,10 @@
 // TYPES — Module Bons de commande (Orders)
 // Sprint 4 — EasyVTC
 //
-// Règle CDC absolue (p.26) : les formules de calcul et détails tarifaires
-// ne doivent JAMAIS apparaître sur le bon de commande. Seul le montant final
-// est affiché si c'est un forfait.
+// Le bon de commande affiche le montant estimé de la course (Désignation /
+// Quantité / Montant TTC), que la tarification soit au forfait ou au compteur
+// (km) — cf. maquette de référence. Seule la formule de calcul détaillée
+// (grille tarifaire, suppléments) ne doit jamais apparaître.
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { VehicleType } from '../reservations/reservations.types.js';
@@ -27,11 +28,7 @@ export interface PassengerSnapshot {
   phone: string | null;
 }
 
-/**
- * Données de course figées.
- * IMPORTANT : le montant final est inclus UNIQUEMENT si c'est un forfait
- * (pricing_type === 'flat_rate'). Jamais de formule ni de détail de calcul.
- */
+/** Données de course figées au moment de l'assignation du chauffeur. */
 export interface TripSnapshot {
   pickup_address: string;
   dest_address: string;
@@ -42,8 +39,10 @@ export interface TripSnapshot {
   comment: string | null;
   via: string;                      // Canal/source, ex: "EasyVTC"
   pricing_type: PricingType;
-  /** Montant final affiché UNIQUEMENT pour les forfaits (jamais la formule) */
+  /** Montant estimé de la course (forfait ou estimation au compteur) */
   final_price: number | null;
+  /** Distance estimée en km (tarification au compteur uniquement) */
+  distance_km: number | null;
   currency: string;
 }
 

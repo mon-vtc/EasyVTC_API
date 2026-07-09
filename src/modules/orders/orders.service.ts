@@ -114,9 +114,8 @@ export class OrdersService {
     // Détermination de la devise selon le pays
     const currency = (reservation as any).country === 'senegal' ? 'XOF' : 'EUR';
 
-    // CDC p.26 : montant affiché UNIQUEMENT pour les forfaits
-    const isFlatRate  = (reservation as any).pricing_type === 'flat_rate';
-    const finalPrice  = isFlatRate ? ((reservation as any).price_estimated ?? null) : null;
+    // Montant estimé de la course, affiché quel que soit le mode de tarification
+    const finalPrice = (reservation as any).price_estimated ?? null;
 
     const tripSnapshot: TripSnapshot = {
       pickup_address: (reservation as any).pickup_address,
@@ -129,6 +128,7 @@ export class OrdersService {
       via:            COMPANY.via,
       pricing_type:   (reservation as any).pricing_type ?? 'formula',
       final_price:    finalPrice,
+      distance_km:    (reservation as any).distance_km ?? null,
       currency,
     };
 
@@ -488,15 +488,57 @@ export class OrdersService {
         row('Informations', tripSnapshot.comment);
       }
 
-      // CDC p.26 — montant affiché UNIQUEMENT pour les forfaits
-      if (tripSnapshot.pricing_type === 'flat_rate' && tripSnapshot.final_price !== null) {
-        y += 6;
-        doc.moveTo(50, y).lineTo(545, y).strokeColor('#eeeeee').lineWidth(0.5).stroke();
-        y += 10;
-        doc.fontSize(9).fillColor(GRAY).font('Helvetica-Bold').text('Tarif forfaitaire', 50, y, { width: 140 });
+      // ── Tableau de tarification (Désignation / Quantité / Montant TTC) ────
+      y += 10;
+
+      const col1 = 50,  col1W = 260;
+      const col2 = 310, col2W = 90;
+      const col3 = 400, col3W = 145;
+      const tableTop = y;
+
+      doc.rect(50, tableTop, W, 20).fill(DARK);
+      doc.fontSize(8).fillColor('#ffffff').font('Helvetica-Bold')
+        .text('DÉSIGNATION', col1 + 5, tableTop + 6, { width: col1W - 10 })
+        .text('QUANTITÉ',    col2,     tableTop + 6, { width: col2W, align: 'center' })
+        .text('MONTANT TTC', col3,     tableTop + 6, { width: col3W - 5, align: 'right' });
+
+      const qty = tripSnapshot.pricing_type === 'flat_rate'
+        ? '1'
+        : tripSnapshot.distance_km != null
+          ? `${tripSnapshot.distance_km} km`
+          : '—';
+      const montant = tripSnapshot.final_price != null
+        ? `${tripSnapshot.final_price} ${tripSnapshot.currency}`
+        : 'Selon compteur';
+
+      doc.fontSize(9).fillColor(DARK).font('Helvetica')
+        .text(qty, col2, tableTop + 28, { width: col2W, align: 'center' });
+      doc.fontSize(9).fillColor(DARK).font('Helvetica-Bold')
+        .text(montant, col3, tableTop + 28, { width: col3W - 5, align: 'right' });
+
+      y = tableTop + 28;
+      doc.fontSize(9).fillColor(DARK).font('Helvetica-Bold')
+        .text('Transport de voyageurs', col1 + 5, y, { width: col1W - 10 });
+      y += 13;
+      doc.fontSize(8).fillColor(GRAY).font('Helvetica')
+        .text(`De : ${tripSnapshot.pickup_address}`, col1 + 5, y, { width: col1W - 10 });
+      y += doc.heightOfString(`De : ${tripSnapshot.pickup_address}`, { width: col1W - 10 }) + 2;
+      doc.fontSize(8).fillColor(GRAY).font('Helvetica')
+        .text(`À : ${tripSnapshot.dest_address}`, col1 + 5, y, { width: col1W - 10 });
+      y += doc.heightOfString(`À : ${tripSnapshot.dest_address}`, { width: col1W - 10 }) + 10;
+
+      doc.moveTo(50, y).lineTo(545, y).strokeColor('#eeeeee').lineWidth(0.5).stroke();
+      y += 14;
+
+      if (tripSnapshot.final_price != null) {
+        doc.fontSize(9).fillColor(GRAY).font('Helvetica-Bold').text('Total TTC', col1 + 5, y, { width: col1W });
         doc.fontSize(9).fillColor(DARK).font('Helvetica-Bold')
-          .text(`${tripSnapshot.final_price} ${tripSnapshot.currency}`, 195, y, { width: W - 145 });
+          .text(montant, col3, y, { width: col3W - 5, align: 'right' });
         y += 18;
+      } else {
+        doc.fontSize(8).fillColor(GRAY).font('Helvetica-Oblique')
+          .text('Le montant final sera déterminé après la course.', col1 + 5, y, { width: W - 10 });
+        y += 16;
       }
 
       // ── Pied de page ─────────────────────────────────────────────────────
