@@ -14,8 +14,6 @@ import {
 } from './driver-documents.validator.js';
 import { DOCUMENT_TYPE_LABELS, DOCUMENT_STATUS_LABELS } from './driver-documents.types.js';
 import { auditLog } from '../../utils/audit.service.js';
-import { notificationsService } from '../notifications/notifications.service.js';
-import { sendDocumentExpiryAlert } from '../../utils/email.service.js';
 
 const service = new DriverDocumentsService();
 
@@ -404,46 +402,7 @@ export async function checkDocumentExpiry(req: Request, res: Response) {
       });
     }
 
-    // 1. Marquer les documents expirés
-    const expiredCount = await service.markExpiredDocuments();
-
-    // 2. Récupérer les documents à alerter
-    const { alert30d, alert7d } = await service.getDocumentsToAlert();
-
-    const results = {
-      expired_marked: expiredCount,
-      alerts_30d: alert30d.length,
-      alerts_7d: alert7d.length,
-      alerts_sent: [] as string[],
-    };
-
-    for (const doc of alert30d) {
-      const docLabel = DOCUMENT_TYPE_LABELS[doc.doc_type];
-      const title = 'Document bientôt expiré';
-      const body = `Votre ${docLabel} expire dans 30 jours (${doc.expiry_date}). Pensez à le renouveler.`;
-      const data = { document_id: doc.document_id, doc_type: doc.doc_type };
-
-      notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
-      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
-        .catch((err) => console.error('[CRON] Erreur envoi email alerte 30j:', err));
-
-      await service.markAlertSent(doc.document_id, '30d');
-      results.alerts_sent.push(`30d:${doc.document_id}`);
-    }
-
-    for (const doc of alert7d) {
-      const docLabel = DOCUMENT_TYPE_LABELS[doc.doc_type];
-      const title = 'Document expirant très bientôt';
-      const body = `Votre ${docLabel} expire dans 7 jours (${doc.expiry_date}). Renouvelez-le immédiatement.`;
-      const data = { document_id: doc.document_id, doc_type: doc.doc_type };
-
-      notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
-      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
-        .catch((err) => console.error('[CRON] Erreur envoi email alerte 7j:', err));
-
-      await service.markAlertSent(doc.document_id, '7d');
-      results.alerts_sent.push(`7d:${doc.document_id}`);
-    }
+    const results = await service.runExpiryCheck();
 
     return res.json({
       ok: true,

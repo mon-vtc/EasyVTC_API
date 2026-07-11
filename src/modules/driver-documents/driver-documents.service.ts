@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { notificationsService } from '../notifications/notifications.service.js';
+import { sendDocumentExpiryAlert } from '../../utils/email.service.js';
 import {
   DriverDocument,
   DriverDocumentWithSignedUrl,
@@ -635,6 +636,58 @@ export class DriverDocumentsService {
     }
 
     return data?.length || 0;
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // CRON : Vérification complète — marque les documents expirés puis envoie
+  // les alertes push/email J-30 et J-7. Utilisé par le endpoint HTTP /cron/documents/check-expiry
+  // ET par le scheduler interne (src/cron/scheduler.ts).
+  // ────────────────────────────────────────────────────────────────────────────
+  async runExpiryCheck(): Promise<{
+    expired_marked: number;
+    alerts_30d: number;
+    alerts_7d: number;
+    alerts_sent: string[];
+  }> {
+    const expiredCount = await this.markExpiredDocuments();
+    const { alert30d, alert7d } = await this.getDocumentsToAlert();
+
+    const results = {
+      expired_marked: expiredCount,
+      alerts_30d: alert30d.length,
+      alerts_7d: alert7d.length,
+      alerts_sent: [] as string[],
+    };
+
+    for (const doc of alert30d) {
+      const docLabel = DOCUMENT_TYPE_LABELS[doc.doc_type];
+      const title = 'Document bientôt expiré';
+      const body = `Votre ${docLabel} expire dans 30 jours (${doc.expiry_date}). Pensez à le renouveler.`;
+      const data = { document_id: doc.document_id, doc_type: doc.doc_type };
+
+      notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
+      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
+        .catch((err) => console.error('[CRON] Erreur envoi email alerte 30j:', err));
+
+      await this.markAlertSent(doc.document_id, '30d');
+      results.alerts_sent.push(`30d:${doc.document_id}`);
+    }
+
+    for (const doc of alert7d) {
+      const docLabel = DOCUMENT_TYPE_LABELS[doc.doc_type];
+      const title = 'Document expirant très bientôt';
+      const body = `Votre ${docLabel} expire dans 7 jours (${doc.expiry_date}). Renouvelez-le immédiatement.`;
+      const data = { document_id: doc.document_id, doc_type: doc.doc_type };
+
+      notificationsService.sendToUser(doc.driver.user_id, 'document_expiry', title, body, data);
+      sendDocumentExpiryAlert(doc.driver.email, doc.driver.first_name, docLabel, doc.days_until_expiry)
+        .catch((err) => console.error('[CRON] Erreur envoi email alerte 7j:', err));
+
+      await this.markAlertSent(doc.document_id, '7d');
+      results.alerts_sent.push(`7d:${doc.document_id}`);
+    }
+
+    return results;
   }
 
   // ════════════════════════════════════════════════════════════════════════════
