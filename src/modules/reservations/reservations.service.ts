@@ -779,10 +779,10 @@ export class ReservationsService {
 
     const eligible = rows.filter(d => !conflictingDriverIds.has(d.id));
 
-    const avgRatingMap = new Map<string, number | null>();
+    const ratingStatsMap = new Map<string, { avg: number | null; count: number }>();
     await Promise.all(
       eligible.map(async d => {
-        avgRatingMap.set(d.id, await ratingsService.computeAvgForDriver(d.id));
+        ratingStatsMap.set(d.id, await ratingsService.getDriverRatingStats(d.id));
       }),
     );
 
@@ -790,10 +790,13 @@ export class ReservationsService {
       const activeVehicle = Array.isArray(d.vehicles)
         ? (d.vehicles.find((v: any) => v.is_active) ?? null)
         : null;
+      const stats = ratingStatsMap.get(d.id) ?? { avg: null, count: 0 };
 
       return {
-        id:           d.id,
-        rating:       avgRatingMap.get(d.id) ?? null,
+        id:              d.id,
+        rating:          stats.avg,
+        average_rating:  stats.avg,
+        ratings_count:   stats.count,
         is_online:    d.is_online,
         status:       d.status,
         vehicle_type: d.vehicle_type,
@@ -818,14 +821,21 @@ export class ReservationsService {
   // PRIVÉS — Helpers internes
   // ──────────────────────────────────────────────────────────────────────────
 
-  private _mapDriver(raw: any, avgRating: number | null = null): AvailableDriverDto | null {
+  private _mapDriver(
+    raw: any,
+    reservationRating: number | null = null,
+    averageRating: number | null = null,
+    ratingsCount: number = 0,
+  ): AvailableDriverDto | null {
     if (!raw) return null;
     const activeVehicle = Array.isArray(raw.vehicles)
       ? (raw.vehicles.find((v: any) => v.is_active) ?? null)
       : null;
     return {
-      id:           raw.id,
-      rating:       avgRating,
+      id:              raw.id,
+      rating:          reservationRating,
+      average_rating:  averageRating,
+      ratings_count:   ratingsCount,
       is_online:    raw.is_online,
       status:       raw.status,
       vehicle_type: raw.vehicle_type,
@@ -847,12 +857,18 @@ export class ReservationsService {
 
   private async _mapReservation(raw: any): Promise<ReservationWithRelations> {
     let driverRating: number | null = null;
+    let driverStats: { avg: number | null; count: number } = { avg: null, count: 0 };
     if (raw.driver) {
-      driverRating = await ratingsService.getRatingForReservation(raw.id);
+      [driverRating, driverStats] = await Promise.all([
+        ratingsService.getRatingForReservation(raw.id),
+        ratingsService.getDriverRatingStats(raw.driver.id),
+      ]);
     }
     return {
       ...raw,
-      driver: raw.driver !== undefined ? this._mapDriver(raw.driver, driverRating) : undefined,
+      driver: raw.driver !== undefined
+        ? this._mapDriver(raw.driver, driverRating, driverStats.avg, driverStats.count)
+        : undefined,
     } as ReservationWithRelations;
   }
 
