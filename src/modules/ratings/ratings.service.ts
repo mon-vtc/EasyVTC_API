@@ -235,6 +235,19 @@ export class RatingsService {
     return Math.round(avg * 10) / 10;
   }
 
+  /** Moyenne + nombre total d'évaluations pour un chauffeur (réputation globale, toutes courses confondues). */
+  async getDriverRatingStats(driverId: string): Promise<{ avg: number | null; count: number }> {
+    const { data, count } = await supabaseAdmin
+      .from('ratings')
+      .select('note', { count: 'exact' })
+      .eq('driver_id', driverId);
+
+    const total = count ?? 0;
+    if (!data || data.length === 0) return { avg: null, count: total };
+    const avg = data.reduce((sum, r: any) => sum + r.note, 0) / data.length;
+    return { avg: Math.round(avg * 10) / 10, count: total };
+  }
+
   /** Note soumise par un client pour une réservation donnée, null si aucune. */
   async getRatingForReservation(reservationId: string): Promise<number | null> {
     const { data } = await supabaseAdmin

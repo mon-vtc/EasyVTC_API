@@ -146,8 +146,10 @@ export interface ReservationListResult {
 // ── Chauffeurs disponibles (pour l'assignation admin) ─────────────────────────
 
 export interface AvailableDriverDto {
-  id:           string;           // drivers.id — passé à assign()
-  rating:       number | null;    // null jusqu'au module ratings (Sprint 6)
+  id:              string;           // drivers.id — passé à assign()
+  rating:          number | null;    // contexte-dépendant : note de LA réservation courante (detail réservation) ou moyenne du chauffeur (liste des chauffeurs disponibles)
+  average_rating:  number | null;    // moyenne globale du chauffeur, toutes courses confondues — null si aucune évaluation
+  ratings_count:   number;           // nombre total d'évaluations reçues par le chauffeur
   is_online:    boolean;
   status:       string;
   vehicle_type: string | null;
