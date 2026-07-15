@@ -41,6 +41,12 @@ const TRIP_BUFFER_MIN = 30;
 // Durée de fallback si la réservation n'a pas de duration_min (ex: forfait sans métriques).
 const TRIP_CONFLICT_FALLBACK_MIN = 180; // 3 heures
 
+// Détection auto du supplément aéroport — mot-clé dans l'adresse de départ ou destination.
+const AIRPORT_KEYWORD_RE = /a[eé]roport|airport/i;
+function isAirportTrip(pickupAddress: string, destAddress: string): boolean {
+  return AIRPORT_KEYWORD_RE.test(pickupAddress) || AIRPORT_KEYWORD_RE.test(destAddress);
+}
+
 // ── Sélect enrichi (jointures client + chauffeur) ────────────────────────────
 const RESERVATION_SELECT = `
   *,
@@ -73,13 +79,17 @@ export class ReservationsService {
   async createReservation(clientId: string, dto: CreateReservationDto): Promise<ReservationWithRelations> {
     await vehicleTypesService.validateCode(dto.vehicle_type);
 
-    // Calculer le prix estimé — vehicle_type transmis pour moduler le base_price
+    // Calculer le prix estimé — vehicle_type transmis pour moduler le base_price ;
+    // scheduled_at + is_airport pour que les suppléments nocturne/aéroport de la
+    // grille s'appliquent réellement (auparavant jamais transmis → jamais facturés).
     const { final_price, currency, breakdown } = await pricingService.computePrice({
       country:      dto.country,
       distance_km:  dto.distance_km,
       duration_min: dto.duration_min,
       flat_rate_id: dto.flat_rate_id,
       vehicle_type: dto.vehicle_type,
+      scheduled_at: dto.scheduled_at,
+      is_airport:   isAirportTrip(dto.pickup_address, dto.dest_address),
     });
 
     const pricing_type = dto.flat_rate_id ? 'flat_rate' : 'formula';
@@ -532,6 +542,8 @@ export class ReservationsService {
           country:      reservation.country as 'france' | 'senegal',
           distance_km:  finalDistanceKm,
           duration_min: finalDurationMin,
+          scheduled_at: currentTrip?.started_at ?? reservation.scheduled_at,
+          is_airport:   isAirportTrip(reservation.pickup_address, reservation.dest_address),
         });
         price_final = recalc.final_price;
       } catch {
