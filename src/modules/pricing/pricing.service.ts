@@ -334,12 +334,22 @@ export class PricingService {
       }
 
       const nb_passengers = dto.nb_passengers ?? 1;
-      const amount_ttc    = roundPrice(flatRate.price, flatRate.currency);
+
+      // Surcharge par passager au-delà du premier (0 si non configurée sur le forfait).
+      const pickup_surcharge_per_person = flatRate.pickup_surcharge ?? 0;
+      const pickup_surcharge_total = roundPrice(
+        Math.max(0, nb_passengers - 1) * pickup_surcharge_per_person,
+        flatRate.currency,
+      );
+
+      const amount_ttc = roundPrice(flatRate.price + pickup_surcharge_total, flatRate.currency);
 
       const breakdown: PriceBreakdown = {
         flat_rate_id:    flatRate.id,
         flat_rate_label: flatRate.label,
         nb_passengers,
+        pickup_surcharge_per_person,
+        pickup_surcharge_total,
         tva_rate:   0,
         tva_amount: 0,
         amount_ht:  amount_ttc,

@@ -213,7 +213,7 @@ describe('PricingService', () => {
       expect(result.breakdown.flat_rate_label).toBe('Massy → Orly');
     });
 
-    it('le prix reste fixe quel que soit le nombre de passagers', async () => {
+    it('le prix reste fixe quel que soit le nombre de passagers (surcharge non configurée)', async () => {
       mockChain(mockFlatRateMassyOrly);
       const result = await service.calculatePrice({
         country:       'france',
@@ -223,6 +223,32 @@ describe('PricingService', () => {
 
       expect(result.final_price).toBe(37.00);
       expect(result.breakdown.nb_passengers).toBe(6);
+    });
+
+    it('applique la surcharge par passager au-delà du premier', async () => {
+      mockChain({ ...mockFlatRateMassyOrly, pickup_surcharge: 10 });
+      const result = await service.calculatePrice({
+        country:       'france',
+        flat_rate_id:  'fr-1',
+        nb_passengers: 4,
+      });
+
+      // 37 (prix forfait) + 3 passagers supplémentaires × 10 = 67
+      expect(result.final_price).toBe(67.00);
+      expect(result.breakdown.pickup_surcharge_per_person).toBe(10);
+      expect(result.breakdown.pickup_surcharge_total).toBe(30);
+    });
+
+    it("n'applique aucune surcharge pour un seul passager même si configurée", async () => {
+      mockChain({ ...mockFlatRateMassyOrly, pickup_surcharge: 10 });
+      const result = await service.calculatePrice({
+        country:       'france',
+        flat_rate_id:  'fr-1',
+        nb_passengers: 1,
+      });
+
+      expect(result.final_price).toBe(37.00);
+      expect(result.breakdown.pickup_surcharge_total).toBe(0);
     });
 
     it('lève une erreur si le forfait est inactif', async () => {
