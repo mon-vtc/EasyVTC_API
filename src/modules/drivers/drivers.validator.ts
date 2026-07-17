@@ -8,18 +8,28 @@ import { z } from 'zod';
 const zoneTypes = ['france', 'senegal'] as const;
 const driverStatusTransitions = ['pending', 'probationary', 'active', 'rejected', 'suspended'] as const;
 
+// Une chaîne vide envoyée par le client (champ non renseigné dans un formulaire)
+// doit être traitée comme "absent", pas comme une valeur invalide à rejeter.
+const emptyToUndefined = (v: unknown) => (v === '' ? undefined : v);
+
 // ── Mise à jour profil chauffeur (self) ───────────────────────────────────────
 export const updateDriverSchema = z.object({
-  siret: z
-    .string()
-    .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
-    .optional(),
-  zone: z.enum(zoneTypes, {
-    error: 'Zone invalide. Valeurs acceptées: france, senegal',
-  }).optional(),
-  vehicle_type: z.string().min(1).max(50).optional(),
+  siret: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
+      .optional()
+  ),
+  zone: z.preprocess(
+    emptyToUndefined,
+    z.enum(zoneTypes, {
+      error: 'Zone invalide. Valeurs acceptées: france, senegal',
+    }).optional()
+  ),
+  vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(
-  (data) => Object.keys(data).length > 0,
+  (data) => Object.values(data).some((v) => v !== undefined),
   { message: 'Au moins un champ doit être fourni pour la mise à jour' }
 );
 
@@ -46,16 +56,22 @@ export const adminUpdateDriverSchema = z.object({
     .min(0, 'Le taux de TVA ne peut pas être négatif')
     .max(100, 'Le taux de TVA ne peut pas dépasser 100%')
     .optional(),
-  siret: z
-    .string()
-    .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
-    .optional(),
-  zone: z.enum(zoneTypes, {
-    error: 'Zone invalide. Valeurs acceptées: france, senegal',
-  }).optional(),
-  vehicle_type: z.string().min(1).max(50).optional(),
+  siret: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
+      .optional()
+  ),
+  zone: z.preprocess(
+    emptyToUndefined,
+    z.enum(zoneTypes, {
+      error: 'Zone invalide. Valeurs acceptées: france, senegal',
+    }).optional()
+  ),
+  vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(
-  (data) => Object.keys(data).length > 0,
+  (data) => Object.values(data).some((v) => v !== undefined),
   { message: 'Au moins un champ doit être fourni pour la mise à jour' }
 );
 
