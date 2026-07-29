@@ -259,6 +259,57 @@ export class RatingsService {
     return (data as any)?.note ?? null;
   }
 
+  /**
+   * Version batchée de getDriverRatingStats — une seule requête pour N chauffeurs,
+   * au lieu d'une requête par chauffeur. Utilisé par listReservations pour éviter
+   * un N+1 (jusqu'à 2 requêtes par ligne de la page) sur les listes de réservations.
+   */
+  async getDriverRatingStatsBatch(driverIds: string[]): Promise<Map<string, { avg: number | null; count: number }>> {
+    const map = new Map<string, { avg: number | null; count: number }>();
+    const uniqueIds = [...new Set(driverIds)];
+    if (uniqueIds.length === 0) return map;
+
+    const { data } = await supabaseAdmin
+      .from('ratings')
+      .select('driver_id, note')
+      .in('driver_id', uniqueIds);
+
+    const byDriver = new Map<string, number[]>();
+    for (const r of (data ?? []) as any[]) {
+      const notes = byDriver.get(r.driver_id) ?? [];
+      notes.push(r.note);
+      byDriver.set(r.driver_id, notes);
+    }
+
+    for (const driverId of uniqueIds) {
+      const notes = byDriver.get(driverId) ?? [];
+      const avg = notes.length > 0
+        ? Math.round((notes.reduce((sum, n) => sum + n, 0) / notes.length) * 10) / 10
+        : null;
+      map.set(driverId, { avg, count: notes.length });
+    }
+    return map;
+  }
+
+  /**
+   * Version batchée de getRatingForReservation — une seule requête pour N réservations.
+   */
+  async getRatingsForReservationsBatch(reservationIds: string[]): Promise<Map<string, number>> {
+    const map = new Map<string, number>();
+    const uniqueIds = [...new Set(reservationIds)];
+    if (uniqueIds.length === 0) return map;
+
+    const { data } = await supabaseAdmin
+      .from('ratings')
+      .select('reservation_id, note')
+      .in('reservation_id', uniqueIds);
+
+    for (const r of (data ?? []) as any[]) {
+      map.set(r.reservation_id, r.note);
+    }
+    return map;
+  }
+
   /** Moyenne des notes soumises par un client (comportement de notation). */
   async computeAvgSubmittedByClient(clientId: string): Promise<number | null> {
     const { data } = await supabaseAdmin
@@ -269,6 +320,37 @@ export class RatingsService {
     if (!data || data.length === 0) return null;
     const avg = data.reduce((sum, r: any) => sum + r.note, 0) / data.length;
     return Math.round(avg * 10) / 10;
+  }
+
+  /**
+   * Version batchée de computeAvgSubmittedByClient — une seule requête pour N clients,
+   * au lieu d'une requête par client. Utilisé par admin.service.ts listClients pour
+   * éviter un N+1 sur la liste des clients.
+   */
+  async computeAvgSubmittedByClientsBatch(clientIds: string[]): Promise<Map<string, number | null>> {
+    const map = new Map<string, number | null>();
+    const uniqueIds = [...new Set(clientIds)];
+    if (uniqueIds.length === 0) return map;
+
+    const { data } = await supabaseAdmin
+      .from('ratings')
+      .select('client_id, note')
+      .in('client_id', uniqueIds);
+
+    const byClient = new Map<string, number[]>();
+    for (const r of (data ?? []) as any[]) {
+      const notes = byClient.get(r.client_id) ?? [];
+      notes.push(r.note);
+      byClient.set(r.client_id, notes);
+    }
+
+    for (const clientId of uniqueIds) {
+      const notes = byClient.get(clientId);
+      map.set(clientId, notes && notes.length > 0
+        ? Math.round((notes.reduce((sum, n) => sum + n, 0) / notes.length) * 10) / 10
+        : null);
+    }
+    return map;
   }
 }
 

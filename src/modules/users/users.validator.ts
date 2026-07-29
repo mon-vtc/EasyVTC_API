@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { phoneSchema } from '../../validators/common.validator.js';
 
 export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — format UUID attendu') });
 
@@ -6,10 +7,7 @@ export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — for
 export const updateProfileSchema = z.object({
   first_name: z.string().min(2).max(100).optional(),
   last_name:  z.string().min(2).max(100).optional(),
-  phone: z
-    .string()
-    .regex(/^\+?[1-9]\d{7,14}$/, 'Numéro de téléphone invalide (format E.164)')
-    .optional(),
+  phone: phoneSchema.optional(),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'Au moins un champ est requis' }

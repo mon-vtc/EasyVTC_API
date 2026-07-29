@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
+import { generatePassword } from '../../utils/generate-password.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
@@ -327,6 +328,60 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     return redirectTo;
   }
 
+  /**
+   * Crée le profil applicatif (public.users) pour un nouveau compte Google, et génère
+   * un mot de passe temporaire — Google ne fournit aucun mot de passe applicatif, ce qui
+   * bloquait ensuite la suppression/anonymisation RGPD du compte (nécessite un mot de passe
+   * pour confirmer). Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en
+   * clair), envoyé une seule fois par email, et retourné une seule fois dans la réponse pour
+   * affichage côté mobile à la première connexion.
+   */
+  private async _provisionGoogleProfile(supabaseUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: Record<string, any>;
+  }): Promise<string | undefined> {
+    const firstName = supabaseUser.user_metadata?.['given_name']
+                   ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
+                   ?? 'Utilisateur';
+    const lastName  = supabaseUser.user_metadata?.['family_name']
+                   ?? supabaseUser.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
+                   ?? '';
+
+    const { error: insertError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: supabaseUser.id, email: supabaseUser.email,
+        first_name: firstName, last_name: lastName,
+        phone: null, role: 'client', rgpd_consent: false,
+      });
+
+    if (insertError) {
+      throw { status: 500, message: 'Erreur lors de la création du profil Google' };
+    }
+
+    const tempPassword = generatePassword();
+    const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(supabaseUser.id, {
+      password: tempPassword,
+    });
+    if (pwError) {
+      logger.warn('auth', `Mot de passe temporaire Google non défini: ${pwError.message}`);
+    }
+    const finalTempPassword = pwError ? undefined : tempPassword;
+
+    sendWelcomeEmail(supabaseUser.email!, firstName, undefined, finalTempPassword).catch((err) =>
+      console.warn('[Email] Welcome Google email failed:', err)
+    );
+    notificationsService.sendToAdmins(
+      'new_user_admin',
+      'Nouveau compte créé (Google)',
+      `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${supabaseUser.email}).`,
+      { user_id: supabaseUser.id, role: 'client' },
+    );
+
+    return finalTempPassword;
+  }
+
   // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────
   async handleGoogleCallback(code: string): Promise<AuthResponse> {
     const { data, error } = await supabaseAdmin.auth.exchangeCodeForSession(code);
@@ -344,35 +399,9 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       .eq('id', supabaseUser.id)
       .single();
 
-    if (!existing) {
-      const firstName = supabaseUser.user_metadata?.['given_name']
-                     ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
-                     ?? 'Utilisateur';
-      const lastName  = supabaseUser.user_metadata?.['family_name']
-                     ?? supabaseUser.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
-                     ?? '';
-
-      const { error: insertError } = await supabaseAdmin
-        .from('users')
-        .insert({
-          id: supabaseUser.id, email: supabaseUser.email,
-          first_name: firstName, last_name: lastName,
-          phone: null, role: 'client', rgpd_consent: false,
-        });
-
-      if (insertError) {
-        throw { status: 500, message: 'Erreur lors de la création du profil Google' };
-      }
-      sendWelcomeEmail(supabaseUser.email!, firstName).catch((err) =>
-        console.warn('[Email] Welcome Google email failed:', err)
-      );
-      notificationsService.sendToAdmins(
-        'new_user_admin',
-        'Nouveau compte créé (Google)',
-        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${supabaseUser.email}).`,
-        { user_id: supabaseUser.id, role: 'client' },
-      );
-    }
+    const tempPassword = !existing
+      ? await this._provisionGoogleProfile(supabaseUser)
+      : undefined;
 
     const userProfile = await this.fetchFullProfile(supabaseUser.id);
 
@@ -385,6 +414,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
       token_type: 'Bearer',
+      ...(tempPassword ? { temp_password: tempPassword } : {}),
     };
   }
 
@@ -403,35 +433,9 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       .eq('id', user.id)
       .single();
 
-    if (!existing) {
-      const firstName = user.user_metadata?.['given_name']
-                     ?? user.user_metadata?.['full_name']?.split(' ')[0]
-                     ?? 'Utilisateur';
-      const lastName  = user.user_metadata?.['family_name']
-                     ?? user.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
-                     ?? '';
-
-      const { error: insertError } = await supabaseAdmin
-        .from('users')
-        .insert({
-          id: user.id, email: user.email,
-          first_name: firstName, last_name: lastName,
-          phone: null, role: 'client', rgpd_consent: false,
-        });
-
-      if (insertError) {
-        throw { status: 500, message: 'Erreur lors de la création du profil Google' };
-      }
-      sendWelcomeEmail(user.email!, firstName).catch((err) =>
-        console.warn('[Email] Welcome Google email failed:', err)
-      );
-      notificationsService.sendToAdmins(
-        'new_user_admin',
-        'Nouveau compte créé (Google)',
-        `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${user.email}).`,
-        { user_id: user.id, role: 'client' },
-      );
-    }
+    const tempPassword = !existing
+      ? await this._provisionGoogleProfile(user)
+      : undefined;
 
     const userProfile = await this.fetchFullProfile(user.id);
 
@@ -444,6 +448,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       access_token: accessToken,
       refresh_token: refreshToken ?? null,
       token_type: 'Bearer',
+      ...(tempPassword ? { temp_password: tempPassword } : {}),
     };
   }
 

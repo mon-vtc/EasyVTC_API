@@ -68,6 +68,10 @@ export interface AuthResponse {
   access_token: string;
   refresh_token: string | null;
   token_type: 'Bearer';
+  // Présent uniquement à la toute première connexion Google (compte nouvellement créé) —
+  // mot de passe temporaire généré car Google ne fournit aucun mot de passe applicatif.
+  // Affiché une seule fois côté mobile, puis jamais renvoyé par l'API ensuite.
+  temp_password?: string;
 }
 
 declare global {

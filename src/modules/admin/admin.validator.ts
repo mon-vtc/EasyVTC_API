@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MANAGER_PERMISSIONS } from './admin.types.js';
+import { phoneSchema } from '../../validators/common.validator.js';
 
 export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — format UUID attendu') });
 
@@ -13,10 +14,7 @@ export const createManagerSchema = z.object({
     .optional(),
   first_name: z.string().min(2, 'Prénom trop court').max(100),
   last_name:  z.string().min(2, 'Nom trop court').max(100),
-  phone: z
-    .string()
-    .regex(/^\+?[1-9]\d{7,14}$/, 'Numéro de téléphone invalide (format E.164)')
-    .optional(),
+  phone: phoneSchema.optional(),
   coverage_zone:  z.string().min(2, 'Zone trop courte').max(100).optional(),
   priority_level: z.number().int().min(1, 'Niveau invalide').max(3, 'Niveau invalide').optional(),
 });
@@ -24,10 +22,7 @@ export const createManagerSchema = z.object({
 export const updateManagerSchema = z.object({
   first_name: z.string().min(2, 'Prénom trop court').max(100).optional(),
   last_name:  z.string().min(2, 'Nom trop court').max(100).optional(),
-  phone: z
-    .string()
-    .regex(/^\+?[1-9]\d{7,14}$/, 'Numéro de téléphone invalide (format E.164)')
-    .optional(),
+  phone: phoneSchema.optional(),
   coverage_zone:  z.string().min(2, 'Zone trop courte').max(100).optional(),
   priority_level: z.number().int().min(1, 'Niveau invalide').max(3, 'Niveau invalide').optional(),
 });
