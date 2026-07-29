@@ -507,6 +507,60 @@ describe('AuthService', () => {
           service.handleGoogleCallback('invalid-code')
         ).rejects.toMatchObject({ status: 401 });
       });
+
+      it(' génère et retourne un mot de passe temporaire pour un nouveau compte Google', async () => {
+        mockExchangeCode.mockResolvedValue({
+          data: {
+            user: {
+              id: 'google-uuid-new',
+              email: 'nouveau@gmail.com',
+              user_metadata: { given_name: 'Nouveau', family_name: 'Utilisateur' },
+            },
+            session: mockSession,
+          },
+          error: null,
+        } as never);
+
+        // 1) vérification profil existant → aucun profil trouvé
+        mockFrom.mockReturnValueOnce({
+          select: jest.fn().mockReturnThis(),
+          eq:     jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({ data: null, error: null } as never),
+        });
+        // 2) insertion du profil → succès
+        mockFrom.mockReturnValueOnce({
+          insert: jest.fn().mockReturnThis(),
+        });
+        // 3) fetchFullProfile → profil nouvellement créé
+        mockFrom.mockReturnValueOnce({
+          select: jest.fn().mockReturnThis(),
+          eq:     jest.fn().mockReturnThis(),
+          single: jest.fn().mockResolvedValue({
+            data: {
+              id: 'google-uuid-new',
+              email: 'nouveau@gmail.com',
+              role: 'client',
+              first_name: 'Nouveau',
+              last_name: 'Utilisateur',
+              phone: null,
+              status: 'active',
+              deleted_at: null,
+              created_at: '2026-03-16T10:00:00Z',
+            },
+            error: null,
+          } as never),
+        });
+
+        mockUpdateUserById.mockResolvedValue({ error: null } as never);
+
+        const result = await service.handleGoogleCallback('valid-code');
+
+        expect(result.temp_password).toBeTruthy();
+        expect(mockUpdateUserById).toHaveBeenCalledWith(
+          'google-uuid-new',
+          { password: result.temp_password }
+        );
+      });
     });
 
     describe('handleGoogleToken()', () => {

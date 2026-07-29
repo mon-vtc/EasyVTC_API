@@ -213,9 +213,23 @@ export class ReservationsService {
     if (error) throw { status: 500, message: 'Erreur lors de la récupération des réservations' };
 
     const total = count ?? 0;
+    const rows = data ?? [];
+
+    // Batch les requêtes de notation (au lieu d'1-2 requêtes par ligne — voir ratings.service.ts)
+    // Seules les réservations avec un chauffeur assigné peuvent avoir une note (cf. _mapReservation).
+    const rowsWithDriver = rows.filter((r: any) => r.driver);
+    const driverIds = rowsWithDriver.map((r: any) => r.driver.id);
+    const reservationIds = rowsWithDriver.map((r: any) => r.id);
+    const [statsMap, ratingMap] = await Promise.all([
+      ratingsService.getDriverRatingStatsBatch(driverIds),
+      ratingsService.getRatingsForReservationsBatch(reservationIds),
+    ]);
 
     return {
-      reservations: await Promise.all((data ?? []).map((r: any) => this._mapReservation(r))),
+      reservations: await Promise.all(rows.map((r: any) => this._mapReservation(r, {
+        rating: ratingMap.get(r.id) ?? null,
+        stats: statsMap.get(r.driver?.id) ?? { avg: null, count: 0 },
+      }))),
       total,
       page,
       limit,
@@ -867,14 +881,22 @@ export class ReservationsService {
     };
   }
 
-  private async _mapReservation(raw: any): Promise<ReservationWithRelations> {
+  private async _mapReservation(
+    raw: any,
+    precomputed?: { rating: number | null; stats: { avg: number | null; count: number } },
+  ): Promise<ReservationWithRelations> {
     let driverRating: number | null = null;
     let driverStats: { avg: number | null; count: number } = { avg: null, count: 0 };
     if (raw.driver) {
-      [driverRating, driverStats] = await Promise.all([
-        ratingsService.getRatingForReservation(raw.id),
-        ratingsService.getDriverRatingStats(raw.driver.id),
-      ]);
+      if (precomputed) {
+        driverRating = precomputed.rating;
+        driverStats = precomputed.stats;
+      } else {
+        [driverRating, driverStats] = await Promise.all([
+          ratingsService.getRatingForReservation(raw.id),
+          ratingsService.getDriverRatingStats(raw.driver.id),
+        ]);
+      }
     }
     return {
       ...raw,

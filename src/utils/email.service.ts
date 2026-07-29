@@ -166,13 +166,34 @@ const footerSupport = (): string => `
 export async function sendWelcomeEmail(
   to: string,
   firstName: string,
-  loginUrl = 'easyvtc://login'
+  loginUrl = 'easyvtc://login',
+  tempPassword?: string,
 ): Promise<void> {
+  const credentialsBlock = tempPassword ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:${C.lightGray};border-radius:8px;border-left:4px solid ${C.bordeaux};margin:0 0 20px;">
+      <tr><td style="padding:20px 24px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          <tr>
+            <td style="padding:0 0 12px;color:${C.gray};font-size:14px;width:150px;vertical-align:top;">📧 Identifiant</td>
+            <td style="padding:0 0 12px;"><strong style="color:${C.bordeaux};">${to}</strong></td>
+          </tr>
+          <tr>
+            <td style="color:${C.gray};font-size:14px;vertical-align:top;">🔑 Mot de passe</td>
+            <td><strong style="color:${C.bordeaux};font-family:monospace;font-size:15px;">${tempPassword}</strong></td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+    ${callout('⚠️', '<strong style="color:' + C.bordeaux + ';">Important :</strong> Ce mot de passe temporaire a été généré car votre compte a été créé via Google. Nous vous recommandons de le modifier dès votre première connexion (Mon compte → Modifier le mot de passe).', '#FFF8F0', C.beige, '#555')}
+  ` : '';
+
   const html = layout(`
     ${header(`Bienvenue, ${firstName} ! 🎉`, 'Votre compte est activé')}
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
       Votre compte EasyVTC a été créé avec succès. Vous pouvez dès maintenant
       vous connecter et réserver votre premier trajet.</p>
+    ${credentialsBlock}
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
            style="background:${C.lightGray};border-radius:8px;border-left:4px solid ${C.beige};margin:20px 0;">
       <tr><td style="padding:18px 20px;">

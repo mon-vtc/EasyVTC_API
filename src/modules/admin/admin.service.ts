@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendManagerAccessEmail } from '../../utils/email.service.js';
+import { generatePassword } from '../../utils/generate-password.js';
 import { ratingsService } from '../ratings/ratings.service.js';
 import type {
   CreateManagerDto, UpdateManagerDto, ChangeManagerStatusDto, ManagerListFilters,
@@ -21,23 +22,9 @@ const USER_PROFILE_COLUMNS = `
 
 export class AdminService {
 
-  // ── Génère un mot de passe aléatoire sécurisé (12 chars) ───────────────────
-  private generatePassword(): string {
-    const lower  = 'abcdefghijklmnopqrstuvwxyz';
-    const upper  = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const digits = '0123456789';
-    const special = '!@#$%&*';
-    const all    = lower + upper + digits + special;
-    const rand   = (s: string) => s[Math.floor(Math.random() * s.length)];
-    // Garantit la présence d'au moins un de chaque catégorie
-    const base = rand(lower) + rand(upper) + rand(digits) + rand(special);
-    const rest = Array.from({ length: 8 }, () => rand(all)).join('');
-    return (base + rest).split('').sort(() => Math.random() - 0.5).join('');
-  }
-
   // ── POST /admin/managers — Créer un compte gestionnaire ─────────────────────
   async createManager(dto: CreateManagerDto, _createdBy?: string): Promise<UserProfile> {
-    const password = dto.password ?? this.generatePassword();
+    const password = dto.password ?? generatePassword();
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email:         dto.email,
       password,
@@ -351,12 +338,7 @@ export class AdminService {
       }
     }
 
-    const avgRatingMap = new Map<string, number | null>();
-    await Promise.all(
-      clientIds.map(async (id: string) => {
-        avgRatingMap.set(id, await ratingsService.computeAvgSubmittedByClient(id));
-      }),
-    );
+    const avgRatingMap = await ratingsService.computeAvgSubmittedByClientsBatch(clientIds);
 
     const clientsWithStats: ClientWithStats[] = (clients ?? []).map(c => {
       const s = statsMap.get((c as any).id);
@@ -573,12 +555,7 @@ export class AdminService {
     }
 
     const reservationIds = (trips ?? []).map(t => t.id);
-    const ratingMap = new Map<string, number | null>();
-    await Promise.all(
-      reservationIds.map(async (id: string) => {
-        ratingMap.set(id, await ratingsService.getRatingForReservation(id));
-      }),
-    );
+    const ratingMap = await ratingsService.getRatingsForReservationsBatch(reservationIds);
 
     const tripItems: ClientTripItem[] = (trips ?? []).map(t => {
       const driver = t.driver_id ? driverNameMap.get(t.driver_id) : undefined;

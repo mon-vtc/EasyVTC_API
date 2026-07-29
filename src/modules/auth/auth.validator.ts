@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { phoneSchema } from '../../validators/common.validator.js';
 
 export const registerSchema = z.object({
   email: z.email('Email invalide'),
@@ -9,7 +10,7 @@ export const registerSchema = z.object({
     .regex(/[0-9]/, 'Le mot de passe doit contenir au moins un chiffre'),
   first_name: z.string().min(2).max(100),
   last_name:  z.string().min(2).max(100),
-  phone: z.string().regex(/^\+?[1-9]\d{7,14}$/, 'Numéro de téléphone invalide (format E.164)'),
+  phone: phoneSchema,
  role: z.enum(['client', 'driver'] as const, {
   error: "Le rôle doit être 'client' ou 'driver'",
 }),
