@@ -13,11 +13,14 @@ export const MANAGER_PERMISSIONS = [
   'view_clients',
   // Tarification
   'view_pricing',
+  'manage_pricing',
   // Documents
   'view_documents',
+  'validate_documents',
   // Finances
   'view_orders',
   'view_invoices',
+  'adjust_invoice_price',
   // Évaluations
   'view_ratings',
   // Support / Chat
@@ -146,7 +149,6 @@ export type AdminDashboardPeriod = 'week' | 'month' | 'year';
 export interface RevenueChartEntry {
   label: string;
   eur:   number;
-  xof:   number;
 }
 
 export interface TopDriver {
@@ -177,7 +179,6 @@ export interface AdminDashboard {
 
   revenue: {
     total_eur: number;
-    total_xof: number;
     trend_pct: number | null;
     chart:     RevenueChartEntry[];
   };
@@ -222,7 +223,6 @@ export interface AdminStats {
   };
   revenue: {
     total_eur:   number;
-    total_xof:   number;
   };
   drivers: {
     total:       number;

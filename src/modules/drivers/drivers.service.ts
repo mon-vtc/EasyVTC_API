@@ -5,7 +5,7 @@
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
-import { computeZonedDateRange, type Zone } from '../../utils/timezone.js';
+import { computeZonedDateRange } from '../../utils/timezone.js';
 import type {
   DriverWithUser,
   DriverWithUserAndVehicle,
@@ -30,7 +30,7 @@ import type {
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
 const DRIVER_WITH_USER_SELECT = `
-  id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, status_reason, created_at, updated_at,
+  id, user_id, status, vehicle_type, siret, tva_rate, is_online, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
   )
@@ -38,7 +38,7 @@ const DRIVER_WITH_USER_SELECT = `
 
 // ── Colonnes du join drivers + user + véhicule actif ────────────────────────
 const DRIVER_WITH_USER_AND_VEHICLE_SELECT = `
-  id, user_id, status, vehicle_type, siret, tva_rate, is_online, zone, status_reason, created_at, updated_at,
+  id, user_id, status, vehicle_type, siret, tva_rate, is_online, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
   ),
@@ -92,7 +92,7 @@ export class DriversService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // PATCH /drivers/me — siret, zone, vehicle_type
+  // PATCH /drivers/me — siret, vehicle_type
   // ────────────────────────────────────────────────────────────────────────────
   async updateMyProfile(userId: string, dto: UpdateDriverDto): Promise<DriverWithUser> {
     if (dto.vehicle_type) {
@@ -173,13 +173,10 @@ export class DriversService {
     let query = supabaseAdmin
       .from('drivers')
       .select(DRIVER_WITH_USER_SELECT, { count: 'exact' })
-      .eq('users.role', 'driver');
+      .eq('user.role', 'driver');
 
     if (filters.status) {
       query = query.eq('status', filters.status);
-    }
-    if (filters.zone) {
-      query = query.eq('zone', filters.zone);
     }
     if (filters.vehicle_type) {
       query = query.eq('vehicle_type', filters.vehicle_type);
@@ -191,7 +188,7 @@ export class DriversService {
       const term = `%${filters.search}%`;
       query = query.or(
         `email.ilike.${term},first_name.ilike.${term},last_name.ilike.${term}`,
-        { foreignTable: 'users' }
+        { foreignTable: 'user' }
       );
     }
 
@@ -337,7 +334,7 @@ export class DriversService {
       .select(`
         id, status, scheduled_at,
         pickup_address, dest_address, vehicle_type,
-        price_estimated, price_final, country,
+        price_estimated, price_final,
         client:users!client_id(first_name, last_name, phone),
         trip:trips!reservation_id(id, started_at, ended_at, actual_distance_km, actual_duration_min)
       `)
@@ -361,7 +358,6 @@ export class DriversService {
       vehicle_type:    r.vehicle_type,
       price_estimated: r.price_estimated,
       price_final:     r.price_final ?? null,
-      country:         r.country,
       client:          r.client ?? null,
       trip:            Array.isArray(r.trip) ? (r.trip[0] ?? null) : (r.trip ?? null),
     }));
@@ -391,13 +387,7 @@ export class DriversService {
     const filterByTripEnd = status !== 'cancelled';
 
     if (period !== 'all') {
-      const { data: driverRow } = await supabaseAdmin
-        .from('drivers')
-        .select('zone')
-        .eq('id', driverId)
-        .single();
-      const zone = (driverRow?.zone as Zone | undefined) ?? 'france';
-      const range = computeZonedDateRange(zone, period, date);
+      const range = computeZonedDateRange(period, date);
       dateFrom = range.dateFrom;
       dateTo   = range.dateTo;
     }
@@ -407,8 +397,8 @@ export class DriversService {
       .from('reservations')
       .select(
         filterByTripEnd
-          ? 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name), trips!inner(ended_at)'
-          : 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, country, client_id, client:users!client_id(first_name, last_name)',
+          ? 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, client_id, client:users!client_id(first_name, last_name), trips!inner(ended_at)'
+          : 'id, scheduled_at, pickup_address, dest_address, price_final, price_adjusted, client_id, client:users!client_id(first_name, last_name)',
         { count: 'exact' },
       )
       .eq('driver_id', driverId)
@@ -444,7 +434,6 @@ export class DriversService {
         period, date_from: dateFrom, date_to: dateTo,
         total_trips: 0, total_gross: 0, total_commission: 0, total_net: 0,
         total_revenue: 0, currency: 'EUR',
-        revenue_by_currency: { EUR: 0, XOF: 0 },
         trips: [],
         page,
         limit,
@@ -478,26 +467,21 @@ export class DriversService {
       ratingMap.set(rt.reservation_id, rt.note);
     }
 
-    let grossEur = 0, grossXof = 0;
-    let commEur  = 0, commXof  = 0;
-    let netEur   = 0, netXof   = 0;
+    // Plateforme limitée à la France — devise toujours EUR.
+    let grossEur = 0;
+    let commEur  = 0;
+    let netEur   = 0;
 
     const trips = rows.map((r: any) => {
       const gross    = Number(r.price_adjusted ?? r.price_final ?? 0);
-      const currency = r.country === 'senegal' ? 'XOF' : 'EUR';
+      const currency = 'EUR';
       const comm     = commMap.get(r.id);
       const commissionAmount = comm ? comm.commission_amount : 0;
       const netAmount        = comm ? comm.driver_net_amount : gross;
 
-      if (currency === 'XOF') {
-        grossXof += gross;
-        commXof  += commissionAmount;
-        netXof   += netAmount;
-      } else {
-        grossEur += gross;
-        commEur  += commissionAmount;
-        netEur   += netAmount;
-      }
+      grossEur += gross;
+      commEur  += commissionAmount;
+      netEur   += netAmount;
 
       return {
         reservation_id:    r.id,
@@ -514,12 +498,11 @@ export class DriversService {
       };
     });
 
-    const primaryIsXof = grossEur === 0 && grossXof > 0;
-    const round2       = (n: number) => Math.round(n * 100) / 100;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
 
-    const totalGross = primaryIsXof ? Math.round(grossXof) : round2(grossEur);
-    const totalComm  = primaryIsXof ? Math.round(commXof)  : round2(commEur);
-    const totalNet   = primaryIsXof ? Math.round(netXof)   : round2(netEur);
+    const totalGross = round2(grossEur);
+    const totalComm  = round2(commEur);
+    const totalNet   = round2(netEur);
 
     return {
       period,
@@ -530,11 +513,7 @@ export class DriversService {
       total_commission:    totalComm,
       total_net:           totalNet,
       total_revenue:       totalNet,           // alias rétro-compatibilité
-      currency:            primaryIsXof ? 'XOF' : 'EUR',
-      revenue_by_currency: {
-        EUR: round2(netEur),
-        XOF: Math.round(netXof),
-      },
+      currency:            'EUR',
       trips,
       page,
       limit,
@@ -1133,7 +1112,7 @@ export class DriversService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // PATCH /admin/drivers/:id — mise à jour admin (tva_rate, siret, zone, etc.)
+  // PATCH /admin/drivers/:id — mise à jour admin (tva_rate, siret, etc.)
   // ────────────────────────────────────────────────────────────────────────────
   async adminUpdateDriver(driverId: string, dto: AdminUpdateDriverDto): Promise<DriverWithUser> {
     if (dto.vehicle_type) {
