@@ -5,7 +5,6 @@ export type UserRole = 'client' | 'driver' | 'admin' | 'manager';
 export type UserStatus = 'active' | 'inactive' | 'locked';
 export type DriverStatus = 'pending' | 'probationary' | 'active' | 'on_trip' | 'rejected' | 'suspended';
 export type VehicleType = string;
-export type ZoneType = 'france' | 'senegal';
 
 export interface RegisterDto {
   email: string;
@@ -31,7 +30,6 @@ export interface DriverProfile {
   siret: string | null;
   tva_rate: number;
   is_online: boolean;
-  zone: ZoneType;
   created_at: string;
   updated_at: string;
 }

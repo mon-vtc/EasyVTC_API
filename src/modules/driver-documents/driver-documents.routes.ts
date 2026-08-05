@@ -6,7 +6,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireRole, requireAdmin, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
+import { requireRole, requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import { requireCronSecret } from '../../middlewares/cron.middleware.js';
 import * as controller from './driver-documents.controller.js';
 
@@ -98,17 +98,17 @@ adminDocumentsRoutes.get(
   (req, res) => controller.getDocumentById(req, res)
 );
 
-// Valider un document — écriture : admin uniquement
+// Valider un document — écriture : admin + manager avec validate_documents
 adminDocumentsRoutes.patch(
   '/:id/validate',
-  requireAdmin,
+  requireStaff, requirePermission('validate_documents'),
   (req, res) => controller.validateDocument(req, res)
 );
 
-// Rejeter un document — écriture : admin uniquement
+// Rejeter un document — écriture : admin + manager avec validate_documents
 adminDocumentsRoutes.patch(
   '/:id/reject',
-  requireAdmin,
+  requireStaff, requirePermission('validate_documents'),
   (req, res) => controller.rejectDocument(req, res)
 );
 

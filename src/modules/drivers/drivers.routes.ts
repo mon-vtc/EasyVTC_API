@@ -126,7 +126,7 @@ adminDriversRoutes.get(
   (req, res) => controller.getDriverById(req, res)
 );
 
-// Mise à jour admin (tva_rate, siret, zone, vehicle_type) — écriture : admin uniquement
+// Mise à jour admin (tva_rate, siret, vehicle_type) — écriture : admin uniquement
 adminDriversRoutes.patch(
   '/:id',
   requireAdmin,

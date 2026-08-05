@@ -3,18 +3,10 @@
 // Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Géographie ───────────────────────────────────────────────────────────────
-export type PricingCountry = 'france' | 'senegal';
-
 // ── Type de tarif ─────────────────────────────────────────────────────────────
 export type PricingType = 'formula' | 'flat_rate';
 
 // ── Labels ───────────────────────────────────────────────────────────────────
-export const PRICING_COUNTRY_LABELS: Record<PricingCountry, string> = {
-  france:  'France',
-  senegal: 'Sénégal',
-};
-
 export const PRICING_TYPE_LABELS: Record<PricingType, string> = {
   formula:   'Tarif à la formule (km + min)',
   flat_rate: 'Forfait itinéraire',
@@ -26,15 +18,13 @@ export const PRICING_TYPE_LABELS: Record<PricingType, string> = {
 
 // ── Grille tarifaire (formule) ────────────────────────────────────────────────
 // Table : pricing_grids
-// Une grille active par pays — contient les paramètres de la formule
+// Une seule grille active à la fois — contient les paramètres de la formule
 export interface PricingGrid {
   id: string;
-  country: PricingCountry;
   base_price: number;              // Prix de prise en charge
   price_per_km: number;            // Prix par kilomètre
   price_per_min: number;           // Prix par minute
   minimum_price: number;           // Prix minimum garanti
-  currency: string;                // 'EUR' ou 'XOF'
   tva_rate: number;                // 0.10 = 10 %, 0 = pas de TVA
   airport_supplement: number;      // Montant fixe supplément aéroport
   night_supplement_rate: number;   // 0.15 = +15 %, 0 = désactivé
@@ -51,13 +41,11 @@ export interface PricingGrid {
 // Prix fixe pour un trajet prédéfini (ex: Massy → Orly = 37€)
 export interface PricingFlatRate {
   id: string;
-  country: PricingCountry;
   label: string;             // Ex: "Massy → Orly"
   origin_label: string;
   destination_label: string;
   price: number;
   pickup_surcharge: number;  // Surcharge par passager supplémentaire (0 = aucune)
-  currency: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -69,12 +57,10 @@ export interface PricingFlatRate {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export interface CreatePricingGridDto {
-  country: PricingCountry;
   base_price: number;
   price_per_km: number;
   price_per_min: number;
   minimum_price: number;
-  currency: string;
 }
 
 export interface UpdatePricingGridDto {
@@ -91,13 +77,11 @@ export interface UpdatePricingGridDto {
 }
 
 export interface CreateFlatRateDto {
-  country: PricingCountry;
   label: string;
   origin_label: string;
   destination_label: string;
   price: number;
   pickup_surcharge?: number; // Surcharge par passager supp. (défaut 0)
-  currency: string;
 }
 
 export interface UpdateFlatRateDto {
@@ -115,7 +99,6 @@ export interface UpdateFlatRateDto {
 
 // ── Requête de calcul ─────────────────────────────────────────────────────────
 export interface PriceEstimateDto {
-  country: PricingCountry;
   distance_km?: number;   // Requis uniquement si pas de flat_rate_id
   duration_min?: number;  // Requis uniquement si pas de flat_rate_id
   flat_rate_id?: string;  // Si fourni → retourne le forfait, ignore distance/durée
@@ -128,7 +111,6 @@ export interface PriceEstimateDto {
 // ── Résultat public (CDC p.26 : jamais de formule sur les PDFs) ───────────────
 export interface PriceEstimateResult {
   pricing_type: PricingType;
-  country: PricingCountry;
   currency: string;
   final_price: number;   // = amount_ttc — seul montant exposé côté PDF/bon de commande
   amount_ht: number;     // Montant hors taxes
@@ -175,7 +157,6 @@ export interface PriceBreakdown {
 export interface PricingConfigCommission {
   id: string;
   label: string;
-  zone: string;
   rate_type: 'percentage' | 'flat';
   rate_value: number;
   tva_rate: number;
@@ -201,14 +182,12 @@ export interface PricingConfigExample {
 }
 
 export interface PricingConfigResult {
-  country: PricingCountry;
   grid: PricingGrid;
   commission: PricingConfigCommission | null;
   example: PricingConfigExample;
 }
 
 export interface PricingConfigUpdateDto {
-  country: PricingCountry;
   // Champs grille
   base_price?: number;
   price_per_km?: number;
@@ -226,7 +205,6 @@ export interface PricingConfigUpdateDto {
 
 // ── Filtres liste forfaits ────────────────────────────────────────────────────
 export interface FlatRateListFilters {
-  country?: PricingCountry;
   is_active?: boolean;
   page?: number;
   limit?: number;

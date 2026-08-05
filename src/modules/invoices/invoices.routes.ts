@@ -5,12 +5,12 @@
 // GET  /invoices            → Liste (filtrée par rôle : admin/client/driver)
 // GET  /invoices/:id        → Détail (accès restreint)
 // GET  /invoices/:id/pdf    → URL signée du PDF (1h)
-// PUT  /invoices/:id/price  → Ajuster le prix (admin uniquement)
+// PUT  /invoices/:id/price  → Ajuster le prix (admin + manager avec adjust_invoice_price)
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
 import { authMiddleware } from '../../middlewares/auth.middleware.js';
-import { requireAdmin } from '../../middlewares/role.middleware.js';
+import { requireStaff, requirePermission } from '../../middlewares/role.middleware.js';
 import * as controller from './invoices.controller.js';
 
 const router = Router();
@@ -25,7 +25,7 @@ router.get('/by-reservation/:reservationId',       (req, res) => controller.getI
 router.get('/:id/pdf',                             (req, res) => controller.getInvoicePdf(req, res));
 router.get('/:id',                                 (req, res) => controller.getInvoice(req, res));
 
-// Écriture — admin uniquement
-router.put('/:id/price', requireAdmin, (req, res) => controller.adjustInvoicePrice(req, res));
+// Écriture — admin + manager avec adjust_invoice_price
+router.put('/:id/price', requireStaff, requirePermission('adjust_invoice_price'), (req, res) => controller.adjustInvoicePrice(req, res));
 
 export default router;

@@ -34,10 +34,6 @@ export const createVehicleTypeSchema = z.object({
   base_price_france: z
     .number()
     .min(0, 'Le prix de base France ne peut pas être négatif'),
-  base_price_senegal: z
-    .number()
-    .int('Le prix de base Sénégal doit être un entier (XOF)')
-    .min(0, 'Le prix de base Sénégal ne peut pas être négatif'),
   is_active: z.boolean().default(true),
   sort_order: z.number().int().default(0),
 });
@@ -68,11 +64,6 @@ export const updateVehicleTypeSchema = z.object({
   base_price_france: z
     .number()
     .min(0, 'Le prix de base France ne peut pas être négatif')
-    .optional(),
-  base_price_senegal: z
-    .number()
-    .int('Le prix de base Sénégal doit être un entier (XOF)')
-    .min(0, 'Le prix de base Sénégal ne peut pas être négatif')
     .optional(),
   is_active: z.boolean().optional(),
   sort_order: z.number().int().optional(),

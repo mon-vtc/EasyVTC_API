@@ -15,8 +15,7 @@ import {
 
 export async function getActiveTypes(req: Request, res: Response) {
   try {
-    const country = typeof req.query.country === 'string' ? req.query.country : undefined;
-    const types = await vehicleTypesService.getActiveTypes(country);
+    const types = await vehicleTypesService.getActiveTypes();
 
     return res.json({ ok: true, data: types });
   } catch (err: any) {

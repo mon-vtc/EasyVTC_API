@@ -43,11 +43,11 @@
 
     {
       "name": "1️⃣ GET /vehicle-types — Endpoint public",
-      "description": "Endpoint public (sans authentification). Retourne uniquement les types actifs avec un base_price unique selon le pays.",
+      "description": "Endpoint public (sans authentification). Retourne uniquement les types actifs avec leur base_price (France).",
       "item": [
 
         {
-          "name": "GET /vehicle-types — sans filtre (France par défaut)",
+          "name": "GET /vehicle-types — sans filtre",
           "request": {
             "method": "GET",
             "header": [],
@@ -90,38 +90,6 @@
             "  if (standard) pm.expect(standard.base_price).to.equal(12.5);",
             "});",
             "",
-            "pm.test('Pas de champs admin (pas de is_active, base_price_france, etc.)', () => {",
-            "  data.forEach(t => {",
-            "    pm.expect(t).to.not.have.property('is_active');",
-            "    pm.expect(t).to.not.have.property('base_price_france');",
-            "    pm.expect(t).to.not.have.property('base_price_senegal');",
-            "  });",
-            "});"
-          ]}}]
-        },
-
-        {
-          "name": "GET /vehicle-types?country=france — prix France",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/vehicle-types?country=france",
-              "host": ["{{base_url}}"],
-              "path": ["vehicle-types"],
-              "query": [{ "key": "country", "value": "france" }]
-            }
-          },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const data = pm.response.json().data;",
-            "",
-            "pm.test('Status 200', () => pm.response.to.have.status(200));",
-            "",
-            "pm.test('standard : 12.50 € (France)', () => {",
-            "  const s = data.find(t => t.code === 'standard');",
-            "  if (s) pm.expect(s.base_price).to.equal(12.5);",
-            "});",
-            "",
             "pm.test('berline : 18.00 € (France)', () => {",
             "  const b = data.find(t => t.code === 'berline');",
             "  if (b) pm.expect(b.base_price).to.equal(18);",
@@ -130,40 +98,13 @@
             "pm.test('van : 35.00 € (France)', () => {",
             "  const v = data.find(t => t.code === 'van');",
             "  if (v) pm.expect(v.base_price).to.equal(35);",
-            "});"
-          ]}}]
-        },
-
-        {
-          "name": "GET /vehicle-types?country=senegal — prix Sénégal (XOF)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/vehicle-types?country=senegal",
-              "host": ["{{base_url}}"],
-              "path": ["vehicle-types"],
-              "query": [{ "key": "country", "value": "senegal" }]
-            }
-          },
-          "event": [{ "listen": "test", "script": { "exec": [
-            "const data = pm.response.json().data;",
-            "",
-            "pm.test('Status 200', () => pm.response.to.have.status(200));",
-            "",
-            "pm.test('standard : 3000 XOF (Sénégal)', () => {",
-            "  const s = data.find(t => t.code === 'standard');",
-            "  if (s) pm.expect(s.base_price).to.equal(3000);",
             "});",
             "",
-            "pm.test('berline : 5000 XOF (Sénégal)', () => {",
-            "  const b = data.find(t => t.code === 'berline');",
-            "  if (b) pm.expect(b.base_price).to.equal(5000);",
-            "});",
-            "",
-            "pm.test('van : 9000 XOF (Sénégal)', () => {",
-            "  const v = data.find(t => t.code === 'van');",
-            "  if (v) pm.expect(v.base_price).to.equal(9000);",
+            "pm.test('Pas de champs admin (pas de is_active, base_price_france, etc.)', () => {",
+            "  data.forEach(t => {",
+            "    pm.expect(t).to.not.have.property('is_active');",
+            "    pm.expect(t).to.not.have.property('base_price_france');",
+            "  });",
             "});"
           ]}}]
         },
@@ -225,7 +166,7 @@
             "",
             "pm.test('Structure VehicleTypeRecord complète', () => {",
             "  data.forEach(t => {",
-            "    pm.expect(t).to.have.all.keys('id','code','label','description','capacity','icon','base_price_france','base_price_senegal','is_active','sort_order','created_at','updated_at');",
+            "    pm.expect(t).to.have.all.keys('id','code','label','description','capacity','icon','base_price_france','is_active','sort_order','created_at','updated_at');",
             "  });",
             "});",
             "",
@@ -271,7 +212,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus\",\n  \"description\": \"8-12 passagers • Groupe\",\n  \"capacity\": 12,\n  \"icon\": \"bus-outline\",\n  \"base_price_france\": 55.00,\n  \"base_price_senegal\": 14000,\n  \"is_active\": true,\n  \"sort_order\": 10\n}"
+              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus\",\n  \"description\": \"8-12 passagers • Groupe\",\n  \"capacity\": 12,\n  \"icon\": \"bus-outline\",\n  \"base_price_france\": 55.00,\n  \"is_active\": true,\n  \"sort_order\": 10\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -283,7 +224,6 @@
             "  pm.expect(json.data.label).to.equal('Minibus');",
             "  pm.expect(json.data.capacity).to.equal(12);",
             "  pm.expect(json.data.base_price_france).to.equal(55);",
-            "  pm.expect(json.data.base_price_senegal).to.equal(14000);",
             "  pm.expect(json.data.is_active).to.be.true;",
             "  pm.expect(json.data.id).to.be.a('string');",
             "  pm.collectionVariables.set('vehicle_type_id', json.data.id);",
@@ -303,7 +243,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus Doublon\",\n  \"capacity\": 12,\n  \"base_price_france\": 55.00,\n  \"base_price_senegal\": 14000\n}"
+              "raw": "{\n  \"code\": \"minibus-test\",\n  \"label\": \"Minibus Doublon\",\n  \"capacity\": 12,\n  \"base_price_france\": 55.00\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -323,7 +263,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"Code INVALIDE!\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20,\n  \"base_price_senegal\": 5000\n}"
+              "raw": "{\n  \"code\": \"Code INVALIDE!\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -347,7 +287,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"limousine\",\n  \"capacity\": 4,\n  \"base_price_france\": 80,\n  \"base_price_senegal\": 20000\n}"
+              "raw": "{\n  \"code\": \"limousine\",\n  \"capacity\": 4,\n  \"base_price_france\": 80\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -371,7 +311,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"bus\",\n  \"label\": \"Bus\",\n  \"capacity\": 100,\n  \"base_price_france\": 120,\n  \"base_price_senegal\": 30000\n}"
+              "raw": "{\n  \"code\": \"bus\",\n  \"label\": \"Bus\",\n  \"capacity\": 100,\n  \"base_price_france\": 120\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -392,7 +332,7 @@
             "url": { "raw": "{{base_url}}/admin/vehicle-types", "host": ["{{base_url}}"], "path": ["admin", "vehicle-types"] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"test\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20,\n  \"base_price_senegal\": 5000\n}"
+              "raw": "{\n  \"code\": \"test\",\n  \"label\": \"Test\",\n  \"capacity\": 4,\n  \"base_price_france\": 20\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -488,7 +428,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Minibus Premium\",\n  \"base_price_france\": 60.00,\n  \"base_price_senegal\": 16000\n}"
+              "raw": "{\n  \"label\": \"Minibus Premium\",\n  \"base_price_france\": 60.00\n}"
             }
           },
           "event": [{ "listen": "test", "script": { "exec": [
@@ -499,7 +439,6 @@
             "  pm.expect(json.ok).to.be.true;",
             "  pm.expect(json.data.label).to.equal('Minibus Premium');",
             "  pm.expect(json.data.base_price_france).to.equal(60);",
-            "  pm.expect(json.data.base_price_senegal).to.equal(16000);",
             "  pm.expect(json.data.code).to.equal('minibus-test');",
             "});"
           ]}}]

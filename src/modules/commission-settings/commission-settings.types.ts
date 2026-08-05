@@ -9,7 +9,6 @@ export type CommissionRateType = 'percentage' | 'flat';
 export interface CommissionSetting {
   id: string;
   label: string;
-  zone: 'france' | 'senegal';
   vehicle_type: string | null;
   rate_type: CommissionRateType;
   rate_value: number;
@@ -23,7 +22,6 @@ export interface CommissionSetting {
 // ── DTOs ──────────────────────────────────────────────────────────────────────
 export interface CreateCommissionSettingDto {
   label: string;
-  zone: 'france' | 'senegal';
   vehicle_type?: string | null;
   rate_type: CommissionRateType;
   rate_value: number;
@@ -32,7 +30,6 @@ export interface CreateCommissionSettingDto {
 
 export interface UpdateCommissionSettingDto {
   label?: string;
-  zone?: 'france' | 'senegal';
   vehicle_type?: string | null;
   rate_type?: CommissionRateType;
   rate_value?: number;
@@ -46,7 +43,6 @@ export interface Commission {
   reservation_id: string;
   driver_id: string;
   commission_setting_id: string | null;
-  zone: string;
   rate_type: string;
   rate_value: number;
   gross_amount: number;
@@ -54,7 +50,6 @@ export interface Commission {
   commission_tva_amount: number;     // TVA sur la commission
   commission_ttc_amount: number;     // Commission TTC (HT + TVA)
   driver_net_amount: number;         // Montant net chauffeur = gross - commission_ttc
-  currency: string;
   calculated_at: string;
 }
 
@@ -78,14 +73,9 @@ export interface CommissionSummary {
   date_from: string | null;
   date_to: string | null;
   total_rides: number;
-  // EUR
   total_gross_eur: number;
   total_commission_eur: number;
   total_net_eur: number;
-  // XOF
-  total_gross_xof: number;
-  total_commission_xof: number;
-  total_net_xof: number;
   commissions: CommissionDetail[];
 }
 
@@ -94,7 +84,5 @@ export interface CalculateCommissionInput {
   reservation_id: string;
   driver_id: string;
   gross_amount: number;
-  zone: 'france' | 'senegal';
   vehicle_type: string | null;
-  currency: string;
 }

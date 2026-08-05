@@ -72,7 +72,7 @@ const DRIVER_ID = '550e8400-e29b-41d4-a716-4466554400e3';
 const MOCK_TYPE = {
   id: 'type-uuid-001', code: TYPE_CODE, name: 'Berline',
   description: 'Voiture berline confort', seats: 4,
-  is_active: true, base_price_france: 8.00, base_price_senegal: 2000,
+  is_active: true, base_price_france: 8.00,
   created_at: new Date().toISOString(),
 };
 
@@ -177,7 +177,7 @@ describe('Vehicle Types routes', () => {
   describe('POST /admin/vehicle-types', () => {
     const VALID_BODY = {
       code: 'luxury', label: 'Luxe', description: 'Véhicule haut de gamme',
-      capacity: 4, base_price_france: 15.00, base_price_senegal: 3000,
+      capacity: 4, base_price_france: 15.00,
     };
 
     it('retourne 401 sans token', async () => {

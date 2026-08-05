@@ -136,7 +136,7 @@ function runPublicFlow() {
     check(vt, { 'vehicle-types → ok': (r) => [200, 429].includes(r.status) });
     sleep(0.2);
 
-    const grid = safeGet(`${BASE_URL}/pricing/grids/active/france`, JSON_HEADERS, 'public');
+    const grid = safeGet(`${BASE_URL}/pricing/grids/active`, JSON_HEADERS, 'public');
     check(grid, { 'pricing grid → ok': (r) => [200, 429].includes(r.status) });
     sleep(0.2);
 

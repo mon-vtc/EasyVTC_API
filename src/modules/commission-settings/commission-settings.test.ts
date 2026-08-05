@@ -65,7 +65,7 @@ const SETTING_ID = '550e8400-e29b-41d4-a716-4466554400c3';
 const DRIVER_ID  = '550e8400-e29b-41d4-a716-4466554400c4';
 
 const MOCK_SETTING = {
-  id: SETTING_ID, zone: 'france', vehicle_type: 'standard',
+  id: SETTING_ID, vehicle_type: 'standard',
   commission_rate: 15, is_active: true,
   created_at: new Date().toISOString(),
 };
@@ -138,7 +138,7 @@ describe('Commission Settings routes', () => {
   // ── POST /admin/commission-settings ─────────────────────────────────────────
 
   describe('POST /admin/commission-settings', () => {
-    const VALID_BODY = { label: 'Commission van Sénégal', zone: 'senegal', vehicle_type: 'van', rate_type: 'percentage', rate_value: 12 };
+    const VALID_BODY = { label: 'Commission van', vehicle_type: 'van', rate_type: 'percentage', rate_value: 12 };
 
     it('retourne 401 sans token', async () => {
       const res = await request(app).post('/admin/commission-settings').send(VALID_BODY);

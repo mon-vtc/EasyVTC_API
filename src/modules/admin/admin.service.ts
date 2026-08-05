@@ -413,7 +413,7 @@ export class AdminService {
 
     let reservationsQuery = supabaseAdmin
       .from('reservations')
-      .select('status, price_final, price_estimated, country, driver_id');
+      .select('status, price_final, price_estimated, driver_id');
 
     if (dateFrom) reservationsQuery = reservationsQuery.gte('scheduled_at', dateFrom);
     if (dateTo)   reservationsQuery = reservationsQuery.lte('scheduled_at', dateTo);
@@ -445,7 +445,6 @@ export class AdminService {
     const rows = reservations ?? [];
     const by_status: Record<string, number> = {};
     let total_eur = 0;
-    let total_xof = 0;
     const vehicleDist: Record<string, number> = {};
     const completedDriverIds = new Set<string>();
 
@@ -454,8 +453,7 @@ export class AdminService {
 
       if (r.status === 'completed') {
         const amount = Number(r.price_final ?? r.price_estimated ?? 0);
-        if (r.country === 'senegal') total_xof += amount;
-        else                         total_eur += amount;
+        total_eur += amount;
 
         if (r.driver_id) {
           completedDriverIds.add(r.driver_id);
@@ -495,7 +493,6 @@ export class AdminService {
       },
       revenue: {
         total_eur: Math.round(total_eur * 100) / 100,
-        total_xof: Math.round(total_xof),
       },
       drivers: {
         total:   totalDrivers,
@@ -652,17 +649,17 @@ export class AdminService {
     ] = await Promise.all([
       supabaseAdmin
         .from('reservations')
-        .select('status, price_final, price_estimated, country, driver_id, pickup_address, dest_address, scheduled_at')
+        .select('status, price_final, price_estimated, driver_id, pickup_address, dest_address, scheduled_at')
         .gte('scheduled_at', dateFrom)
         .lte('scheduled_at', dateTo),
       supabaseAdmin
         .from('reservations')
-        .select('status, price_final, price_estimated, country')
+        .select('status, price_final, price_estimated')
         .gte('scheduled_at', prevFrom)
         .lte('scheduled_at', prevTo),
       supabaseAdmin
         .from('reservations')
-        .select('scheduled_at, price_final, price_estimated, country')
+        .select('scheduled_at, price_final, price_estimated')
         .eq('status', 'completed')
         .gte('scheduled_at', yearFrom)
         .lte('scheduled_at', yearTo),
@@ -693,8 +690,8 @@ export class AdminService {
     const ratings = ratingsRaw ?? [];
 
     // ── Revenue ────────────────────────────────────────────────────────────
-    const [currEur, currXof] = this._sumRevenue(curr);
-    const [prevEur]          = this._sumRevenue(prev);
+    const currEur = this._sumRevenue(curr);
+    const prevEur = this._sumRevenue(prev);
     const revTrend = prevEur > 0
       ? Math.round(((currEur - prevEur) / prevEur) * 1000) / 10
       : null;
@@ -712,16 +709,14 @@ export class AdminService {
 
     // ── Revenue chart (12 mois de l'année) ────────────────────────────────
     const MONTH_LABELS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-    const chart: RevenueChartEntry[] = MONTH_LABELS.map(label => ({ label, eur: 0, xof: 0 }));
+    const chart: RevenueChartEntry[] = MONTH_LABELS.map(label => ({ label, eur: 0 }));
     for (const r of yearRes) {
       const m   = new Date(r.scheduled_at as string).getUTCMonth();
       const amt = Number(r.price_final ?? r.price_estimated ?? 0);
-      if (r.country === 'senegal') chart[m]!.xof += amt;
-      else                         chart[m]!.eur += amt;
+      chart[m]!.eur += amt;
     }
     for (const e of chart) {
       e.eur = Math.round(e.eur * 100) / 100;
-      e.xof = Math.round(e.xof);
     }
 
     // ── Chauffeurs ─────────────────────────────────────────────────────────
@@ -842,7 +837,6 @@ export class AdminService {
       date_to:   dateTo,
       revenue: {
         total_eur: Math.round(currEur * 100) / 100,
-        total_xof: Math.round(currXof),
         trend_pct: revTrend,
         chart,
       },
@@ -863,16 +857,14 @@ export class AdminService {
   }
 
   private _sumRevenue(
-    rows: Array<{ status: string; price_final: unknown; price_estimated: unknown; country: string }>,
-  ): [number, number] {
-    let eur = 0, xof = 0;
+    rows: Array<{ status: string; price_final: unknown; price_estimated: unknown }>,
+  ): number {
+    let eur = 0;
     for (const r of rows) {
       if (r.status !== 'completed') continue;
-      const amt = Number(r.price_final ?? r.price_estimated ?? 0);
-      if (r.country === 'senegal') xof += amt;
-      else                         eur += amt;
+      eur += Number(r.price_final ?? r.price_estimated ?? 0);
     }
-    return [eur, xof];
+    return eur;
   }
 
   private _dashboardRange(period: AdminDashboardPeriod, date?: string): { dateFrom: string; dateTo: string } {

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "easyvtc-planning-revenues-sprint6",
     "name": "EasyVTC API — Planning & Revenus (Sprint 6)",
-    "description": "# EasyVTC — Module Planning & Revenus Chauffeur\n\n## Endpoints couverts\n\n### Chauffeur (self)\n- `GET /drivers/me/planning`             → Son planning hebdo ou mensuel\n- `GET /drivers/me/revenues`             → Ses revenus (semaine / mois / tout)\n\n### Admin / Manager\n- `GET /admin/drivers/:id/planning`      → Planning d'un chauffeur spécifique\n- `GET /admin/drivers/:id/revenues`      → Revenus d'un chauffeur spécifique\n\n## Paramètres communs\n| Query param | Valeurs           | Défaut  |\n|-------------|-------------------|---------|\n| `period`    | `week` \\| `month` \\| `all` (revenus seulement) | `week` (planning) / `month` (revenus) |\n| `date`      | `YYYY-MM-DD`      | Aujourd'hui |\n\n## Structure de la réponse — Planning\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"week\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-07T23:59:59.999Z\",\n    \"total\": 3,\n    \"reservations\": [\n      {\n        \"id\": \"uuid\",\n        \"status\": \"assigned\",\n        \"scheduled_at\": \"2026-06-02T09:00:00Z\",\n        \"pickup_address\": \"12 rue de Rivoli\",\n        \"dest_address\": \"Aéroport CDG T2\",\n        \"vehicle_type\": \"berline\",\n        \"price_estimated\": 78,\n        \"price_final\": null,\n        \"country\": \"france\",\n        \"client\": { \"first_name\": \"Marie\", \"last_name\": \"Martin\", \"phone\": \"+33600000002\" },\n        \"trip\": null\n      }\n    ]\n  }\n}\n```\n\n## Structure de la réponse — Revenus\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"month\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-30T23:59:59.999Z\",\n    \"total_trips\": 12,\n    \"total_revenue\": 624.50,\n    \"currency\": \"EUR\",\n    \"revenue_by_currency\": { \"EUR\": 624.50, \"XOF\": 0 },\n    \"trips\": [\n      {\n        \"reservation_id\": \"uuid\",\n        \"scheduled_at\": \"2026-06-15T10:00:00Z\",\n        \"pickup_address\": \"Gare de Lyon\",\n        \"dest_address\": \"Orly T4\",\n        \"price_final\": 62,\n        \"currency\": \"EUR\"\n      }\n    ]\n  }\n}\n```\n\n## Prérequis\n1. Lancer l'API : `npm run dev` (port 4000)\n2. Avoir en base : un compte driver avec profil `drivers` validé (status = active)\n3. Avoir des réservations assignées/terminées liées à ce driver\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Tokens\n2. 🔍 Setup — IDs\n3. 📅 Chauffeur — Planning\n4. 💰 Chauffeur — Revenus\n5. 👨‍💼 Admin — Planning par driver ID\n6. 👨‍💼 Admin — Revenus par driver ID\n7. 🔒 Contrôle d'accès\n\n## Variables sauvegardées automatiquement\n- `driver_token`, `admin_token`\n- `driver_id` (drivers.id — PK de la table drivers, pas le user_id)",
+    "description": "# EasyVTC — Module Planning & Revenus Chauffeur\n\n## Endpoints couverts\n\n### Chauffeur (self)\n- `GET /drivers/me/planning`             → Son planning hebdo ou mensuel\n- `GET /drivers/me/revenues`             → Ses revenus (semaine / mois / tout)\n\n### Admin / Manager\n- `GET /admin/drivers/:id/planning`      → Planning d'un chauffeur spécifique\n- `GET /admin/drivers/:id/revenues`      → Revenus d'un chauffeur spécifique\n\n## Paramètres communs\n| Query param | Valeurs           | Défaut  |\n|-------------|-------------------|---------|\n| `period`    | `week` \\| `month` \\| `all` (revenus seulement) | `week` (planning) / `month` (revenus) |\n| `date`      | `YYYY-MM-DD`      | Aujourd'hui |\n\n## Structure de la réponse — Planning\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"week\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-07T23:59:59.999Z\",\n    \"total\": 3,\n    \"reservations\": [\n      {\n        \"id\": \"uuid\",\n        \"status\": \"assigned\",\n        \"scheduled_at\": \"2026-06-02T09:00:00Z\",\n        \"pickup_address\": \"12 rue de Rivoli\",\n        \"dest_address\": \"Aéroport CDG T2\",\n        \"vehicle_type\": \"berline\",\n        \"price_estimated\": 78,\n        \"price_final\": null,\n        \"client\": { \"first_name\": \"Marie\", \"last_name\": \"Martin\", \"phone\": \"+33600000002\" },\n        \"trip\": null\n      }\n    ]\n  }\n}\n```\n\n## Structure de la réponse — Revenus\n```json\n{\n  \"ok\": true,\n  \"data\": {\n    \"period\": \"month\",\n    \"date_from\": \"2026-06-01T00:00:00.000Z\",\n    \"date_to\": \"2026-06-30T23:59:59.999Z\",\n    \"total_trips\": 12,\n    \"total_gross\": 624.50,\n    \"total_commission\": 93.68,\n    \"total_net\": 530.82,\n    \"total_revenue\": 530.82,\n    \"currency\": \"EUR\",\n    \"trips\": [\n      {\n        \"reservation_id\": \"uuid\",\n        \"scheduled_at\": \"2026-06-15T10:00:00Z\",\n        \"pickup_address\": \"Gare de Lyon\",\n        \"dest_address\": \"Orly T4\",\n        \"price_final\": 62,\n        \"currency\": \"EUR\"\n      }\n    ]\n  }\n}\n```\n\n## Prérequis\n1. Lancer l'API : `npm run dev` (port 4000)\n2. Avoir en base : un compte driver avec profil `drivers` validé (status = active)\n3. Avoir des réservations assignées/terminées liées à ce driver\n\n## Ordre d'exécution recommandé\n1. 🔐 Setup — Tokens\n2. 🔍 Setup — IDs\n3. 📅 Chauffeur — Planning\n4. 💰 Chauffeur — Revenus\n5. 👨‍💼 Admin — Planning par driver ID\n6. 👨‍💼 Admin — Revenus par driver ID\n7. 🔒 Contrôle d'accès\n\n## Variables sauvegardées automatiquement\n- `driver_token`, `admin_token`\n- `driver_id` (drivers.id — PK de la table drivers, pas le user_id)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -109,7 +109,7 @@
             "  if (!pm.collectionVariables.get('driver_id')) {",
             "    pm.collectionVariables.set('driver_id', data.id);",
             "  }",
-            "  console.log('Driver:', data.user?.first_name, data.user?.last_name, '| status:', data.status, '| zone:', data.zone);",
+            "  console.log('Driver:', data.user?.first_name, data.user?.last_name, '| status:', data.status);",
             "});"
           ]}}]
         }
@@ -153,7 +153,7 @@
             "  if (data.reservations.length > 0) {",
             "    const r = data.reservations[0];",
             "    ['id','status','scheduled_at','pickup_address','dest_address','vehicle_type',",
-            "     'price_estimated','price_final','country','client','trip'].forEach(k => {",
+            "     'price_estimated','price_final','client','trip'].forEach(k => {",
             "      pm.expect(r, `champ manquant: ${k}`).to.have.property(k);",
             "    });",
             "    if (r.client) {",
@@ -293,7 +293,7 @@
 
     {
       "name": "💰 Chauffeur — Revenus (self)",
-      "description": "GET /drivers/me/revenues\nLe chauffeur consulte ses revenus sur les courses terminées (status = completed).\nprice_adjusted écrase price_final si un ajustement admin existe.\nLes montants XOF (Sénégal) et EUR (France) sont agrégés séparément dans revenue_by_currency.",
+      "description": "GET /drivers/me/revenues\nLe chauffeur consulte ses revenus sur les courses terminées (status = completed).\nprice_adjusted écrase price_final si un ajustement admin existe.\nMontants en EUR : total_gross (brut) − total_commission (part plateforme) = total_net (= total_revenue).",
       "item": [
         {
           "name": "[Driver] GET revenus — mois courant (défaut)",
@@ -313,13 +313,13 @@
             "  pm.expect(data.period).to.equal('month');",
             "  pm.expect(data.total_trips).to.be.a('number');",
             "  pm.expect(data.total_revenue).to.be.a('number');",
-            "  pm.expect(data.currency).to.be.oneOf(['EUR', 'XOF']);",
-            "  pm.expect(data.revenue_by_currency).to.be.an('object');",
-            "  pm.expect(data.revenue_by_currency.EUR).to.be.a('number');",
-            "  pm.expect(data.revenue_by_currency.XOF).to.be.a('number');",
+            "  pm.expect(data.currency).to.equal('EUR');",
+            "  pm.expect(data.total_gross).to.be.a('number');",
+            "  pm.expect(data.total_commission).to.be.a('number');",
+            "  pm.expect(data.total_net).to.be.a('number');",
             "  pm.expect(data.trips).to.be.an('array');",
             "  pm.expect(data.trips.length).to.equal(data.total_trips);",
-            "  console.log('Mois courant | courses complétées:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "  console.log('Mois courant | courses complétées:', data.total_trips, '| CA net:', data.total_net);",
             "});",
             "pm.test('date_from est le 1er du mois', () => {",
             "  const { data } = pm.response.json();",
@@ -335,7 +335,7 @@
             "    ['reservation_id','scheduled_at','pickup_address','dest_address','price_final','currency'].forEach(k => {",
             "      pm.expect(t, `champ manquant: ${k}`).to.have.property(k);",
             "    });",
-            "    pm.expect(t.currency).to.be.oneOf(['EUR', 'XOF']);",
+            "    pm.expect(t.currency).to.equal('EUR');",
             "    pm.expect(t.price_final).to.be.a('number');",
             "    pm.expect(t.price_final).to.be.at.least(0);",
             "  }",
@@ -343,8 +343,8 @@
             "pm.test('total_revenue >= 0', () => {",
             "  const { data } = pm.response.json();",
             "  pm.expect(data.total_revenue).to.be.at.least(0);",
-            "  pm.expect(data.revenue_by_currency.EUR).to.be.at.least(0);",
-            "  pm.expect(data.revenue_by_currency.XOF).to.be.at.least(0);",
+            "  pm.expect(data.total_gross).to.be.at.least(0);",
+            "  pm.expect(data.total_net).to.be.at.least(0);",
             "});"
           ]}}]
         },
@@ -370,7 +370,7 @@
             "  pm.expect(data.period).to.equal('week');",
             "  pm.expect(data.date_from).to.include('2026-06-08');",
             "  pm.expect(data.date_to).to.include('2026-06-14');",
-            "  console.log('Semaine 8–14 juin | CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "  console.log('Semaine 8–14 juin | CA net:', data.total_net);",
             "});"
           ]}}]
         },
@@ -419,7 +419,7 @@
             "  pm.expect(data.date_from).to.be.null;",
             "  pm.expect(data.date_to).to.be.null;",
             "  pm.expect(data.trips).to.be.an('array');",
-            "  console.log('Tout | courses totales:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "  console.log('Tout | courses totales:', data.total_trips, '| CA net:', data.total_net);",
             "});",
             "pm.test('Trips triés DESC par scheduled_at', () => {",
             "  const { data } = pm.response.json();",
@@ -429,16 +429,11 @@
             "    pm.expect(t1).to.be.at.least(t2);",
             "  }",
             "});",
-            "pm.test('revenue_by_currency cohérent avec total_revenue', () => {",
+            "pm.test('total_net cohérent avec total_revenue', () => {",
             "  const { data } = pm.response.json();",
-            "  const { EUR, XOF } = data.revenue_by_currency;",
-            "  if (EUR > 0 || XOF === 0) {",
-            "    pm.expect(data.currency).to.equal('EUR');",
-            "    pm.expect(data.total_revenue).to.be.closeTo(EUR, 0.01);",
-            "  } else {",
-            "    pm.expect(data.currency).to.equal('XOF');",
-            "    pm.expect(data.total_revenue).to.equal(XOF);",
-            "  }",
+            "  pm.expect(data.currency).to.equal('EUR');",
+            "  pm.expect(data.total_revenue).to.be.closeTo(data.total_net, 0.01);",
+            "  pm.expect(data.total_net).to.be.closeTo(data.total_gross - data.total_commission, 0.01);",
             "});"
           ]}}]
         },
@@ -646,23 +641,17 @@
             "  pm.expect(data.period).to.equal('month');",
             "  pm.expect(data.total_trips).to.be.a('number');",
             "  pm.expect(data.total_revenue).to.be.a('number');",
-            "  pm.expect(data.currency).to.be.oneOf(['EUR', 'XOF']);",
-            "  pm.expect(data.revenue_by_currency).to.be.an('object');",
-            "  pm.expect(data.revenue_by_currency.EUR).to.be.a('number');",
-            "  pm.expect(data.revenue_by_currency.XOF).to.be.a('number');",
+            "  pm.expect(data.currency).to.equal('EUR');",
+            "  pm.expect(data.total_gross).to.be.a('number');",
+            "  pm.expect(data.total_commission).to.be.a('number');",
+            "  pm.expect(data.total_net).to.be.a('number');",
             "  pm.expect(data.trips).to.be.an('array');",
-            "  console.log('Driver', pm.collectionVariables.get('driver_id'), '| Mois courant | CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "  console.log('Driver', pm.collectionVariables.get('driver_id'), '| Mois courant | CA net:', data.total_net);",
             "});",
-            "pm.test('revenue_by_currency cohérent avec total_revenue', () => {",
+            "pm.test('total_net cohérent avec total_revenue', () => {",
             "  const { data } = pm.response.json();",
-            "  const { EUR, XOF } = data.revenue_by_currency;",
-            "  if (EUR > 0 || XOF === 0) {",
-            "    pm.expect(data.currency).to.equal('EUR');",
-            "    pm.expect(data.total_revenue).to.be.closeTo(EUR, 0.01);",
-            "  } else {",
-            "    pm.expect(data.currency).to.equal('XOF');",
-            "    pm.expect(data.total_revenue).to.equal(XOF);",
-            "  }",
+            "  pm.expect(data.currency).to.equal('EUR');",
+            "  pm.expect(data.total_revenue).to.be.closeTo(data.total_net, 0.01);",
             "});"
           ]}}]
         },
@@ -688,7 +677,7 @@
             "  pm.expect(data.period).to.equal('week');",
             "  pm.expect(data.date_from).to.include('2026-06-08');",
             "  pm.expect(data.date_to).to.include('2026-06-14');",
-            "  console.log('Semaine 8–14 juin | courses:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR);",
+            "  console.log('Semaine 8–14 juin | courses:', data.total_trips, '| CA net:', data.total_net);",
             "});"
           ]}}]
         },
@@ -711,7 +700,7 @@
             "  pm.expect(data.period).to.equal('all');",
             "  pm.expect(data.date_from).to.be.null;",
             "  pm.expect(data.date_to).to.be.null;",
-            "  console.log('Total career | courses:', data.total_trips, '| CA EUR:', data.revenue_by_currency.EUR, '| CA XOF:', data.revenue_by_currency.XOF);",
+            "  console.log('Total career | courses:', data.total_trips, '| CA net:', data.total_net);",
             "});"
           ]}}]
         },

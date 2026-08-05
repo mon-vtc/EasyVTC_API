@@ -30,7 +30,6 @@ const mockDriverWithUser = {
   siret:        '12345678900011',
   tva_rate:     10,
   is_online:    false,
-  zone:         'france',
   created_at:   '2026-03-01T10:00:00Z',
   updated_at:   '2026-03-01T10:00:00Z',
   user: {
@@ -117,18 +116,17 @@ describe('DriversService', () => {
   // updateMyProfile
   // ────────────────────────────────────────────────────────────────────────────
   describe('updateMyProfile()', () => {
-    it(' met à jour siret et zone', async () => {
-      const updated = { ...mockDriverWithUser, siret: '99999999900099', zone: 'senegal' };
+    it(' met à jour siret', async () => {
+      const updated = { ...mockDriverWithUser, siret: '99999999900099' };
       mockFrom.mockReturnValueOnce(chain(updated));
 
-      const result = await service.updateMyProfile(DRIVER_USER_ID, { siret: '99999999900099', zone: 'senegal' });
+      const result = await service.updateMyProfile(DRIVER_USER_ID, { siret: '99999999900099' });
       expect(result.siret).toBe('99999999900099');
-      expect(result.zone).toBe('senegal');
     });
 
     it(' lève 500 si la mise à jour échoue', async () => {
       mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
-      await expect(service.updateMyProfile(DRIVER_USER_ID, { zone: 'france' }))
+      await expect(service.updateMyProfile(DRIVER_USER_ID, { siret: '99999999900099' }))
         .rejects.toMatchObject({ status: 500 });
     });
   });
@@ -193,7 +191,7 @@ describe('DriversService', () => {
       expect(result.total).toBe(1);
     });
 
-    it(' filtre par statut et zone', async () => {
+    it(' filtre par statut', async () => {
       const listChain = {
         select:  jest.fn().mockReturnThis(),
         eq:      jest.fn().mockReturnThis(),
@@ -202,7 +200,7 @@ describe('DriversService', () => {
       };
       mockFrom.mockReturnValueOnce(listChain);
 
-      const result = await service.listDrivers({ status: 'active', zone: 'france', page: 1, limit: 20 });
+      const result = await service.listDrivers({ status: 'active', page: 1, limit: 20 });
       expect(result.drivers).toHaveLength(0);
     });
   });
@@ -289,7 +287,7 @@ describe('DriversService', () => {
         scheduled_at: '2026-04-14T09:00:00Z',
         pickup_address: '1 rue de la Paix', dest_address: 'CDG',
         vehicle_type: 'berline', price_estimated: 45, price_final: null,
-        country: 'france', client: { first_name: 'Marie', last_name: 'Martin', phone: null },
+        client: { first_name: 'Marie', last_name: 'Martin', phone: null },
         trip: null,
       },
     ];
@@ -369,12 +367,12 @@ describe('DriversService', () => {
       {
         id: 'resa-1', scheduled_at: '2026-04-10T09:00:00Z',
         pickup_address: '1 rue de la Paix', dest_address: 'CDG',
-        price_final: 48.50, price_adjusted: null, country: 'france',
+        price_final: 48.50, price_adjusted: null,
       },
       {
         id: 'resa-2', scheduled_at: '2026-04-12T14:00:00Z',
         pickup_address: 'Gare du Nord', dest_address: 'Orly',
-        price_final: 55.00, price_adjusted: null, country: 'france',
+        price_final: 55.00, price_adjusted: null,
       },
     ];
 
@@ -392,7 +390,6 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))     // resolveDriverId
-        .mockReturnValueOnce(chain({ zone: 'france' }))   // zone chauffeur (bornes de période)
         .mockReturnValueOnce(revenuesChain)               // réservations
         .mockReturnValueOnce(commChain())                 // commissions (vides = non configurées)
         .mockReturnValueOnce(commChain());                // ratings (Promise.all parallèle)
@@ -446,7 +443,6 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
-        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(emptyChain);
       // Pas de mock commissions car early return si rows.length === 0
 
@@ -461,10 +457,10 @@ describe('DriversService', () => {
       const resasWithAdjustment = [
         { id: 'resa-1', scheduled_at: '2026-04-10T09:00:00Z',
           pickup_address: '1 rue de la Paix', dest_address: 'CDG',
-          price_final: 48.50, price_adjusted: 60.00, country: 'france' },
+          price_final: 48.50, price_adjusted: 60.00 },
         { id: 'resa-2', scheduled_at: '2026-04-12T14:00:00Z',
           pickup_address: 'Gare du Nord', dest_address: 'Orly',
-          price_final: 55.00, price_adjusted: null, country: 'france' },
+          price_final: 55.00, price_adjusted: null },
       ];
       const resolved = { data: resasWithAdjustment, error: null } as never;
       const revenuesChain: Record<string, unknown> = {
@@ -479,7 +475,6 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain(mockDriverRecord))
-        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(revenuesChain)
         .mockReturnValueOnce(commChain())              // commissions
         .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
@@ -529,7 +524,7 @@ describe('DriversService', () => {
         scheduled_at: '2026-06-01T10:00:00Z',
         pickup_address: '12 av. Victor Hugo', dest_address: 'Aéroport CDG T2',
         vehicle_type: 'berline', price_estimated: 78, price_final: 78,
-        country: 'france', client: { first_name: 'Alice', last_name: 'Dubois', phone: '+33600000002' },
+        client: { first_name: 'Alice', last_name: 'Dubois', phone: '+33600000002' },
         trip: { id: 'trip-1', started_at: '2026-06-01T10:15:00Z', ended_at: '2026-06-01T11:05:00Z', actual_distance_km: 42, actual_duration_min: 50 },
       },
     ];
@@ -587,12 +582,12 @@ describe('DriversService', () => {
       {
         id: 'resa-a1', scheduled_at: '2026-06-02T09:00:00Z',
         pickup_address: 'Gare de Lyon', dest_address: 'Orly T4',
-        price_final: 62.00, price_adjusted: null, country: 'france',
+        price_final: 62.00, price_adjusted: null,
       },
       {
         id: 'resa-a2', scheduled_at: '2026-06-04T14:00:00Z',
         pickup_address: 'Montparnasse', dest_address: 'CDG T1',
-        price_final: 85.50, price_adjusted: null, country: 'france',
+        price_final: 85.50, price_adjusted: null,
       },
     ];
 
@@ -610,7 +605,6 @@ describe('DriversService', () => {
       };
       mockFrom
         .mockReturnValueOnce(chain({ id: DRIVER_ID }))   // vérification existence
-        .mockReturnValueOnce(chain({ zone: 'france' }))  // zone chauffeur (bornes de période)
         .mockReturnValueOnce(revenuesChain)             // requête revenus
         .mockReturnValueOnce(commChain())               // commissions vides
         .mockReturnValueOnce(commChain());              // ratings (Promise.all parallèle)
@@ -622,71 +616,6 @@ describe('DriversService', () => {
       expect(result.total_net).toBeCloseTo(147.50, 2);
       expect(result.total_revenue).toBeCloseTo(147.50, 2);
       expect(result.currency).toBe('EUR');
-      expect(result.revenue_by_currency.XOF).toBe(0);
-    });
-
-    it(' revenue_by_currency.XOF correctement agrégé pour un chauffeur Sénégal', async () => {
-      const xofResas = [
-        { id: 'xof-1', scheduled_at: '2026-06-03T08:00:00Z',
-          pickup_address: 'Dakar Centre', dest_address: 'Aéroport LSS',
-          price_final: 25000, price_adjusted: null, country: 'senegal' },
-        { id: 'xof-2', scheduled_at: '2026-06-05T16:00:00Z',
-          pickup_address: 'Plateau', dest_address: 'Almadies',
-          price_final: 12000, price_adjusted: 10000, country: 'senegal' },
-      ];
-      const resolved = { data: xofResas, error: null } as never;
-      const revenuesChain: Record<string, unknown> = {
-        select: jest.fn().mockReturnThis(),
-        eq:     jest.fn().mockReturnThis(),
-        order:  jest.fn().mockReturnThis(),
-        range:  jest.fn().mockReturnThis(),
-        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
-          Promise.resolve(resolved).then(resolve, reject),
-      };
-      mockFrom
-        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
-        .mockReturnValueOnce(revenuesChain)
-        .mockReturnValueOnce(commChain())              // commissions
-        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
-
-      const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
-      // xof-1: 25000, xof-2: price_adjusted=10000 (écrase 12000) → gross=35000
-      expect(result.total_gross).toBe(35000);
-      expect(result.revenue_by_currency.XOF).toBe(35000);
-      expect(result.revenue_by_currency.EUR).toBe(0);
-      expect(result.total_revenue).toBe(35000);
-      expect(result.currency).toBe('XOF');
-    });
-
-    it(' revenue_by_currency.XOF avec commission prélevée', async () => {
-      const xofResas = [
-        { id: 'xof-1', scheduled_at: '2026-06-03T08:00:00Z',
-          pickup_address: 'Dakar Centre', dest_address: 'Aéroport LSS',
-          price_final: 25000, price_adjusted: null, country: 'senegal' },
-      ];
-      const resolved = { data: xofResas, error: null } as never;
-      const revenuesChain: Record<string, unknown> = {
-        select: jest.fn().mockReturnThis(),
-        eq:     jest.fn().mockReturnThis(),
-        order:  jest.fn().mockReturnThis(),
-        range:  jest.fn().mockReturnThis(),
-        then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) =>
-          Promise.resolve(resolved).then(resolve, reject),
-      };
-      // Commission de 12% sur 25000 XOF = 3000 XOF → net = 22000 XOF
-      mockFrom
-        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
-        .mockReturnValueOnce(revenuesChain)
-        .mockReturnValueOnce(commChain([
-          { reservation_id: 'xof-1', commission_amount: 3000, driver_net_amount: 22000 },
-        ]))
-        .mockReturnValueOnce(commChain());             // ratings (Promise.all parallèle)
-
-      const result = await service.getRevenuesAdmin(DRIVER_ID, 'all');
-      expect(result.total_gross).toBe(25000);
-      expect(result.total_commission).toBe(3000);
-      expect(result.total_net).toBe(22000);
-      expect(result.revenue_by_currency.XOF).toBe(22000); // net
     });
 
     it(' lève 404 si le driver_id est introuvable', async () => {
@@ -705,7 +634,7 @@ describe('DriversService', () => {
       scheduled_at: '2026-08-05T09:00:00Z',
       pickup_address: '1 rue de la Paix', dest_address: 'CDG',
       vehicle_type: 'berline', price_estimated: 45, price_final: null,
-      country: 'france', client: null, trip: null,
+      client: null, trip: null,
     };
 
     const mockUnavail = {
@@ -1155,17 +1084,17 @@ describe('DriversService', () => {
   });
 
   // ────────────────────────────────────────────────────────────────────────────
-  // revenue_by_currency — correction du bug XOF exclu (getRevenues self)
+  // getRevenues (self) — calcul du net avec commission réelle
   // ────────────────────────────────────────────────────────────────────────────
   describe('getRevenues() — commission avec montant réel', () => {
     it(' total_net = gross - commission quand commission configurée (EUR)', async () => {
       const resas = [
         { id: 'r1', scheduled_at: '2026-06-01T09:00:00Z',
           pickup_address: 'Paris', dest_address: 'CDG',
-          price_final: 80, price_adjusted: null, country: 'france' },
+          price_final: 80, price_adjusted: null },
         { id: 'r2', scheduled_at: '2026-06-02T10:00:00Z',
           pickup_address: 'Gare de Lyon', dest_address: 'Orly',
-          price_final: 55, price_adjusted: null, country: 'france' },
+          price_final: 55, price_adjusted: null },
       ];
       const resolved = { data: resas, error: null } as never;
       const revenuesChain: Record<string, unknown> = {
@@ -1191,8 +1120,6 @@ describe('DriversService', () => {
       expect(result.total_commission).toBeCloseTo(20.25, 2);
       expect(result.total_net).toBeCloseTo(114.75, 2);
       expect(result.total_revenue).toBeCloseTo(114.75, 2);
-      // revenue_by_currency reflète les montants nets
-      expect(result.revenue_by_currency.EUR).toBeCloseTo(114.75, 2);
       expect(result.trips[0].commission_amount).toBeCloseTo(12.00, 2);
       expect(result.trips[0].net_amount).toBeCloseTo(68.00, 2);
     });

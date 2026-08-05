@@ -26,7 +26,6 @@ const mockTypeRecord = {
   capacity:           4,
   icon:               'car-berline',
   base_price_france:  3.5,
-  base_price_senegal: 2.0,
   is_active:          true,
   sort_order:         2,
   created_at:         '2026-04-22T10:00:00.000Z',
@@ -98,18 +97,10 @@ describe('VehicleTypesService', () => {
       expect(result[1].code).toBe('berline');
     });
 
-    it('retourne les prix Sénégal quand country=senegal', async () => {
+    it('retourne toujours le prix France (plateforme limitée à la France)', async () => {
       mockFrom.mockReturnValueOnce(chain([mockTypeRecord]));
 
-      const result = await service.getActiveTypes('senegal');
-
-      expect(result[0].base_price).toBe(2.0);
-    });
-
-    it('retourne les prix France quand country=france', async () => {
-      mockFrom.mockReturnValueOnce(chain([mockTypeRecord]));
-
-      const result = await service.getActiveTypes('france');
+      const result = await service.getActiveTypes();
 
       expect(result[0].base_price).toBe(3.5);
     });
@@ -199,7 +190,6 @@ describe('VehicleTypesService', () => {
       capacity:           4,
       icon:               'car-premium',
       base_price_france:  5.0,
-      base_price_senegal: 3.0,
       is_active:          true,
       sort_order:         4,
     };

@@ -5,28 +5,7 @@
 
 import { z } from 'zod';
 
-const countries  = ['france', 'senegal'] as const;
-const currencies = ['EUR', 'XOF'] as const;
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-const countryEnum = z.enum(countries, {
-  error: (issue) => {
-    if (issue.code === 'invalid_value') {
-      return 'Pays invalide. Valeurs acceptées : france, senegal';
-    }
-    return undefined;
-  },
-});
-
-const currencyEnum = z.enum(currencies, {
-  error: (issue) => {
-    if (issue.code === 'invalid_value') {
-      return 'Devise invalide. Valeurs acceptées : EUR, XOF';
-    }
-    return undefined;
-  },
-});
 
 const positiveNumber = () =>
   z.number()
@@ -53,12 +32,10 @@ const timeHHMM = () =>
 // ── Grille tarifaire ─────────────────────────────────────────────────────────
 
 export const createPricingGridSchema = z.object({
-  country:               countryEnum,
   base_price:            positiveNumber(),
   price_per_km:          positiveNumber(),
   price_per_min:         positiveNumber(),
   minimum_price:         positiveNumber(),
-  currency:              currencyEnum,
   tva_rate:              rateBetween0and1().optional(),
   airport_supplement:    nonNegativeNumber().optional(),
   night_supplement_rate: rateBetween0and1().optional(),
@@ -88,13 +65,11 @@ export const updatePricingGridSchema = z.object({
 // ── Forfaits itinéraires ─────────────────────────────────────────────────────
 
 export const createFlatRateSchema = z.object({
-  country:           countryEnum,
   label:             z.string().min(3, 'Le libellé doit contenir au moins 3 caractères').max(100),
   origin_label:      z.string().min(2, 'Le lieu de départ est requis').max(150),
   destination_label: z.string().min(2, 'La destination est requise').max(150),
   price:             positiveNumber(),
   pickup_surcharge:  nonNegativeNumber().optional(),
-  currency:          currencyEnum,
 });
 
 export const updateFlatRateSchema = z.object({
@@ -112,7 +87,6 @@ export const updateFlatRateSchema = z.object({
 // ── Estimation de prix ───────────────────────────────────────────────────────
 
 export const priceEstimateSchema = z.object({
-  country:       countryEnum,
   distance_km:   z.number().positive('La distance doit être positive').optional(),
   duration_min:  z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:  z.string().uuid('ID de forfait invalide').optional(),
@@ -129,7 +103,6 @@ export const priceEstimateSchema = z.object({
 // Zod v4 : .default() placé AVANT .transform() pour correspondre au type d'entrée (string).
 
 export const flatRateListFiltersSchema = z.object({
-  country:   countryEnum.optional(),
   is_active: z.string()
     .transform((v) => v === 'true')
     .optional(),
@@ -146,7 +119,6 @@ export const flatRateListFiltersSchema = z.object({
 // ── Config unifiée (GET + PATCH /pricing/config) ─────────────────────────────
 
 export const updatePricingConfigSchema = z.object({
-  country:               countryEnum,
   // Champs grille
   base_price:            positiveNumber().optional(),
   price_per_km:          positiveNumber().optional(),

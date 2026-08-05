@@ -83,10 +83,10 @@ export class InvoicesService {
         actual_distance_km, actual_duration_min,
         reservation:reservations!reservation_id(
           id, pickup_address, dest_address, vehicle_type,
-          scheduled_at, price_final, price_estimated, country, discount_amount,
+          scheduled_at, price_final, price_estimated, discount_amount,
           client:users!client_id(first_name, last_name, phone, email),
           driver:drivers!driver_id(
-            id, siret, tva_rate, zone,
+            id, siret, tva_rate,
             user:users!user_id(first_name, last_name, phone, email)
           )
         )
@@ -114,7 +114,6 @@ export class InvoicesService {
       email:      driverUser?.email      ?? null,
       siret:      driverData?.siret      ?? null,
       tva_rate:   Number(driverData?.tva_rate ?? 0),
-      zone:       driverData?.zone ?? 'france',
     };
 
     const clientSnapshot: ClientInvoiceSnapshot = {
@@ -128,7 +127,6 @@ export class InvoicesService {
       pickup_address:      reservation.pickup_address,
       dest_address:        reservation.dest_address,
       vehicle_type:        reservation.vehicle_type,
-      country:             reservation.country,
       scheduled_at:        reservation.scheduled_at,
       started_at:          (trip as any).started_at   ?? null,
       ended_at:            (trip as any).ended_at     ?? null,
@@ -582,7 +580,7 @@ export class InvoicesService {
       const LGRAY     = '#F2F2F2';
       const WHITE     = '#FFFFFF';
       const DIVIDER   = '#CCCCCC';
-      const currency  = tripSnapshot.country === 'senegal' ? 'XOF' : 'EUR';
+      const currency  = 'EUR'; // Plateforme limitée à la France
 
       // ── 1. EN-TÊTE (fond bordeaux) ─────────────────────────────────────
       doc.rect(0, 0, PW, 118).fill(BORDEAUX);

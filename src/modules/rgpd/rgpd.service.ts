@@ -4,7 +4,6 @@
 //
 // Conformité :
 //   - France  : RGPD (Règlement général sur la protection des données)
-//   - Sénégal : Loi 2008-12 sur la protection des données personnelles (CDP)
 //
 // Deux opérations :
 //   exportData  → collecte toutes les données personnelles (droit d'accès)
@@ -43,7 +42,7 @@ export class RgpdService {
 
       supabaseAdmin
         .from('drivers')
-        .select('id, status, vehicle_type, zone, siret, created_at')
+        .select('id, status, vehicle_type, siret, created_at')
         .eq('user_id', userId)
         .maybeSingle(),
     ]);
@@ -91,7 +90,7 @@ export class RgpdService {
     return {
       exported_at:  new Date().toISOString(),
       user_id:      userId,
-      legal_basis:  'Droit d\'accès — Art. 15 RGPD (France) / Art. 20 Loi 2008-12 CDP (Sénégal)',
+      legal_basis:  'Droit d\'accès — Art. 15 RGPD',
 
       profile:       profileResult.data  ?? null,
       driver_profile: driverResult.data  ?? null,

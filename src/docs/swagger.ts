@@ -145,7 +145,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
           id: { type: 'string', format: 'uuid' },
           user_id: { type: 'string', format: 'uuid' },
           status: { type: 'string', enum: ['offline', 'online', 'on_trip', 'pending', 'suspended'] },
-          zone: { type: 'string', enum: ['france', 'senegal'] },
           siret: { type: 'string', nullable: true },
           tva_rate: { type: 'number', example: 10 },
           vehicle_type: { type: 'string' },
@@ -197,8 +196,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         properties: {
           id:                    { type: 'string', format: 'uuid' },
-          country:               { type: 'string', enum: ['france', 'senegal'] },
-          currency:              { type: 'string', example: 'EUR' },
           base_price:            { type: 'number', example: 3.5 },
           price_per_km:          { type: 'number', example: 1.73 },
           price_per_min:         { type: 'number', example: 0.35 },
@@ -215,10 +212,8 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       CreatePricingGridBody: {
         type: 'object',
-        required: ['country', 'base_price', 'price_per_km', 'price_per_min', 'minimum_price', 'currency'],
+        required: ['base_price', 'price_per_km', 'price_per_min', 'minimum_price'],
         properties: {
-          country:               { type: 'string', enum: ['france', 'senegal'] },
-          currency:              { type: 'string', enum: ['EUR', 'XOF'] },
           base_price:            { type: 'number', example: 3.5 },
           price_per_km:          { type: 'number', example: 1.73 },
           price_per_min:         { type: 'number', example: 0.35 },
@@ -249,20 +244,16 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         properties: {
           id:                { type: 'string', format: 'uuid' },
-          country:           { type: 'string', enum: ['france', 'senegal'] },
           label:             { type: 'string', example: 'Massy → Orly' },
           origin_label:      { type: 'string' },
           destination_label: { type: 'string' },
           price:             { type: 'number', example: 37 },
-          currency:          { type: 'string', example: 'EUR' },
           is_active:         { type: 'boolean' },
         },
       },
       PriceEstimateRequest: {
         type: 'object',
-        required: ['country'],
         properties: {
-          country:       { type: 'string', enum: ['france', 'senegal'] },
           distance_km:   { type: 'number', example: 15 },
           duration_min:  { type: 'number', example: 25 },
           flat_rate_id:  { type: 'string', format: 'uuid' },
@@ -276,7 +267,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         properties: {
           pricing_type: { type: 'string', enum: ['formula', 'flat_rate'] },
-          country:      { type: 'string', enum: ['france', 'senegal'] },
           currency:     { type: 'string', example: 'EUR' },
           amount_ht:    { type: 'number', example: 36.45 },
           tva_amount:   { type: 'number', example: 3.65 },
@@ -308,7 +298,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
       PricingConfig: {
         type: 'object',
         properties: {
-          country:    { type: 'string', enum: ['france', 'senegal'] },
           grid:       { $ref: '#/components/schemas/PricingGrid' },
           commission: {
             nullable: true,
@@ -327,9 +316,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       UpdatePricingConfigBody: {
         type: 'object',
-        required: ['country'],
         properties: {
-          country:               { type: 'string', enum: ['france', 'senegal'] },
           base_price:            { type: 'number' },
           price_per_km:          { type: 'number' },
           price_per_min:         { type: 'number' },
@@ -611,7 +598,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         properties: {
           id: { type: 'string', format: 'uuid' },
-          country: { type: 'string', enum: ['france', 'senegal'] },
           vehicle_type: { type: 'string', nullable: true },
           rate_percent: { type: 'number', example: 15 },
           is_active: { type: 'boolean' },
@@ -1300,7 +1286,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         summary: 'Modifier mon profil chauffeur',
         security: [{ BearerAuth: [] }],
         requestBody: {
-          content: { 'application/json': { schema: { type: 'object', properties: { siret: { type: 'string' }, zone: { type: 'string' } } } } },
+          content: { 'application/json': { schema: { type: 'object', properties: { siret: { type: 'string' } } } } },
         },
         responses: { '200': { description: 'Profil mis à jour' } },
       },
@@ -1687,15 +1673,9 @@ export const swaggerSpec: OpenAPIV3.Document = {
     '/pricing/config': {
       get: {
         tags: ['Pricing'],
-        summary: 'Config tarifaire unifiée d\'un pays (admin + manager)',
+        summary: 'Config tarifaire unifiée (admin + manager)',
         description: 'Retourne la grille active, la commission générique et un exemple de calcul (15 km / 25 min).',
         security: [{ BearerAuth: [] }],
-        parameters: [
-          {
-            name: 'country', in: 'query', required: true,
-            schema: { type: 'string', enum: ['france', 'senegal'] },
-          },
-        ],
         responses: {
           '200': {
             description: 'Config tarifaire complète',
@@ -1718,7 +1698,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       patch: {
         tags: ['Pricing'],
-        summary: 'Mettre à jour la config tarifaire d\'un pays (admin)',
+        summary: 'Mettre à jour la config tarifaire (admin)',
         description: 'Met à jour la grille active et/ou la commission générique en une seule opération. Retourne la config mise à jour.',
         security: [{ BearerAuth: [] }],
         requestBody: {
@@ -1727,7 +1707,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
             'application/json': {
               schema: { $ref: '#/components/schemas/UpdatePricingConfigBody' },
               example: {
-                country: 'france',
                 base_price: 3.50,
                 price_per_km: 1.73,
                 price_per_min: 0.35,
@@ -1765,11 +1744,10 @@ export const swaggerSpec: OpenAPIV3.Document = {
         },
       },
     },
-    '/pricing/grids/active/{country}': {
+    '/pricing/grids/active': {
       get: {
         tags: ['Pricing'],
-        summary: 'Grille tarifaire active d\'un pays (public)',
-        parameters: [{ name: 'country', in: 'path', required: true, schema: { type: 'string', enum: ['france', 'senegal'] } }],
+        summary: 'Grille tarifaire active (public)',
         responses: {
           '200': {
             description: 'Grille active',
@@ -1783,9 +1761,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         tags: ['Pricing'],
         summary: 'Toutes les grilles tarifaires (admin + manager view_pricing)',
         security: [{ BearerAuth: [] }],
-        parameters: [
-          { name: 'country', in: 'query', schema: { type: 'string', enum: ['france', 'senegal'] } },
-        ],
         responses: { '200': { description: 'Liste des grilles' } },
       },
       post: {
@@ -1816,7 +1791,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         tags: ['Pricing'],
         summary: 'Forfaits actifs (public)',
         parameters: [
-          { name: 'country',   in: 'query', schema: { type: 'string', enum: ['france', 'senegal'] } },
           { name: 'is_active', in: 'query', schema: { type: 'boolean' } },
           { name: 'page',      in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'limit',     in: 'query', schema: { type: 'integer', default: 20 } },
@@ -1870,7 +1844,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
             'application/json': {
               schema: { $ref: '#/components/schemas/PriceEstimateRequest' },
               example: {
-                country: 'france',
                 distance_km: 15,
                 duration_min: 25,
                 vehicle_type: 'berline',
@@ -1896,7 +1869,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
                   ok: true,
                   data: {
                     pricing_type: 'formula',
-                    country: 'france',
                     currency: 'EUR',
                     amount_ht: 36.45,
                     tva_amount: 3.65,
@@ -2743,7 +2715,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         description:
           'Retourne toutes les métriques nécessaires à l\'écran "Statistiques" de l\'application mobile.\n\n' +
           '**KPIs filtrés par la période sélectionnée :**\n' +
-          '- Chiffre d\'affaires (EUR + XOF) avec trend vs période précédente\n' +
+          '- Chiffre d\'affaires (EUR) avec trend vs période précédente\n' +
           '- Total courses (terminées / annulées / taux de complétion) avec trend\n' +
           '- Clients actifs sur total\n' +
           '- Chauffeurs actifs sur total\n' +
@@ -2787,7 +2759,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
                               type: 'object',
                               properties: {
                                 total_eur: { type: 'number', example: 45680 },
-                                total_xof: { type: 'number', example: 0 },
                                 trend_pct: { type: 'number', nullable: true, example: 12.5, description: '% vs période précédente (null si pas de données antérieures)' },
                                 chart: {
                                   type: 'array',
@@ -2796,7 +2767,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
                                     properties: {
                                       label: { type: 'string', example: 'Jan' },
                                       eur:   { type: 'number' },
-                                      xof:   { type: 'number' },
                                     },
                                   },
                                   description: 'Toujours 12 entrées Jan→Déc pour l\'année en cours',
@@ -2959,7 +2929,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
         security: [{ BearerAuth: [] }],
         parameters: [
           { name: 'status', in: 'query', schema: { type: 'string' } },
-          { name: 'zone', in: 'query', schema: { type: 'string', enum: ['france', 'senegal'] } },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
         ],
         responses: { '200': { description: 'Chauffeurs retournés' } },
@@ -2975,7 +2944,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       patch: {
         tags: ['Drivers'],
-        summary: 'Modifier un chauffeur — tva_rate, siret, zone, vehicle_type (admin)',
+        summary: 'Modifier un chauffeur — tva_rate, siret, vehicle_type (admin)',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
         requestBody: {
@@ -4063,7 +4032,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         summary: 'Bilan hebdomadaire envoyé aux admins (7 derniers jours)',
         description: [
           'Agrège les métriques de la semaine et envoie une push aux admins :',
-          'nombre de courses, CA France (EUR) et Sénégal (XOF), nouveaux comptes,',
+          'nombre de courses, CA (EUR), nouveaux comptes,',
           'tickets support ouverts, note moyenne des chauffeurs.',
           'Fréquence recommandée : lundi à 8h.',
         ].join('\n'),

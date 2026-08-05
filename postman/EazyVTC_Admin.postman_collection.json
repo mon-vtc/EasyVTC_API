@@ -815,7 +815,6 @@
                 { "key": "page",      "value": "1" },
                 { "key": "limit",     "value": "20" },
                 { "key": "status",    "value": "pending",    "disabled": true },
-                { "key": "country",   "value": "france",     "disabled": true },
                 { "key": "client_id", "value": "",           "disabled": true },
                 { "key": "driver_id", "value": "",           "disabled": true },
                 { "key": "date_from", "value": "2026-04-01T00:00:00Z", "disabled": true },

@@ -3,9 +3,9 @@
 // Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-import type { DriverStatus, VehicleType, ZoneType } from '../auth/auth.types.js';
+import type { DriverStatus, VehicleType } from '../auth/auth.types.js';
 
-export type { DriverStatus, VehicleType, ZoneType };
+export type { DriverStatus, VehicleType };
 
 // ── Profil chauffeur complet avec infos utilisateur joint ─────────────────────
 export interface DriverWithUser {
@@ -16,7 +16,6 @@ export interface DriverWithUser {
   siret: string | null;
   tva_rate: number;
   is_online: boolean;
-  zone: ZoneType;
   status_reason: string | null;
   created_at: string;
   updated_at: string;
@@ -59,7 +58,6 @@ export interface DriverWithUserAndVehicle extends DriverWithUser {
 // ── DTO mise à jour profil chauffeur (par le chauffeur lui-même) ──────────────
 export interface UpdateDriverDto {
   siret?: string;
-  zone?: ZoneType;
   vehicle_type?: VehicleType;
 }
 
@@ -73,14 +71,12 @@ export interface ChangeDriverStatusDto {
 export interface AdminUpdateDriverDto {
   tva_rate?: number;
   siret?: string;
-  zone?: ZoneType;
   vehicle_type?: VehicleType;
 }
 
 // ── Filtres liste chauffeurs (admin) ──────────────────────────────────────────
 export interface DriverListFilters {
   status?: DriverStatus;
-  zone?: ZoneType;
   vehicle_type?: VehicleType;
   is_online?: boolean;
   search?: string; // sur email, first_name, last_name
@@ -110,7 +106,6 @@ export interface PlanningReservation {
   vehicle_type: VehicleType | null;
   price_final: number | null;
   price_estimated: number;
-  country: string;
   client: {
     first_name: string;
     last_name: string;
@@ -238,7 +233,6 @@ export interface DriverRevenuesResult {
   total_net: number;           // ce que le chauffeur perçoit réellement
   total_revenue: number;       // alias de total_net (rétro-compatibilité)
   currency: string;
-  revenue_by_currency: { EUR: number; XOF: number };
   trips: RevenueTrip[];
   page?: number;
   limit?: number;

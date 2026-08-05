@@ -47,7 +47,7 @@ export async function getMyProfile(req: Request, res: Response) {
 
 /**
  * PATCH /drivers/me
- * Met à jour siret, zone, vehicle_type du chauffeur connecté
+ * Met à jour siret, vehicle_type du chauffeur connecté
  */
 export async function updateMyProfile(req: Request, res: Response) {
   try {
@@ -640,7 +640,7 @@ export async function changeDriverStatus(req: Request, res: Response) {
 
 /**
  * PATCH /admin/drivers/:id
- * Mise à jour admin d'un chauffeur (tva_rate, siret, zone, vehicle_type)
+ * Mise à jour admin d'un chauffeur (tva_rate, siret, vehicle_type)
  */
 export async function adminUpdateDriver(req: Request, res: Response) {
   try {

@@ -1,14 +1,9 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// TIMEZONE — Bornes de période (jour/semaine/mois) dans le fuseau local d'une zone
-// France (Europe/Paris, DST) et Sénégal (Africa/Dakar, UTC+0 fixe)
+// TIMEZONE — Bornes de période (jour/semaine/mois) dans le fuseau local
+// (France, Europe/Paris, DST)
 // ══════════════════════════════════════════════════════════════════════════════
 
-export type Zone = 'france' | 'senegal';
-
-const ZONE_TIMEZONES: Record<Zone, string> = {
-  france:  'Europe/Paris',
-  senegal: 'Africa/Dakar',
-};
+const TIMEZONE = 'Europe/Paris';
 
 // Décalage UTC (en minutes) du fuseau à l'instant donné (gère le changement d'heure française)
 function utcOffsetMinutes(timeZone: string, at: Date): number {
@@ -24,20 +19,18 @@ function utcOffsetMinutes(timeZone: string, at: Date): number {
 
 /**
  * Bornes UTC (ISO) d'une période calendaire (jour/semaine/mois) exprimées
- * dans le fuseau horaire local de la zone, pour que "aujourd'hui" corresponde
+ * dans le fuseau horaire local (Europe/Paris), pour que "aujourd'hui" corresponde
  * bien à la journée locale du chauffeur/client (et non au jour UTC).
  */
 export function computeZonedDateRange(
-  zone:   Zone,
   period: 'day' | 'week' | 'month',
   date?:  string,
 ): { dateFrom: string; dateTo: string } {
-  const timeZone  = ZONE_TIMEZONES[zone];
   const ref       = date ? new Date(`${date}T12:00:00.000Z`) : new Date();
-  const offsetMin = utcOffsetMinutes(timeZone, ref);
+  const offsetMin = utcOffsetMinutes(TIMEZONE, ref);
 
   // On décale l'instant de l'offset pour pouvoir lire/manipuler ses champs UTC
-  // comme s'ils étaient l'heure locale de la zone.
+  // comme s'ils étaient l'heure locale.
   const local = new Date(ref.getTime() + offsetMin * 60_000);
   const toUtc = (localDate: Date): string => new Date(localDate.getTime() - offsetMin * 60_000).toISOString();
 

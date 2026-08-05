@@ -5,7 +5,6 @@
 
 import { z } from 'zod';
 
-const countries = ['france', 'senegal'] as const;
 const statuses  = ['pending', 'assigned', 'driver_arrived', 'in_progress', 'completed', 'cancelled'] as const;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -14,15 +13,6 @@ const vehicleTypeField = z
   .string()
   .min(1, 'Le type de véhicule est requis')
   .max(50, 'Type de véhicule invalide');
-
-const countryEnum = z.enum(countries, {
-  error: (issue) => {
-    if (issue.code === 'invalid_value') {
-      return 'Pays invalide. Valeurs : france, senegal';
-    }
-    return undefined;
-  },
-});
 
 // ── Création de réservation ───────────────────────────────────────────────────
 
@@ -36,7 +26,6 @@ export const createReservationSchema = z.object({
   dest_lng:       z.number().min(-180).max(180).optional(),
 
   vehicle_type:   vehicleTypeField,
-  country:        countryEnum,
 
   scheduled_at:   z.string()
     .datetime({ message: 'scheduled_at doit être une date ISO 8601 valide' })
@@ -88,7 +77,6 @@ export const cancelReservationSchema = z.object({
 
 export const reservationListFiltersSchema = z.object({
   status:    z.enum(statuses).optional(),
-  country:      countryEnum.optional(),
   vehicle_type: vehicleTypeField.optional(),
   driver_id: z.string().uuid().optional(),
   client_id: z.string().uuid().optional(),

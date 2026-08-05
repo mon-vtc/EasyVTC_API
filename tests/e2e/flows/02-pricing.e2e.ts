@@ -5,7 +5,7 @@
 //   Grille active (public) → Forfaits (public) → Estimation (authentifié)
 //
 // Prérequis staging :
-//   - Au moins une grille active pour 'france'
+//   - Au moins une grille active
 //   - Au moins un type de véhicule (standard, berline ou van)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -44,21 +44,11 @@ afterAll(async () => {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('Pricing E2E — grilles tarifaires (public)', () => {
-  it('GET /pricing/grids/active/france → 200 avec une grille', async () => {
-    const res = await api.get('/pricing/grids/active/france');
+  it('GET /pricing/grids/active → 200 avec une grille', async () => {
+    const res = await api.get('/pricing/grids/active');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.data).toBeDefined();
-  });
-
-  it('GET /pricing/grids/active/senegal → 200 ou 404 selon staging', async () => {
-    const res = await api.get('/pricing/grids/active/senegal');
-    expect([200, 404]).toContain(res.status);
-  });
-
-  it('GET /pricing/grids/active/unknown → 400 (pays inconnu)', async () => {
-    const res = await api.get('/pricing/grids/active/unknown');
-    expect(res.status).toBe(400);
   });
 });
 
@@ -75,7 +65,6 @@ describe('Pricing E2E — forfaits (public)', () => {
 describe('Pricing E2E — estimation (authentifié)', () => {
   it('POST /pricing/estimate → 200 avec les champs montants', async () => {
     const res = await apiAs(accessToken).post('/pricing/estimate').send({
-      country:      'france',
       distance_km:  15,
       duration_min: 25,
       vehicle_type: 'standard',
@@ -87,16 +76,13 @@ describe('Pricing E2E — estimation (authentifié)', () => {
   });
 
   it('POST /pricing/estimate → 400 sans distance ni forfait', async () => {
-    const res = await apiAs(accessToken).post('/pricing/estimate').send({
-      country: 'france',
-    });
+    const res = await apiAs(accessToken).post('/pricing/estimate').send({});
     expect(res.status).toBe(400);
     expect(res.body.ok).toBe(false);
   });
 
   it('POST /pricing/estimate → 401 sans token', async () => {
     const res = await api.post('/pricing/estimate').send({
-      country:      'france',
       distance_km:  10,
       duration_min: 15,
     });

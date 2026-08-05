@@ -6,6 +6,7 @@ dist/
 .env.test.e2e
 uploads/
 *.log
+coverage/
 
 # Firebase service account key (contient la clé privée — ne jamais committer)
 *-firebase-adminsdk-*.json

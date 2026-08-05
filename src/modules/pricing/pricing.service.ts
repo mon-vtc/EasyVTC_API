@@ -15,23 +15,22 @@ import type {
   PriceEstimateResult,
   PriceBreakdown,
   FlatRateListFilters,
-  PricingCountry,
   PricingConfigResult,
   PricingConfigCommission,
   PricingConfigUpdateDto,
 } from './pricing.types.js';
+
+const CURRENCY = 'EUR';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // HELPERS — Arrondi monétaire
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Arrondi à 2 décimales pour EUR, 0 décimale pour XOF (pas de centimes).
+ * Arrondi à 2 décimales (EUR).
  */
-function roundPrice(amount: number, currency: string): number {
-  return currency === 'XOF'
-    ? Math.round(amount)
-    : Math.round(amount * 100) / 100;
+function roundPrice(amount: number): number {
+  return Math.round(amount * 100) / 100;
 }
 
 /**
@@ -62,21 +61,20 @@ export class PricingService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Récupère la grille active pour un pays.
-   * Il ne peut y avoir qu'une seule grille active par pays à la fois.
+   * Récupère la grille active.
+   * Il ne peut y avoir qu'une seule grille active à la fois.
    */
-  async getActiveGrid(country: PricingCountry): Promise<PricingGrid> {
+  async getActiveGrid(): Promise<PricingGrid> {
     const { data, error } = await supabaseAdmin
       .from('pricing_grids')
       .select('*')
-      .eq('country', country)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
     if (error || !data) {
-      throw { status: 404, message: `Aucune grille tarifaire active pour ${country}` };
+      throw { status: 404, message: 'Aucune grille tarifaire active' };
     }
 
     return data as PricingGrid;
@@ -85,16 +83,11 @@ export class PricingService {
   /**
    * Toutes les grilles (admin) — historique inclus.
    */
-  async getAllGrids(country?: PricingCountry): Promise<PricingGrid[]> {
-    let query = supabaseAdmin
+  async getAllGrids(): Promise<PricingGrid[]> {
+    const { data, error } = await supabaseAdmin
       .from('pricing_grids')
       .select('*')
-      .order('country')
       .order('created_at', { ascending: false });
-
-    if (country) query = query.eq('country', country);
-
-    const { data, error } = await query;
 
     if (error) throw { status: 500, message: 'Erreur lors de la récupération des grilles' };
 
@@ -103,14 +96,13 @@ export class PricingService {
 
   /**
    * Crée une nouvelle grille.
-   * Si is_active est implicitement true, désactive l'ancienne pour ce pays.
+   * Si is_active est implicitement true, désactive l'ancienne.
    */
   async createGrid(adminId: string, dto: CreatePricingGridDto): Promise<PricingGrid> {
-    // Désactiver la grille active existante pour ce pays
+    // Désactiver la grille active existante
     await supabaseAdmin
       .from('pricing_grids')
       .update({ is_active: false })
-      .eq('country', dto.country)
       .eq('is_active', true);
 
     const { data, error } = await supabaseAdmin
@@ -136,18 +128,17 @@ export class PricingService {
   async updateGrid(id: string, dto: UpdatePricingGridDto): Promise<PricingGrid> {
     const { data: existing } = await supabaseAdmin
       .from('pricing_grids')
-      .select('id, country')
+      .select('id')
       .eq('id', id)
       .single();
 
     if (!existing) throw { status: 404, message: 'Grille tarifaire introuvable' };
 
-    // Si on réactive cette grille, on désactive les autres du même pays
+    // Si on réactive cette grille, on désactive les autres
     if (dto.is_active === true) {
       await supabaseAdmin
         .from('pricing_grids')
         .update({ is_active: false })
-        .eq('country', existing.country)
         .neq('id', id);
     }
 
@@ -187,11 +178,9 @@ export class PricingService {
     let query = supabaseAdmin
       .from('pricing_flat_rates')
       .select('*', { count: 'exact' })
-      .order('country')
       .order('label')
       .range(from, to);
 
-    if (filters.country   !== undefined) query = query.eq('country', filters.country);
     if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
     const { data, error, count } = await query;
@@ -228,11 +217,10 @@ export class PricingService {
    * Crée un forfait.
    */
   async createFlatRate(adminId: string, dto: CreateFlatRateDto): Promise<PricingFlatRate> {
-    // Vérifier les doublons (même libellé, même pays)
+    // Vérifier les doublons (même libellé)
     const { data: existing } = await supabaseAdmin
       .from('pricing_flat_rates')
       .select('id')
-      .eq('country', dto.country)
       .ilike('label', dto.label)
       .limit(1)
       .single();
@@ -240,7 +228,7 @@ export class PricingService {
     if (existing) {
       throw {
         status: 409,
-        message: `Un forfait "${dto.label}" existe déjà pour ${dto.country}`,
+        message: `Un forfait "${dto.label}" existe déjà`,
       };
     }
 
@@ -329,9 +317,6 @@ export class PricingService {
       if (!flatRate.is_active) {
         throw { status: 400, message: 'Ce forfait n\'est plus actif' };
       }
-      if (flatRate.country !== dto.country) {
-        throw { status: 400, message: 'Ce forfait n\'est pas disponible pour ce pays' };
-      }
 
       const nb_passengers = dto.nb_passengers ?? 1;
 
@@ -339,10 +324,9 @@ export class PricingService {
       const pickup_surcharge_per_person = flatRate.pickup_surcharge ?? 0;
       const pickup_surcharge_total = roundPrice(
         Math.max(0, nb_passengers - 1) * pickup_surcharge_per_person,
-        flatRate.currency,
       );
 
-      const amount_ttc = roundPrice(flatRate.price + pickup_surcharge_total, flatRate.currency);
+      const amount_ttc = roundPrice(flatRate.price + pickup_surcharge_total);
 
       const breakdown: PriceBreakdown = {
         flat_rate_id:    flatRate.id,
@@ -358,8 +342,7 @@ export class PricingService {
 
       return {
         pricing_type: 'flat_rate',
-        country:      dto.country,
-        currency:     flatRate.currency,
+        currency:     CURRENCY,
         final_price:  amount_ttc,
         amount_ht:    amount_ttc,
         tva_amount:   0,
@@ -372,7 +355,7 @@ export class PricingService {
     const distance_km  = dto.distance_km!;
     const duration_min = dto.duration_min!;
 
-    const grid = await this.getActiveGrid(dto.country);
+    const grid = await this.getActiveGrid();
 
     // Récupère le base_price propre au type de véhicule si fourni.
     // Remplace grid.base_price dans la formule (le VTC à la demande facture
@@ -383,14 +366,13 @@ export class PricingService {
     if (dto.vehicle_type) {
       const { data: vt } = await supabaseAdmin
         .from('vehicle_types')
-        .select('base_price_france, base_price_senegal')
+        .select('base_price_france')
         .eq('code', dto.vehicle_type)
         .eq('is_active', true)
         .single();
 
       if (vt) {
-        const raw    = dto.country === 'senegal' ? vt.base_price_senegal : vt.base_price_france;
-        const parsed = Number(raw);
+        const parsed = Number(vt.base_price_france);
         if (!isNaN(parsed) && parsed > 0) {
           vehicle_base_price = parsed;
           vehicle_type_code  = dto.vehicle_type;
@@ -398,9 +380,9 @@ export class PricingService {
       }
     }
 
-    const km_cost  = roundPrice(grid.price_per_km  * distance_km,  grid.currency);
-    const min_cost = roundPrice(grid.price_per_min * duration_min, grid.currency);
-    const subtotal = roundPrice(vehicle_base_price + km_cost + min_cost, grid.currency);
+    const km_cost  = roundPrice(grid.price_per_km  * distance_km);
+    const min_cost = roundPrice(grid.price_per_min * duration_min);
+    const subtotal = roundPrice(vehicle_base_price + km_cost + min_cost);
 
     const minimum_applied   = subtotal < grid.minimum_price;
     const effective_subtotal = minimum_applied ? grid.minimum_price : subtotal;
@@ -408,7 +390,7 @@ export class PricingService {
     // ── Supplément aéroport ───────────────────────────────────────────────────
     const is_airport = dto.is_airport ?? false;
     const airport_supplement_amount = is_airport
-      ? roundPrice(grid.airport_supplement ?? 0, grid.currency)
+      ? roundPrice(grid.airport_supplement ?? 0)
       : 0;
 
     // ── Supplément nocturne ───────────────────────────────────────────────────
@@ -417,14 +399,14 @@ export class PricingService {
       ? isNightTime(dto.scheduled_at, grid.night_start ?? '19:00', grid.night_end ?? '07:00')
       : false;
     const night_supplement_amount = is_night
-      ? roundPrice(effective_subtotal * night_rate, grid.currency)
+      ? roundPrice(effective_subtotal * night_rate)
       : 0;
 
     // ── Montant HT + TVA + TTC ────────────────────────────────────────────────
-    const amount_ht  = roundPrice(effective_subtotal + airport_supplement_amount + night_supplement_amount, grid.currency);
+    const amount_ht  = roundPrice(effective_subtotal + airport_supplement_amount + night_supplement_amount);
     const tva_rate   = grid.tva_rate ?? 0;
-    const tva_amount = roundPrice(amount_ht * tva_rate, grid.currency);
-    const amount_ttc = roundPrice(amount_ht + tva_amount, grid.currency);
+    const tva_amount = roundPrice(amount_ht * tva_rate);
+    const amount_ttc = roundPrice(amount_ht + tva_amount);
 
     const breakdown: PriceBreakdown = {
       base_price:          grid.base_price,
@@ -453,8 +435,7 @@ export class PricingService {
 
     return {
       pricing_type: 'formula',
-      country:      dto.country,
-      currency:     grid.currency,
+      currency:     CURRENCY,
       final_price:  amount_ttc,
       amount_ht,
       tva_amount,
@@ -483,16 +464,15 @@ export class PricingService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Retourne la config tarifaire complète d'un pays :
+   * Retourne la config tarifaire complète :
    * grille active + commission générique + exemple de calcul (15 km / 25 min).
    */
-  async getPricingConfig(country: PricingCountry): Promise<PricingConfigResult> {
-    const grid = await this.getActiveGrid(country);
+  async getPricingConfig(): Promise<PricingConfigResult> {
+    const grid = await this.getActiveGrid();
 
     const { data: commData } = await supabaseAdmin
       .from('commission_settings')
-      .select('id, label, zone, rate_type, rate_value, tva_rate, is_active')
-      .eq('zone', country)
+      .select('id, label, rate_type, rate_value, tva_rate, is_active')
       .is('vehicle_type', null)
       .eq('is_active', true)
       .limit(1)
@@ -503,13 +483,13 @@ export class PricingService {
     // Exemple fixe : 15 km, 25 min (sans supplément, sans TVA sur l'exemple si non configurée)
     const exKm  = 15;
     const exMin = 25;
-    const exKmCost  = roundPrice(grid.price_per_km  * exKm,  grid.currency);
-    const exMinCost = roundPrice(grid.price_per_min * exMin, grid.currency);
-    const exRaw     = roundPrice(grid.base_price + exKmCost + exMinCost, grid.currency);
+    const exKmCost  = roundPrice(grid.price_per_km  * exKm);
+    const exMinCost = roundPrice(grid.price_per_min * exMin);
+    const exRaw     = roundPrice(grid.base_price + exKmCost + exMinCost);
     const exBase    = Math.max(exRaw, grid.minimum_price);
     const tvRate    = grid.tva_rate ?? 0;
-    const exTva     = roundPrice(exBase * tvRate, grid.currency);
-    const exTtc     = roundPrice(exBase + exTva, grid.currency);
+    const exTva     = roundPrice(exBase * tvRate);
+    const exTtc     = roundPrice(exBase + exTva);
 
     let commRate    = 0;
     let commHt      = 0;
@@ -521,14 +501,13 @@ export class PricingService {
       commRate    = commission.rate_value;
       commTvaRate = commission.tva_rate ?? 0;
       commHt      = commission.rate_type === 'percentage'
-        ? roundPrice(exBase * (commRate / 100), grid.currency)
-        : roundPrice(commRate, grid.currency);
-      commTva  = roundPrice(commHt * commTvaRate, grid.currency);
-      commTtc  = roundPrice(commHt + commTva, grid.currency);
+        ? roundPrice(exBase * (commRate / 100))
+        : roundPrice(commRate);
+      commTva  = roundPrice(commHt * commTvaRate);
+      commTtc  = roundPrice(commHt + commTva);
     }
 
     return {
-      country,
       grid,
       commission,
       example: {
@@ -546,18 +525,18 @@ export class PricingService {
         commission_tva_rate:  commTvaRate,
         commission_tva_amount: commTva,
         commission_ttc:       commTtc,
-        driver_net_ttc:       roundPrice(exTtc - commTtc, grid.currency),
+        driver_net_ttc:       roundPrice(exTtc - commTtc),
       },
     };
   }
 
   /**
-   * Met à jour la config tarifaire d'un pays en une seule opération atomique.
+   * Met à jour la config tarifaire en une seule opération atomique.
    * Modifie la grille active existante et/ou la commission générique active.
    * Retourne la config mise à jour.
    */
   async updatePricingConfig(dto: PricingConfigUpdateDto, adminId: string): Promise<PricingConfigResult> {
-    const { country, commission_rate, commission_tva_rate, ...gridFields } = dto;
+    const { commission_rate, commission_tva_rate, ...gridFields } = dto;
 
     // Mise à jour de la grille ────────────────────────────────────────────────
     const gridUpdates = Object.fromEntries(
@@ -568,13 +547,12 @@ export class PricingService {
       const { data: activeGrid } = await supabaseAdmin
         .from('pricing_grids')
         .select('id')
-        .eq('country', country)
         .eq('is_active', true)
         .limit(1)
         .maybeSingle();
 
       if (!activeGrid) {
-        throw { status: 404, message: `Aucune grille tarifaire active pour ${country}. Créez d'abord une grille via POST /pricing/grids.` };
+        throw { status: 404, message: 'Aucune grille tarifaire active. Créez d\'abord une grille via POST /pricing/grids.' };
       }
 
       const { error: gridErr } = await supabaseAdmin
@@ -594,7 +572,6 @@ export class PricingService {
       const { data: activeSetting } = await supabaseAdmin
         .from('commission_settings')
         .select('id')
-        .eq('zone', country)
         .is('vehicle_type', null)
         .eq('is_active', true)
         .limit(1)
@@ -613,7 +590,7 @@ export class PricingService {
 
     void adminId; // l'audit est géré dans le controller
 
-    return this.getPricingConfig(country);
+    return this.getPricingConfig();
   }
 }
 

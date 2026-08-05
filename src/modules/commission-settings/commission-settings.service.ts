@@ -28,15 +28,13 @@ export class CommissionSettingsService {
   // ────────────────────────────────────────────────────────────────────────────
   // GET /admin/commission-settings
   // ────────────────────────────────────────────────────────────────────────────
-  async listSettings(filters: { zone?: string; is_active?: boolean }): Promise<CommissionSetting[]> {
+  async listSettings(filters: { is_active?: boolean }): Promise<CommissionSetting[]> {
     let query = supabaseAdmin
       .from('commission_settings')
       .select('*')
-      .order('zone')
       .order('vehicle_type', { nullsFirst: true })
       .order('created_at', { ascending: false });
 
-    if (filters.zone)                query = query.eq('zone', filters.zone);
     if (filters.is_active !== undefined) query = query.eq('is_active', filters.is_active);
 
     const { data, error } = await query;
@@ -68,14 +66,13 @@ export class CommissionSettingsService {
   // POST /admin/commission-settings
   // ────────────────────────────────────────────────────────────────────────────
   async createSetting(dto: CreateCommissionSettingDto, createdBy: string): Promise<CommissionSetting> {
-    // Vérifier l'unicité : un seul taux actif par (zone, vehicle_type)
-    await this._checkUniquenessOrThrow(dto.zone, dto.vehicle_type ?? null, null);
+    // Vérifier l'unicité : un seul taux actif par vehicle_type
+    await this._checkUniquenessOrThrow(dto.vehicle_type ?? null, null);
 
     const { data, error } = await supabaseAdmin
       .from('commission_settings')
       .insert({
         label:        dto.label,
-        zone:         dto.zone,
         vehicle_type: dto.vehicle_type ?? null,
         rate_type:    dto.rate_type,
         rate_value:   dto.rate_value,
@@ -89,7 +86,7 @@ export class CommissionSettingsService {
       console.error('[CommissionSettings] createSetting error:', error);
       // Contrainte unique violée (index partiel sur is_active=true)
       if (error?.code === '23505') {
-        throw { status: 409, message: 'Un taux actif existe déjà pour cette combinaison zone / type de véhicule' };
+        throw { status: 409, message: 'Un taux actif existe déjà pour ce type de véhicule' };
       }
       throw { status: 500, message: 'Erreur lors de la création du paramétrage' };
     }
@@ -107,7 +104,6 @@ export class CommissionSettingsService {
     if (dto.is_active === true) {
       const existing = await this.getSettingById(id);
       await this._checkUniquenessOrThrow(
-        dto.zone ?? existing.zone,
         dto.vehicle_type !== undefined ? dto.vehicle_type : existing.vehicle_type,
         id,
       );
@@ -123,7 +119,7 @@ export class CommissionSettingsService {
     if (error || !data) {
       console.error('[CommissionSettings] updateSetting error:', error);
       if (error?.code === '23505') {
-        throw { status: 409, message: 'Un taux actif existe déjà pour cette combinaison zone / type de véhicule' };
+        throw { status: 409, message: 'Un taux actif existe déjà pour ce type de véhicule' };
       }
       throw { status: 500, message: 'Erreur lors de la mise à jour du paramétrage' };
     }
@@ -167,18 +163,16 @@ export class CommissionSettingsService {
   // ══════════════════════════════════════════════════════════════════════════
 
   // ────────────────────────────────────────────────────────────────────────────
-  // Trouve le taux applicable le plus précis (zone + vehicle_type exact, puis zone seule)
+  // Trouve le taux applicable le plus précis (vehicle_type exact, puis générique)
   // ────────────────────────────────────────────────────────────────────────────
   async findApplicableSetting(
-    zone: string,
     vehicleType: string | null,
   ): Promise<CommissionSetting | null> {
-    // Priorité 1 : taux actif correspondant exactement à zone + vehicle_type
+    // Priorité 1 : taux actif correspondant exactement au vehicle_type
     if (vehicleType) {
       const { data: specific } = await supabaseAdmin
         .from('commission_settings')
         .select('*')
-        .eq('zone', zone)
         .eq('vehicle_type', vehicleType)
         .eq('is_active', true)
         .limit(1)
@@ -187,11 +181,10 @@ export class CommissionSettingsService {
       if (specific) return specific as CommissionSetting;
     }
 
-    // Priorité 2 : taux actif générique pour la zone (vehicle_type = NULL)
+    // Priorité 2 : taux actif générique (vehicle_type = NULL)
     const { data: generic } = await supabaseAdmin
       .from('commission_settings')
       .select('*')
-      .eq('zone', zone)
       .is('vehicle_type', null)
       .eq('is_active', true)
       .limit(1)
@@ -214,7 +207,7 @@ export class CommissionSettingsService {
 
     if (existing) return; // Déjà calculée — on ne recalcule pas
 
-    const setting = await this.findApplicableSetting(input.zone, input.vehicle_type);
+    const setting = await this.findApplicableSetting(input.vehicle_type);
 
     let commissionAmount    = 0;
     let commissionTvaAmount = 0;
@@ -234,26 +227,17 @@ export class CommissionSettingsService {
         commissionAmount = setting.rate_value;
       }
 
-      commissionAmount = input.currency === 'XOF'
-        ? Math.round(commissionAmount)
-        : Math.round(commissionAmount * 100) / 100;
-
+      commissionAmount = Math.round(commissionAmount * 100) / 100;
       commissionAmount = Math.min(commissionAmount, input.gross_amount);
 
       // TVA sur la commission (snapshot du taux configuré)
       const tvRate = setting.tva_rate ?? 0;
-      commissionTvaAmount = input.currency === 'XOF'
-        ? Math.round(commissionAmount * tvRate)
-        : Math.round(commissionAmount * tvRate * 100) / 100;
-      commissionTtcAmount = input.currency === 'XOF'
-        ? Math.round(commissionAmount + commissionTvaAmount)
-        : Math.round((commissionAmount + commissionTvaAmount) * 100) / 100;
+      commissionTvaAmount = Math.round(commissionAmount * tvRate * 100) / 100;
+      commissionTtcAmount = Math.round((commissionAmount + commissionTvaAmount) * 100) / 100;
     }
 
     // Le chauffeur reçoit le brut moins la commission TTC (plateforme encaisse comm + TVA comm)
-    const driverNet = input.currency === 'XOF'
-      ? Math.round(input.gross_amount - commissionTtcAmount)
-      : Math.round((input.gross_amount - commissionTtcAmount) * 100) / 100;
+    const driverNet = Math.round((input.gross_amount - commissionTtcAmount) * 100) / 100;
 
     const { error } = await supabaseAdmin
       .from('commissions')
@@ -261,7 +245,6 @@ export class CommissionSettingsService {
         reservation_id:        input.reservation_id,
         driver_id:             input.driver_id,
         commission_setting_id: settingId,
-        zone:                  input.zone,
         rate_type:             rateType,
         rate_value:            rateValue,
         gross_amount:          input.gross_amount,
@@ -269,7 +252,6 @@ export class CommissionSettingsService {
         commission_tva_amount: commissionTvaAmount,
         commission_ttc_amount: commissionTtcAmount,
         driver_net_amount:     driverNet,
-        currency:              input.currency,
       });
 
     if (error) {
@@ -282,12 +264,11 @@ export class CommissionSettingsService {
   // ══════════════════════════════════════════════════════════════════════════
 
   // ────────────────────────────────────────────────────────────────────────────
-  // GET /admin/commissions?period=month&date=YYYY-MM-DD&zone=france
+  // GET /admin/commissions?period=month&date=YYYY-MM-DD
   // ────────────────────────────────────────────────────────────────────────────
   async listCommissions(filters: {
     period: PeriodType;
     date?: string;
-    zone?: string;
     driver_id?: string;
     page: number;
     limit: number;
@@ -306,7 +287,6 @@ export class CommissionSettingsService {
 
     if (dateFrom) query = query.gte('calculated_at', dateFrom);
     if (dateTo)   query = query.lte('calculated_at', dateTo);
-    if (filters.zone)      query = query.eq('zone', filters.zone);
     if (filters.driver_id) query = query.eq('driver_id', filters.driver_id);
 
     const { data, error, count } = await query.range(offset, offset + filters.limit - 1);
@@ -355,18 +335,11 @@ export class CommissionSettingsService {
 
     const rows = data ?? [];
     let totalGrossEur = 0, totalCommEur = 0, totalNetEur = 0;
-    let totalGrossXof = 0, totalCommXof = 0, totalNetXof = 0;
 
     const commissions: CommissionDetail[] = rows.map((c: any) => {
-      if (c.currency === 'XOF') {
-        totalGrossXof += Number(c.gross_amount);
-        totalCommXof  += Number(c.commission_amount);
-        totalNetXof   += Number(c.driver_net_amount);
-      } else {
-        totalGrossEur += Number(c.gross_amount);
-        totalCommEur  += Number(c.commission_amount);
-        totalNetEur   += Number(c.driver_net_amount);
-      }
+      totalGrossEur += Number(c.gross_amount);
+      totalCommEur  += Number(c.commission_amount);
+      totalNetEur   += Number(c.driver_net_amount);
       return {
         ...c,
         reservation: c.reservation ?? null,
@@ -384,9 +357,6 @@ export class CommissionSettingsService {
       total_gross_eur:      Math.round(totalGrossEur * 100) / 100,
       total_commission_eur: Math.round(totalCommEur  * 100) / 100,
       total_net_eur:        Math.round(totalNetEur   * 100) / 100,
-      total_gross_xof:      Math.round(totalGrossXof),
-      total_commission_xof: Math.round(totalCommXof),
-      total_net_xof:        Math.round(totalNetXof),
       commissions,
     };
   }
@@ -396,14 +366,12 @@ export class CommissionSettingsService {
   // ══════════════════════════════════════════════════════════════════════════
 
   private async _checkUniquenessOrThrow(
-    zone: string,
     vehicleType: string | null,
     excludeId: string | null,
   ): Promise<void> {
     let query = supabaseAdmin
       .from('commission_settings')
       .select('id')
-      .eq('zone', zone)
       .eq('is_active', true);
 
     if (vehicleType) {
@@ -419,7 +387,7 @@ export class CommissionSettingsService {
     if (data) {
       throw {
         status: 409,
-        message: 'Un taux actif existe déjà pour cette combinaison zone / type de véhicule. Désactivez-le d\'abord.',
+        message: 'Un taux actif existe déjà pour ce type de véhicule. Désactivez-le d\'abord.',
       };
     }
   }

@@ -138,7 +138,7 @@ describe('RgpdService', () => {
     });
 
     it('inclut le profil chauffeur si l\'utilisateur est driver', async () => {
-      const mockDriverProfile = { id: 'driver-uuid', status: 'active', zone: 'france' };
+      const mockDriverProfile = { id: 'driver-uuid', status: 'active' };
 
       // Phase 1 (3 appels) : users, reservations=[] (vide), drivers=mockDriverProfile
       mockFrom
