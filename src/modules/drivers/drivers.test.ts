@@ -88,7 +88,7 @@ const DRIVER_ID = 'b8f4e2a1-9c3d-4e5f-8a7b-6c5d4e3f2a1b';
 
 const MOCK_DRIVER_PROFILE = {
   id: DRIVER_ID, user_id: MOCK_DRIVER.id, status: 'active',
-  zone: 'france', vehicle_type: 'standard', is_online: true,
+  vehicle_type: 'standard', is_online: true,
   siret: '12345678901234', tva_rate: 20,
 };
 
@@ -150,7 +150,7 @@ describe('Drivers routes', () => {
 
   describe('PATCH /drivers/me', () => {
     it('retourne 401 sans token', async () => {
-      const res = await request(app).patch('/drivers/me').send({ zone: 'france' });
+      const res = await request(app).patch('/drivers/me').send({ siret: '12345678901234' });
       expect(res.status).toBe(401);
     });
 
@@ -159,17 +159,17 @@ describe('Drivers routes', () => {
       const res = await request(app)
         .patch('/drivers/me')
         .set('Authorization', 'Bearer admin-token')
-        .send({ zone: 'france' });
+        .send({ siret: '12345678901234' });
       expect(res.status).toBe(403);
     });
 
     it('retourne 200 après mise à jour réussie', async () => {
       setupValidToken(MOCK_DRIVER);
-      mockUpdateMyProfile.mockResolvedValue({ ...MOCK_DRIVER_PROFILE, zone: 'senegal' });
+      mockUpdateMyProfile.mockResolvedValue({ ...MOCK_DRIVER_PROFILE, siret: '98765432109876' });
       const res = await request(app)
         .patch('/drivers/me')
         .set('Authorization', 'Bearer driver-token')
-        .send({ zone: 'senegal' });
+        .send({ siret: '98765432109876' });
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
     });

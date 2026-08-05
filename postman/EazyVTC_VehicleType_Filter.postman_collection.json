@@ -530,7 +530,7 @@
                   "",
                   "pm.test('Chaque driver a les champs requis (AvailableDriverDto)', () => {",
                   "  data.forEach(d => {",
-                  "    pm.expect(d, `driver ${d.id}`).to.have.all.keys('id', 'rating', 'is_online', 'status', 'vehicle_type', 'zone', 'user', 'vehicle');",
+                  "    pm.expect(d, `driver ${d.id}`).to.have.all.keys('id', 'rating', 'is_online', 'status', 'vehicle_type', 'user', 'vehicle');",
                   "  });",
                   "});",
                   "",

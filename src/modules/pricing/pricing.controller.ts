@@ -4,7 +4,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { pricingService } from './pricing.service.js';
 import { auditLog } from '../../utils/audit.service.js';
 import {
@@ -18,12 +17,6 @@ import {
   updatePricingConfigSchema,
 } from './pricing.validator.js';
 
-const countryParamSchema = z.object({
-  country: z.enum(['france', 'senegal'], {
-    error: () => 'Pays invalide. Valeurs acceptées : france, senegal',
-  }),
-});
-
 export class PricingController {
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -31,17 +24,9 @@ export class PricingController {
   // ──────────────────────────────────────────────────────────────────────────
 
   // GET /pricing/grids — Admin : toutes les grilles
-  async getAllGrids(req: Request, res: Response): Promise<void> {
-    if (req.query.country !== undefined) {
-      const parsed = countryParamSchema.safeParse({ country: req.query.country });
-      if (!parsed.success) {
-        res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
-        return;
-      }
-    }
+  async getAllGrids(_req: Request, res: Response): Promise<void> {
     try {
-      const country = req.query.country as 'france' | 'senegal' | undefined;
-      const grids = await pricingService.getAllGrids(country);
+      const grids = await pricingService.getAllGrids();
       res.status(200).json({ ok: true, data: grids });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -49,15 +34,10 @@ export class PricingController {
     }
   }
 
-  // GET /pricing/grids/active/:country — Public : grille active d'un pays
-  async getActiveGrid(req: Request, res: Response): Promise<void> {
-    const parsed = countryParamSchema.safeParse(req.params);
-    if (!parsed.success) {
-      res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
-      return;
-    }
+  // GET /pricing/grids/active — Public : grille active
+  async getActiveGrid(_req: Request, res: Response): Promise<void> {
     try {
-      const grid = await pricingService.getActiveGrid(parsed.data.country);
+      const grid = await pricingService.getActiveGrid();
       res.status(200).json({ ok: true, data: grid });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -79,7 +59,7 @@ export class PricingController {
         action:     'PRICING_GRID_CREATED',
         entityType: 'pricing_grid',
         entityId:   grid.id,
-        newValue:   { country: grid.country, currency: grid.currency },
+        newValue:   { base_price: grid.base_price },
       });
 
       res.status(201).json({ ok: true, message: 'Grille tarifaire créée', data: grid });
@@ -228,7 +208,6 @@ export class PricingController {
         ok: true,
         data: {
           pricing_type: result.pricing_type,
-          country:      result.country,
           currency:     result.currency,
           amount_ht:    result.amount_ht,
           tva_amount:   result.tva_amount,
@@ -245,20 +224,10 @@ export class PricingController {
   // CONFIG UNIFIÉE
   // ──────────────────────────────────────────────────────────────────────────
 
-  // GET /pricing/config?country=france — Admin : lecture config complète
-  async getConfig(req: Request, res: Response): Promise<void> {
-    const parsed = z.object({
-      country: z.enum(['france', 'senegal'] as const, {
-        error: () => 'Pays invalide. Valeurs acceptées : france, senegal',
-      }),
-    }).safeParse({ country: req.query.country });
-
-    if (!parsed.success) {
-      res.status(400).json({ ok: false, message: 'Pays invalide. Valeurs acceptées : france, senegal' });
-      return;
-    }
+  // GET /pricing/config — Admin : lecture config complète
+  async getConfig(_req: Request, res: Response): Promise<void> {
     try {
-      const config = await pricingService.getPricingConfig(parsed.data.country);
+      const config = await pricingService.getPricingConfig();
       res.status(200).json({ ok: true, data: config });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
@@ -279,7 +248,7 @@ export class PricingController {
       void auditLog(req, {
         action:     'PRICING_CONFIG_UPDATED',
         entityType: 'pricing_config',
-        entityId:   parsed.data.country,
+        entityId:   'active',
         newValue:   parsed.data,
       });
 

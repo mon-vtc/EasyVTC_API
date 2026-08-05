@@ -77,7 +77,6 @@ const MOCK_ADMIN = {
 
 const MOCK_GRID = {
   id:            'grid-uuid-1',
-  country:       'france',
   is_active:     true,
   base_fare:     3.5,
   price_per_km:  1.8,
@@ -94,7 +93,6 @@ const MOCK_FLAT_RATE = {
   name:         'Aéroport CDG',
   price:        65.0,
   vehicle_type: 'standard',
-  country:      'france',
   is_active:    true,
   created_at:   new Date().toISOString(),
 };
@@ -107,7 +105,6 @@ const VALID_ESTIMATE_BODY = {
   distance_km:     30,
   duration_min:    40,
   vehicle_type:    'standard',
-  country:         'france',
   pickup_datetime: new Date(Date.now() + 86400000).toISOString(),
 };
 
@@ -143,43 +140,24 @@ describe('Pricing routes', () => {
 
   // ── Routes publiques ────────────────────────────────────────────────────────
 
-  describe('GET /pricing/grids/active/:country (public)', () => {
-    it('retourne 200 avec la grille active pour la France', async () => {
+  describe('GET /pricing/grids/active (public)', () => {
+    it('retourne 200 avec la grille active', async () => {
       mockGetActiveGrid.mockResolvedValue(MOCK_GRID);
 
-      const res = await request(app).get('/pricing/grids/active/france');
+      const res = await request(app).get('/pricing/grids/active');
 
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
-      expect(res.body.data.country).toBe('france');
       expect(res.body.data.base_fare).toBeDefined();
-    });
-
-    it('retourne 200 avec la grille active pour le Sénégal', async () => {
-      const senegalGrid = { ...MOCK_GRID, country: 'senegal' };
-      mockGetActiveGrid.mockResolvedValue(senegalGrid);
-
-      const res = await request(app).get('/pricing/grids/active/senegal');
-
-      expect(res.status).toBe(200);
-      expect(res.body.ok).toBe(true);
-    });
-
-    it('retourne 400 pour un pays invalide', async () => {
-      const res = await request(app).get('/pricing/grids/active/allemagne');
-
-      expect(res.status).toBe(400);
-      expect(res.body.ok).toBe(false);
-      expect(res.body.message).toMatch(/pays invalide/i);
     });
 
     it('retourne 404 si aucune grille active n\'existe', async () => {
       mockGetActiveGrid.mockRejectedValue({
         status:  404,
-        message: 'Aucune grille active trouvée pour ce pays',
+        message: 'Aucune grille tarifaire active',
       });
 
-      const res = await request(app).get('/pricing/grids/active/senegal');
+      const res = await request(app).get('/pricing/grids/active');
 
       expect(res.status).toBe(404);
       expect(res.body.ok).toBe(false);
@@ -247,7 +225,6 @@ describe('Pricing routes', () => {
       setupValidToken(MOCK_CLIENT);
       mockCalculatePrice.mockResolvedValue({
         pricing_type: 'dynamic',
-        country:      'france',
         currency:     'EUR',
         amount_ht:    45.0,
         tva_amount:   9.0,

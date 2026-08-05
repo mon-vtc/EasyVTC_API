@@ -168,19 +168,9 @@ export default function ({ clientToken, adminToken, driverToken }) {
       'GET /vehicle-types → data': (r) => Array.isArray(r.json('data')),
     }));
 
-    const gridFR = get(`${BASE_URL}/pricing/grids/active/france`, JSON_HEADERS, 'public');
+    const gridFR = get(`${BASE_URL}/pricing/grids/active`, JSON_HEADERS, 'public');
     checksFailed.add(!check(gridFR, {
-      'GET /pricing/grids/active/france → 200': (r) => r.status === 200,
-    }));
-
-    // 404 accepté : grille Sénégal peut ne pas être configurée
-    const gridSN = http.get(`${BASE_URL}/pricing/grids/active/senegal`, {
-      headers: JSON_HEADERS,
-      tags: { tag: 'public' },
-      responseCallback: http.expectedStatuses(200, 404),
-    });
-    checksFailed.add(!check(gridSN, {
-      'GET /pricing/grids/active/senegal → 200 ou 404': (r) => [200, 404].includes(r.status),
+      'GET /pricing/grids/active → 200': (r) => r.status === 200,
     }));
 
     const flatRates = get(`${BASE_URL}/pricing/flat-rates`, JSON_HEADERS, 'public');
@@ -253,7 +243,6 @@ export default function ({ clientToken, adminToken, driverToken }) {
       const estimate = post(
         `${BASE_URL}/pricing/estimate`,
         {
-          country:      'france',
           distance_km:  25,
           duration_min: 35,
           vehicle_type: 'standard',
@@ -605,7 +594,7 @@ export default function ({ clientToken, adminToken, driverToken }) {
         'GET /pricing/grids → 200': (r) => r.status === 200,
       }));
 
-      const pricingConfig = http.get(`${BASE_URL}/pricing/config?country=france`, {
+      const pricingConfig = http.get(`${BASE_URL}/pricing/config`, {
         headers: ah,
         tags: { tag: 'business' },
         responseCallback: http.expectedStatuses(200, 404),

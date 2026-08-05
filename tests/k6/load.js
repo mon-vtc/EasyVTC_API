@@ -168,7 +168,7 @@ function runPublicScenario() {
     check(vt, { 'vehicle-types → ok': (r) => r.status === 200 || r.status === 429 });
     sleep(0.2);
 
-    const grid = get(`${BASE_URL}/pricing/grids/active/france`, JSON_HEADERS, 'public');
+    const grid = get(`${BASE_URL}/pricing/grids/active`, JSON_HEADERS, 'public');
     check(grid, { 'pricing grid france → ok': (r) => r.status === 200 || r.status === 429 });
     sleep(0.2);
 

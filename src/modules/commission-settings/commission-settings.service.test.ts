@@ -23,24 +23,10 @@ const DRIVER_ID  = 'driver-uuid-003';
 
 const mockSettingPercentageFrance = {
   id:           SETTING_ID,
-  label:        'Commission France standard',
-  zone:         'france',
+  label:        'Commission standard',
   vehicle_type: 'standard',
   rate_type:    'percentage',
   rate_value:   15,
-  is_active:    true,
-  created_by:   ADMIN_ID,
-  created_at:   '2026-05-01T00:00:00.000Z',
-  updated_at:   '2026-05-01T00:00:00.000Z',
-};
-
-const mockSettingFlatSenegal = {
-  id:           'setting-uuid-002',
-  label:        'Commission fixe Sénégal',
-  zone:         'senegal',
-  vehicle_type: null,
-  rate_type:    'flat',
-  rate_value:   500,
   is_active:    true,
   created_by:   ADMIN_ID,
   created_at:   '2026-05-01T00:00:00.000Z',
@@ -52,13 +38,11 @@ const mockCommissionRow = {
   reservation_id:        RESA_ID,
   driver_id:             DRIVER_ID,
   commission_setting_id: SETTING_ID,
-  zone:                  'france',
   rate_type:             'percentage',
   rate_value:            15,
   gross_amount:          100,
   commission_amount:     15,
   driver_net_amount:     85,
-  currency:              'EUR',
   calculated_at:         '2026-06-01T10:00:00.000Z',
   reservation: {
     scheduled_at:   '2026-06-01T09:00:00.000Z',
@@ -120,7 +104,6 @@ describe('CommissionSettingsService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe(SETTING_ID);
-      expect(result[0].zone).toBe('france');
     });
 
     it('retourne un tableau vide si aucun paramétrage', async () => {
@@ -131,10 +114,10 @@ describe('CommissionSettingsService', () => {
       expect(result).toEqual([]);
     });
 
-    it('applique les filtres zone et is_active sans erreur', async () => {
+    it('applique le filtre is_active sans erreur', async () => {
       mockFrom.mockReturnValueOnce(chain([mockSettingPercentageFrance]));
 
-      const result = await service.listSettings({ zone: 'france', is_active: true });
+      const result = await service.listSettings({ is_active: true });
 
       expect(result).toHaveLength(1);
     });
@@ -174,8 +157,7 @@ describe('CommissionSettingsService', () => {
   describe('createSetting()', () => {
 
     const dto = {
-      label:        'Taux France standard',
-      zone:         'france' as const,
+      label:        'Taux standard',
       vehicle_type: 'standard',
       rate_type:    'percentage' as const,
       rate_value:   15,
@@ -192,7 +174,7 @@ describe('CommissionSettingsService', () => {
       expect(result.is_active).toBe(true);
     });
 
-    it('lève 409 si un taux actif existe déjà pour la même combinaison zone/vehicle_type', async () => {
+    it('lève 409 si un taux actif existe déjà pour ce type de véhicule', async () => {
       mockFrom.mockReturnValueOnce(chain({ id: 'doublon-id' })); // _checkUniqueness → conflit
 
       await expect(service.createSetting(dto, ADMIN_ID)).rejects.toMatchObject({ status: 409 });
@@ -215,7 +197,7 @@ describe('CommissionSettingsService', () => {
     });
 
     it('crée un taux générique (vehicle_type absent → null)', async () => {
-      const genericDto = { label: 'Taux France global', zone: 'france' as const, rate_type: 'flat' as const, rate_value: 200 };
+      const genericDto = { label: 'Taux global', rate_type: 'flat' as const, rate_value: 200 };
       const mockGeneric = { ...mockSettingPercentageFrance, vehicle_type: null, rate_type: 'flat', rate_value: 200 };
 
       mockFrom
@@ -335,10 +317,10 @@ describe('CommissionSettingsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('findApplicableSetting()', () => {
 
-    it('retourne le taux spécifique (zone + vehicle_type exact) en priorité', async () => {
+    it('retourne le taux spécifique (vehicle_type exact) en priorité', async () => {
       mockFrom.mockReturnValueOnce(chain(mockSettingPercentageFrance)); // taux spécifique trouvé
 
-      const result = await service.findApplicableSetting('france', 'standard');
+      const result = await service.findApplicableSetting('standard');
 
       expect(result?.id).toBe(SETTING_ID);
       expect(result?.vehicle_type).toBe('standard');
@@ -352,7 +334,7 @@ describe('CommissionSettingsService', () => {
         .mockReturnValueOnce(chain(null))     // taux spécifique → absent
         .mockReturnValueOnce(chain(generic)); // taux générique → trouvé
 
-      const result = await service.findApplicableSetting('france', 'berline');
+      const result = await service.findApplicableSetting('berline');
 
       expect(result?.vehicle_type).toBeNull();
       expect(mockFrom).toHaveBeenCalledTimes(2);
@@ -363,7 +345,7 @@ describe('CommissionSettingsService', () => {
         .mockReturnValueOnce(chain(null))  // spécifique → absent
         .mockReturnValueOnce(chain(null)); // générique → absent
 
-      const result = await service.findApplicableSetting('france', 'van');
+      const result = await service.findApplicableSetting('van');
 
       expect(result).toBeNull();
     });
@@ -373,7 +355,7 @@ describe('CommissionSettingsService', () => {
 
       mockFrom.mockReturnValueOnce(chain(generic)); // seule la recherche générique est lancée
 
-      const result = await service.findApplicableSetting('france', null);
+      const result = await service.findApplicableSetting(null);
 
       expect(result?.vehicle_type).toBeNull();
       expect(mockFrom).toHaveBeenCalledTimes(1);
@@ -389,9 +371,7 @@ describe('CommissionSettingsService', () => {
       reservation_id: RESA_ID,
       driver_id:      DRIVER_ID,
       gross_amount:   100,
-      zone:           'france' as const,
       vehicle_type:   'standard',
-      currency:       'EUR',
     };
 
     it('est idempotent : ne relance pas le calcul si une commission existe déjà', async () => {
@@ -423,56 +403,7 @@ describe('CommissionSettingsService', () => {
         driver_net_amount: 85,
         rate_type:         'percentage',
         rate_value:        15,
-        currency:          'EUR',
       });
-    });
-
-    it('calcule une commission flat : 500 XOF fixe sur 3000 XOF brut', async () => {
-      const input = { ...baseInput, gross_amount: 3000, zone: 'senegal' as const, vehicle_type: null, currency: 'XOF' };
-
-      let insertedData: unknown;
-      const insertChain = chain(null);
-      (insertChain.insert as ReturnType<typeof jest.fn>).mockImplementation((data: unknown) => {
-        insertedData = data;
-        return insertChain;
-      });
-
-      mockFrom
-        .mockReturnValueOnce(chain(null))                // check idempotence
-        .mockReturnValueOnce(chain(mockSettingFlatSenegal)) // findApplicable (vehicleType=null → générique)
-        .mockReturnValueOnce(insertChain);               // insert
-
-      await service.calculateAndRecord(input);
-
-      expect(insertedData).toMatchObject({
-        commission_amount:  500,
-        driver_net_amount:  2500,
-        rate_type:          'flat',
-        currency:           'XOF',
-      });
-    });
-
-    it('arrondit la commission XOF à l\'entier (pas de centimes)', async () => {
-      // 3500 XOF × 15% = 525 XOF (entier, pas de virgule)
-      const input = { ...baseInput, gross_amount: 3500, zone: 'senegal' as const, currency: 'XOF' };
-      const xofSetting = { ...mockSettingPercentageFrance, zone: 'senegal', vehicle_type: 'standard', rate_value: 15 };
-
-      let insertedData: unknown;
-      const insertChain = chain(null);
-      (insertChain.insert as ReturnType<typeof jest.fn>).mockImplementation((data: unknown) => {
-        insertedData = data;
-        return insertChain;
-      });
-
-      mockFrom
-        .mockReturnValueOnce(chain(null))
-        .mockReturnValueOnce(chain(xofSetting))
-        .mockReturnValueOnce(insertChain);
-
-      await service.calculateAndRecord(input);
-
-      expect(insertedData).toMatchObject({ commission_amount: 525, driver_net_amount: 2975 });
-      expect(Number.isInteger((insertedData as { commission_amount: number }).commission_amount)).toBe(true);
     });
 
     it('plafonne la commission au montant brut (commission ne peut pas dépasser le prix de la course)', async () => {
@@ -580,24 +511,20 @@ describe('CommissionSettingsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('getSummary()', () => {
 
-    it('agrège EUR et XOF séparément et correctement', async () => {
+    it('agrège les montants EUR correctement', async () => {
       const rows = [
-        { gross_amount: 100,  commission_amount: 15,  driver_net_amount: 85,   currency: 'EUR', calculated_at: '2026-06-01T10:00:00Z', reservation: null, driver: null },
-        { gross_amount: 80,   commission_amount: 12,  driver_net_amount: 68,   currency: 'EUR', calculated_at: '2026-06-01T11:00:00Z', reservation: null, driver: null },
-        { gross_amount: 5000, commission_amount: 500, driver_net_amount: 4500, currency: 'XOF', calculated_at: '2026-06-01T12:00:00Z', reservation: null, driver: null },
+        { gross_amount: 100, commission_amount: 15, driver_net_amount: 85, calculated_at: '2026-06-01T10:00:00Z', reservation: null, driver: null },
+        { gross_amount: 80,  commission_amount: 12, driver_net_amount: 68, calculated_at: '2026-06-01T11:00:00Z', reservation: null, driver: null },
       ];
 
       mockFrom.mockReturnValueOnce(chain(rows));
 
       const result = await service.getSummary('all');
 
-      expect(result.total_rides).toBe(3);
+      expect(result.total_rides).toBe(2);
       expect(result.total_gross_eur).toBe(180);
       expect(result.total_commission_eur).toBe(27);
       expect(result.total_net_eur).toBe(153);
-      expect(result.total_gross_xof).toBe(5000);
-      expect(result.total_commission_xof).toBe(500);
-      expect(result.total_net_xof).toBe(4500);
     });
 
     it('retourne des totaux à zéro si aucune commission sur la période', async () => {
@@ -608,7 +535,6 @@ describe('CommissionSettingsService', () => {
       expect(result.total_rides).toBe(0);
       expect(result.total_gross_eur).toBe(0);
       expect(result.total_commission_eur).toBe(0);
-      expect(result.total_gross_xof).toBe(0);
     });
 
     it('retourne date_from et date_to null pour period=all', async () => {

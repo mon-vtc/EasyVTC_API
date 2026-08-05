@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { VehicleType } from '../reservations/reservations.types.js';
-import type { PricingCountry, PricingType } from '../pricing/pricing.types.js';
+import type { PricingType } from '../pricing/pricing.types.js';
 
 // ── Snapshots (données figées à la génération du bon) ────────────────────────
 
@@ -33,7 +33,6 @@ export interface TripSnapshot {
   pickup_address: string;
   dest_address: string;
   vehicle_type: VehicleType;
-  country: PricingCountry;
   scheduled_at: string;             // ISO 8601
   nb_passengers: number;
   comment: string | null;

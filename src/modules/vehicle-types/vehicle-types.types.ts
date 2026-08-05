@@ -11,7 +11,6 @@ export interface VehicleTypeRecord {
   capacity: number;
   icon: string | null;
   base_price_france: number;
-  base_price_senegal: number;
   is_active: boolean;
   sort_order: number;
   created_at: string;

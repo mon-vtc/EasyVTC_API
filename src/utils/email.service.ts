@@ -99,7 +99,7 @@ function layout(content: string, preview = ''): string {
             </td>
           </tr>
         </table>
-        <p style="margin:16px 0 0;color:#B08A7A;font-size:11px;">EasyVTC · France &amp; Sénégal</p>
+        <p style="margin:16px 0 0;color:#B08A7A;font-size:11px;">EasyVTC · France</p>
       </td></tr>
     </table>
     </body></html>`;
@@ -266,15 +266,24 @@ export async function sendManagerAccessEmail(
 export async function sendResetPasswordEmail(
   to: string,
   firstName: string,
-  resetLink: string
+  resetToken: string
 ): Promise<void> {
   const html = layout(`
     ${header('Réinitialisation du mot de passe', 'Demande de réinitialisation', C.danger)}
     <p style="color:#333;font-size:15px;line-height:1.7;margin:0 0 16px;">
       Bonjour <strong>${firstName}</strong>,<br/>
-      Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte.</p>
-    ${callout('⏱️', 'Ce lien est valide pendant <strong>1 heure</strong> uniquement.', C.dangerBg, C.danger, C.dangerTx)}
-    ${btn('Réinitialiser mon mot de passe', resetLink)}
+      Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte.
+      Copiez le code ci-dessous dans l'application pour choisir un nouveau mot de passe.</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+           style="background:${C.lightGray};border-radius:8px;border:2px dashed ${C.beige};margin:0 0 20px;">
+      <tr><td style="padding:20px;text-align:center;">
+        <p style="margin:0 0 10px;color:${C.gray};font-size:12px;font-weight:700;
+                  letter-spacing:1px;text-transform:uppercase;">Votre code de réinitialisation</p>
+        <p style="margin:0;color:${C.bordeaux};font-size:16px;font-weight:700;
+                  font-family:monospace;word-break:break-all;">${resetToken}</p>
+      </td></tr>
+    </table>
+    ${callout('⏱️', 'Ce code est valide pendant <strong>1 heure</strong> uniquement et à usage unique.', C.dangerBg, C.danger, C.dangerTx)}
     ${hr()}
     <p style="color:${C.gray};font-size:13px;line-height:1.6;margin:0;">
       Si vous n'avez pas fait cette demande, ignorez cet email.

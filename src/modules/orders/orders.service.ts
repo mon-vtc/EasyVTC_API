@@ -111,8 +111,8 @@ export class OrdersService {
       phone:      clientData?.phone      ?? null,
     };
 
-    // Détermination de la devise selon le pays
-    const currency = (reservation as any).country === 'senegal' ? 'XOF' : 'EUR';
+    // Plateforme limitée à la France — devise toujours EUR.
+    const currency = 'EUR';
 
     // Montant estimé de la course, affiché quel que soit le mode de tarification
     const finalPrice = (reservation as any).price_estimated ?? null;
@@ -121,7 +121,6 @@ export class OrdersService {
       pickup_address: (reservation as any).pickup_address,
       dest_address:   (reservation as any).dest_address,
       vehicle_type:   (reservation as any).vehicle_type,
-      country:        (reservation as any).country,
       scheduled_at:   (reservation as any).scheduled_at,
       nb_passengers:  (reservation as any).nb_passengers ?? 1,
       comment:        (reservation as any).comment ?? null,

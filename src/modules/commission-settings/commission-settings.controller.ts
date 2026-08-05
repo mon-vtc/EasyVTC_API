@@ -56,7 +56,7 @@ export async function createSetting(req: Request, res: Response) {
       action:     'COMMISSION_SETTING_CREATED',
       entityType: 'commission_setting',
       entityId:   setting.id,
-      newValue:   { zone: setting.zone, vehicle_type: setting.vehicle_type, rate_value: setting.rate_value },
+      newValue:   { vehicle_type: setting.vehicle_type, rate_value: setting.rate_value },
     });
 
     return res.status(201).json({ ok: true, message: 'Paramétrage de commission créé', data: setting });

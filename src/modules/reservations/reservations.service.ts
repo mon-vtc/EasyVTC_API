@@ -56,7 +56,6 @@ const RESERVATION_SELECT = `
     is_online,
     status,
     vehicle_type,
-    zone,
     user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
     vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
   )
@@ -83,7 +82,6 @@ export class ReservationsService {
     // scheduled_at + is_airport pour que les suppléments nocturne/aéroport de la
     // grille s'appliquent réellement (auparavant jamais transmis → jamais facturés).
     const { final_price, currency, breakdown } = await pricingService.computePrice({
-      country:      dto.country,
       distance_km:  dto.distance_km,
       duration_min: dto.duration_min,
       flat_rate_id: dto.flat_rate_id,
@@ -124,7 +122,6 @@ export class ReservationsService {
         dest_lat:        dto.dest_lat ?? null,
         dest_lng:        dto.dest_lng ?? null,
         vehicle_type:    dto.vehicle_type,
-        country:         dto.country,
         scheduled_at:    dto.scheduled_at,
         nb_passengers:   dto.nb_passengers ?? 1,
         comment:         dto.comment ?? null,
@@ -203,7 +200,6 @@ export class ReservationsService {
       .range(from, to);
 
     if (filters.status)    query = query.eq('status', filters.status);
-    if (filters.country)   query = query.eq('country', filters.country);
     if (filters.driver_id) query = query.eq('driver_id', filters.driver_id);
     if (filters.client_id) query = query.eq('client_id', filters.client_id);
     if (filters.date_from) query = query.gte('scheduled_at', filters.date_from);
@@ -553,7 +549,6 @@ export class ReservationsService {
     if (finalDistanceKm && finalDurationMin && reservation.pricing_type === 'formula') {
       try {
         const recalc = await pricingService.computePrice({
-          country:      reservation.country as 'france' | 'senegal',
           distance_km:  finalDistanceKm,
           duration_min: finalDurationMin,
           scheduled_at: currentTrip?.started_at ?? reservation.scheduled_at,
@@ -598,7 +593,7 @@ export class ReservationsService {
       .eq('reservation_id', reservationId);
 
     // Générer la facture, calculer la commission, puis notifier (fire-and-forget)
-    const currency = reservation.country === 'senegal' ? 'XOF' : 'EUR';
+    const currency = 'EUR'; // Plateforme limitée à la France
     const amount   = dto.price_adjusted ?? price_final;
     void (async () => {
       let invoiceId: string | undefined;
@@ -623,9 +618,7 @@ export class ReservationsService {
           reservation_id: reservationId,
           driver_id:      reservation.driver_id,
           gross_amount:   amount,
-          zone:           reservation.country as 'france' | 'senegal',
           vehicle_type:   reservation.vehicle_type ?? null,
-          currency,
         }).catch((err) => {
           console.error('[Reservations] Erreur calcul commission pour reservation', reservationId, err);
         });
@@ -765,7 +758,7 @@ export class ReservationsService {
     let query = supabaseAdmin
       .from('drivers')
       .select(`
-        id, is_online, status, vehicle_type, zone,
+        id, is_online, status, vehicle_type,
         user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
         vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
       `)
@@ -826,7 +819,6 @@ export class ReservationsService {
         is_online:    d.is_online,
         status:       d.status,
         vehicle_type: d.vehicle_type,
-        zone:         d.zone,
         user:         d.user,
         vehicle:      activeVehicle
           ? {
@@ -865,7 +857,6 @@ export class ReservationsService {
       is_online:    raw.is_online,
       status:       raw.status,
       vehicle_type: raw.vehicle_type,
-      zone:         raw.zone,
       user:         raw.user,
       vehicle:      activeVehicle
         ? {

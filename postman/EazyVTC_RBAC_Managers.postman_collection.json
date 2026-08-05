@@ -956,7 +956,7 @@
 
     {
       "name": "5️⃣ Accès Manager — view_pricing",
-      "description": "Tester l'accès aux grilles tarifaires avec permission view_pricing.\nLes routes d'écriture (POST/PATCH/DELETE) restent réservées à l'admin.\nNote : GET /pricing/grids/active/:country et GET /pricing/flat-rates sont publics — pas besoin de permission.",
+      "description": "Tester l'accès aux grilles tarifaires avec permission view_pricing.\nLes routes d'écriture (POST/PATCH/DELETE) restent réservées à l'admin.\nNote : GET /pricing/grids/active et GET /pricing/flat-rates sont publics — pas besoin de permission.",
       "item": [
 
         {
@@ -1034,7 +1034,7 @@
               { "key": "Authorization", "value": "Bearer {{manager_token}}" }
             ],
             "url": { "raw": "{{base_url}}/pricing/grids", "host": ["{{base_url}}"], "path": ["pricing","grids"] },
-            "body": { "mode": "raw", "raw": "{\n  \"country\": \"france\",\n  \"base_price\": 5,\n  \"price_per_km\": 1.5,\n  \"price_per_min\": 0.3\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"base_price\": 5,\n  \"price_per_km\": 1.5,\n  \"price_per_min\": 0.3\n}" }
           }
         },
 

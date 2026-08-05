@@ -8,7 +8,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import type { VehicleType } from '../reservations/reservations.types.js';
-import type { PricingCountry } from '../pricing/pricing.types.js';
 
 // ── Snapshots (données figées à l'émission) ───────────────────────────────────
 
@@ -21,7 +20,6 @@ export interface DriverBillingSnapshot {
   siret: string | null;
   /** Taux de TVA en % (ex: 10 pour 10%) — 0 si non assujetti */
   tva_rate: number;
-  zone: PricingCountry;
 }
 
 /** Données client figées à l'émission */
@@ -37,7 +35,6 @@ export interface TripInvoiceSnapshot {
   pickup_address: string;
   dest_address: string;
   vehicle_type: VehicleType;
-  country: PricingCountry;
   scheduled_at: string;     // ISO 8601
   started_at: string | null;
   ended_at: string | null;

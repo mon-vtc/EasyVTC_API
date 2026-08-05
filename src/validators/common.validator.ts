@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// ── Numéro de téléphone — France ET Sénégal ──────────────────────────────────
+// ── Numéro de téléphone — France ──────────────────────────────────────────────
 // Accepte le format E.164 (+33...) ET les formats locaux avec 0 initial
 // (0X XX XX XX XX), avec ou sans séparateurs (espaces, points, tirets) — un
 // format E.164 strict rejetait tout numéro local tel que tapé par l'utilisateur

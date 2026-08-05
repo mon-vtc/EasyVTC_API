@@ -5,7 +5,6 @@
 
 import { z } from 'zod';
 
-const zoneTypes = ['france', 'senegal'] as const;
 const driverStatusTransitions = ['pending', 'probationary', 'active', 'rejected', 'suspended'] as const;
 
 // Une chaîne vide envoyée par le client (champ non renseigné dans un formulaire)
@@ -20,12 +19,6 @@ export const updateDriverSchema = z.object({
       .string()
       .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
       .optional()
-  ),
-  zone: z.preprocess(
-    emptyToUndefined,
-    z.enum(zoneTypes, {
-      error: 'Zone invalide. Valeurs acceptées: france, senegal',
-    }).optional()
   ),
   vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(
@@ -63,12 +56,6 @@ export const adminUpdateDriverSchema = z.object({
       .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
       .optional()
   ),
-  zone: z.preprocess(
-    emptyToUndefined,
-    z.enum(zoneTypes, {
-      error: 'Zone invalide. Valeurs acceptées: france, senegal',
-    }).optional()
-  ),
   vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(
   (data) => Object.values(data).some((v) => v !== undefined),
@@ -78,7 +65,6 @@ export const adminUpdateDriverSchema = z.object({
 // ── Filtres liste (admin) ─────────────────────────────────────────────────────
 export const driverListFiltersSchema = z.object({
   status: z.enum(['pending', 'probationary', 'active', 'on_trip', 'rejected', 'suspended'] as const).optional(),
-  zone: z.enum(zoneTypes).optional(),
   vehicle_type: z.string().min(1).max(50).optional(),
   is_online: z
     .string()

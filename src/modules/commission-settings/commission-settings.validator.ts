@@ -5,14 +5,12 @@
 
 import { z } from 'zod';
 
-const zoneTypes    = ['france', 'senegal'] as const;
 const rateTypes    = ['percentage', 'flat'] as const;
 const periodTypes  = ['week', 'month', 'all'] as const;
 
 // ── Création d'un taux de commission ─────────────────────────────────────────
 export const createCommissionSettingSchema = z.object({
   label: z.string().min(3, 'Le libellé doit contenir au moins 3 caractères').max(100),
-  zone: z.enum(zoneTypes, { error: 'Zone invalide. Valeurs acceptées: france, senegal' }),
   vehicle_type: z
     .string()
     .min(1)
@@ -30,7 +28,6 @@ export const createCommissionSettingSchema = z.object({
 // ── Mise à jour partielle ─────────────────────────────────────────────────────
 export const updateCommissionSettingSchema = z.object({
   label: z.string().min(3).max(100).optional(),
-  zone: z.enum(zoneTypes).optional(),
   vehicle_type: z.string().min(1).max(50).nullable().optional(),
   rate_type: z.enum(rateTypes).optional(),
   rate_value: z.number().min(0).max(100).optional(),
@@ -47,7 +44,6 @@ export const settingIdParamSchema = z.object({
 
 // ── Filtres liste admin ───────────────────────────────────────────────────────
 export const listSettingsSchema = z.object({
-  zone: z.enum(zoneTypes).optional(),
   is_active: z
     .string()
     .transform((v) => v === 'true')
@@ -61,7 +57,6 @@ export const listCommissionsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format YYYY-MM-DD requis')
     .optional(),
-  zone: z.enum(zoneTypes).optional(),
   driver_id: z.string().uuid().optional(),
   page: z
     .string()

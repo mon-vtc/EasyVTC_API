@@ -1,7 +1,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // TYPES — Module RGPD
 // Sprint 7 — EasyVTC
-// Conformité : France (RGPD) + Sénégal (loi 2008-12 CDP)
+// Conformité : France (RGPD)
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Export complet des données personnelles ───────────────────────────────────

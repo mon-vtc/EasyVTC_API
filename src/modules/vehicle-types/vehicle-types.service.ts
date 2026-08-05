@@ -14,10 +14,11 @@ import type {
 export class VehicleTypesService {
 
   // ── PUBLIC : Liste des types actifs (endpoint mobile / client) ───────────────
-  async getActiveTypes(country?: string): Promise<VehicleTypePublic[]> {
+  // Plateforme limitée à la France — le prix de base est toujours base_price_france.
+  async getActiveTypes(): Promise<VehicleTypePublic[]> {
     const { data, error } = await supabaseAdmin
       .from('vehicle_types')
-      .select('code, label, description, capacity, icon, base_price_france, base_price_senegal')
+      .select('code, label, description, capacity, icon, base_price_france')
       .eq('is_active', true)
       .order('sort_order', { ascending: true });
 
@@ -26,15 +27,13 @@ export class VehicleTypesService {
       throw { status: 500, message: 'Erreur lors de la récupération des types de véhicule' };
     }
 
-    const isSenegal = country === 'senegal';
-
     return (data ?? []).map((row) => ({
       code:        row.code,
       label:       row.label,
       description: row.description,
       capacity:    row.capacity,
       icon:        row.icon,
-      base_price:  isSenegal ? Number(row.base_price_senegal) : Number(row.base_price_france),
+      base_price:  Number(row.base_price_france),
     }));
   }
 
@@ -79,7 +78,6 @@ export class VehicleTypesService {
         capacity:           dto.capacity,
         icon:               dto.icon ?? null,
         base_price_france:  dto.base_price_france,
-        base_price_senegal: dto.base_price_senegal,
         is_active:          dto.is_active,
         sort_order:         dto.sort_order,
       })

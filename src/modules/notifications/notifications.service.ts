@@ -451,7 +451,7 @@ export class NotificationsService {
     const [reservationsRes, usersRes, ticketsRes, ratingsRes] = await Promise.all([
       supabaseAdmin
         .from('reservations')
-        .select('id, status, price_final, country')
+        .select('id, status, price_final')
         .gte('created_at', since),
       supabaseAdmin
         .from('users')
@@ -467,10 +467,9 @@ export class NotificationsService {
         .gte('created_at', since),
     ]);
 
-    const allReservations  = (reservationsRes.data ?? []) as Array<{ id: string; status: string; price_final: number | null; country: string }>;
+    const allReservations  = (reservationsRes.data ?? []) as Array<{ id: string; status: string; price_final: number | null }>;
     const completed        = allReservations.filter(r => r.status === 'completed');
-    const revenueEur       = completed.filter(r => r.country !== 'senegal').reduce((s, r) => s + (r.price_final ?? 0), 0);
-    const revenueXof       = completed.filter(r => r.country === 'senegal').reduce((s, r) => s + (r.price_final ?? 0), 0);
+    const revenueEur       = completed.reduce((s, r) => s + (r.price_final ?? 0), 0);
     const newUsers         = usersRes.count ?? 0;
     const openTickets      = (ticketsRes.data ?? []).filter((t: any) => t.status === 'open').length;
     const notes            = (ratingsRes.data ?? []).map((r: any) => r.note as number);
@@ -478,8 +477,7 @@ export class NotificationsService {
 
     const lines = [
       `Courses : ${allReservations.length} (${completed.length} terminées)`,
-      revenueEur > 0 ? `CA France : ${revenueEur.toFixed(2)} €` : null,
-      revenueXof > 0 ? `CA Sénégal : ${Math.round(revenueXof).toLocaleString('fr-FR')} XOF` : null,
+      revenueEur > 0 ? `CA : ${revenueEur.toFixed(2)} €` : null,
       `Nouveaux comptes : ${newUsers}`,
       openTickets > 0 ? `Tickets support ouverts : ${openTickets}` : null,
       avgRating !== null ? `Note moyenne : ${avgRating}/5` : null,

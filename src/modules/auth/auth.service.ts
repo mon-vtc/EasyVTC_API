@@ -29,7 +29,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   if (user.role === 'driver') {
     const { data: driverData } = await supabaseAdmin
       .from('drivers')
-      .select('id, status, vehicle_type, siret, tva_rate, is_online, zone, created_at, updated_at')
+      .select('id, status, vehicle_type, siret, tva_rate, is_online, created_at, updated_at')
       .eq('user_id', userId)
       .single();
 
@@ -237,11 +237,16 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       return;
     }
 
+    // On utilise hashed_token (attendu tel quel par verifyOtp ci-dessous) plutôt que
+    // action_link : ce dernier est une URL Supabase à usage unique, consommée dès sa
+    // première visite (y compris par les scanners de sécurité automatiques des clients
+    // mail), ce qui rendait le lien systématiquement "invalide ou expiré" pour
+    // l'utilisateur réel. Le token est affiché en clair dans l'email pour copier-coller.
     if (userProfile?.first_name) {
       sendResetPasswordEmail(
         email,
         userProfile.first_name,
-        data.properties.action_link
+        data.properties.hashed_token
       ).catch((err) => console.warn('[Email] Reset email failed:', err));
     }
   }

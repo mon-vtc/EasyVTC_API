@@ -3,7 +3,7 @@
 // Sprint 3 — EasyVTC
 // ══════════════════════════════════════════════════════════════════════════════
 
-import type { PricingCountry, PricingType, PriceBreakdown } from '../pricing/pricing.types.js';
+import type { PricingType, PriceBreakdown } from '../pricing/pricing.types.js';
 
 // ── Énumérations ──────────────────────────────────────────────────────────────
 
@@ -34,9 +34,8 @@ export interface Reservation {
   dest_lat: number | null;
   dest_lng: number | null;
 
-  // Véhicule & pays
+  // Véhicule
   vehicle_type: VehicleType;
-  country: PricingCountry;
 
   // Tarification
   pricing_type: PricingType | null;
@@ -85,7 +84,6 @@ export interface CreateReservationDto {
   dest_lat?: number;
   dest_lng?: number;
   vehicle_type: VehicleType;
-  country: PricingCountry;
   scheduled_at: string;           // ISO 8601
   nb_passengers?: number;         // Nombre de passagers (défaut : 1)
   comment?: string;
@@ -124,7 +122,6 @@ export interface CancelReservationDto {
 
 export interface ReservationListFilters {
   status?: ReservationStatus;
-  country?: PricingCountry;
   driver_id?: string;
   client_id?: string;
   date_from?: string;
@@ -153,7 +150,6 @@ export interface AvailableDriverDto {
   is_online:    boolean;
   status:       string;
   vehicle_type: string | null;
-  zone:         string | null;
   user: {
     id:                string;
     first_name:        string;
