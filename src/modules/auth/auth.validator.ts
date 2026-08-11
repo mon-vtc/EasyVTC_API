@@ -18,6 +18,15 @@ export const registerSchema = z.object({
   rgpd_consent: z.boolean().optional(),
 });
 
+// ── Options d'inscription/connexion Google (POST /auth/google/token) ─────────
+export const googleAuthSchema = z.object({
+  access_token: z.string().min(1, 'access_token manquant'),
+  refresh_token: z.string().optional(),
+  intent: z.enum(['login', 'register']).optional(),
+  role: z.enum(['client', 'driver']).optional(),
+  accept_terms: z.boolean().optional(),
+});
+
 export const loginSchema = z.object({
   email: z.email('Email invalide'),
   password: z.string().min(1, 'Le mot de passe est requis'),
@@ -57,6 +66,7 @@ export const changePasswordSchema = z.object({
 );
 
 export type RegisterInput       = z.infer<typeof registerSchema>;
+export type GoogleAuthInput     = z.infer<typeof googleAuthSchema>;
 export type LoginInput          = z.infer<typeof loginSchema>;
 export type RefreshTokenInput   = z.infer<typeof refreshTokenSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

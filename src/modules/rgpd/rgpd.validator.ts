@@ -12,13 +12,14 @@ export const userIdParamSchema = z.object({
 
 // ── Corps de la demande d'anonymisation ───────────────────────────────────────
 // Double confirmation obligatoire pour éviter les suppressions accidentelles
+// password est optionnel ici : les comptes créés via Google n'ont pas de mot de
+// passe fiable connu de l'utilisateur (cf. auth_provider) — rgpd.service.ts
+// n'exige le mot de passe que pour les comptes 'password'.
 export const anonymizeSchema = z.object({
   confirm: z.literal(true, {
     error: 'Vous devez confirmer explicitement : { "confirm": true }',
   }),
-  password: z.string().min(1, {
-    error: 'Le mot de passe est requis pour confirmer la suppression.',
-  }),
+  password: z.string().optional(),
 });
 
 export type UserIdParamInput = z.infer<typeof userIdParamSchema>;

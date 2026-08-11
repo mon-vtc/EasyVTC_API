@@ -15,7 +15,7 @@ import type {
 const USER_PROFILE_COLUMNS = `
   id, email, role, first_name, last_name, phone,
   profile_photo_url, status, status_changed_by, status_changed_at, status_reason,
-  rgpd_consent, rgpd_consent_at,
+  rgpd_consent, rgpd_consent_at, auth_provider,
   marketing_email_opt_in, marketing_sms_opt_in, marketing_push_opt_in,
   deleted_at, created_at, updated_at
 `;

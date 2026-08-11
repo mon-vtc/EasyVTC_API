@@ -5,7 +5,7 @@ import { notificationsService } from '../notifications/notifications.service.js'
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import type { Vehicle } from '../vehicles/vehicles.types.js'
-import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile } from './auth.types.js';
+import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile, GoogleAuthOptions } from './auth.types.js';
 import type { ManagerPermission } from '../admin/admin.types.js';
 
 export class AuthService {
@@ -334,79 +334,170 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   }
 
   /**
-   * Crée le profil applicatif (public.users) pour un nouveau compte Google, et génère
-   * un mot de passe temporaire — Google ne fournit aucun mot de passe applicatif, ce qui
-   * bloquait ensuite la suppression/anonymisation RGPD du compte (nécessite un mot de passe
-   * pour confirmer). Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en
-   * clair), envoyé une seule fois par email, et retourné une seule fois dans la réponse pour
-   * affichage côté mobile à la première connexion.
+   * Génère un mot de passe temporaire pour un compte Google — Google ne fournit
+   * aucun mot de passe applicatif, ce qui bloquait la suppression/anonymisation
+   * RGPD du compte (nécessitait un mot de passe pour confirmer, cf. auth_provider
+   * dans rgpd.service.ts qui dispense désormais ces comptes de cette étape).
+   * Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en clair),
+   * envoyé une seule fois par email, et retourné une seule fois dans la réponse
+   * pour affichage côté mobile. Rappelée à chaque connexion tant qu'elle n'a
+   * jamais réussi (google_password_set_at NULL) — évite qu'un échec silencieux
+   * (ex: updateUserById en erreur) ne bloque le compte définitivement.
    */
-  private async _provisionGoogleProfile(supabaseUser: {
-    id: string;
-    email?: string | null;
-    user_metadata?: Record<string, any>;
-  }): Promise<string | undefined> {
-    const firstName = supabaseUser.user_metadata?.['given_name']
-                   ?? supabaseUser.user_metadata?.['full_name']?.split(' ')[0]
-                   ?? 'Utilisateur';
-    const lastName  = supabaseUser.user_metadata?.['family_name']
-                   ?? supabaseUser.user_metadata?.['full_name']?.split(' ').slice(1).join(' ')
-                   ?? '';
-
-    const { error: insertError } = await supabaseAdmin
-      .from('users')
-      .insert({
-        id: supabaseUser.id, email: supabaseUser.email,
-        first_name: firstName, last_name: lastName,
-        phone: null, role: 'client', rgpd_consent: false,
-      });
-
-    if (insertError) {
-      throw { status: 500, message: 'Erreur lors de la création du profil Google' };
-    }
-
+  private async _ensureGooglePassword(userId: string, email: string, firstName: string): Promise<string | undefined> {
     const tempPassword = generatePassword();
-    const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(supabaseUser.id, {
+    const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
       password: tempPassword,
     });
     if (pwError) {
       logger.warn('auth', `Mot de passe temporaire Google non défini: ${pwError.message}`);
+      return undefined;
     }
-    const finalTempPassword = pwError ? undefined : tempPassword;
 
-    sendWelcomeEmail(supabaseUser.email!, firstName, undefined, finalTempPassword).catch((err) =>
-      console.warn('[Email] Welcome Google email failed:', err)
-    );
-    notificationsService.sendToAdmins(
-      'new_user_admin',
-      'Nouveau compte créé (Google)',
-      `Un nouveau compte client vient de s'inscrire via Google : ${firstName} ${lastName} (${supabaseUser.email}).`,
-      { user_id: supabaseUser.id, role: 'client' },
-    );
+    await supabaseAdmin
+      .from('users')
+      .update({ google_password_set_at: new Date().toISOString() })
+      .eq('id', userId);
 
-    return finalTempPassword;
+    if (email) {
+      sendWelcomeEmail(email, firstName || 'Utilisateur', undefined, tempPassword).catch((err) =>
+        console.warn('[Email] Welcome Google email failed:', err)
+      );
+    }
+    return tempPassword;
   }
 
-  // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────
-  async handleGoogleCallback(code: string): Promise<AuthResponse> {
-    const { data, error } = await supabaseAdmin.auth.exchangeCodeForSession(code);
-
+  /**
+   * Rafraîchit la session après _ensureGooglePassword : changer le mot de passe
+   * d'un utilisateur via l'API admin invalide sa session en cours (constaté en
+   * test — le access_token utilisé pour l'appel devient un 401 immédiat juste
+   * après). Sans ce rafraîchissement, la réponse renverrait au mobile un couple
+   * de tokens déjà morts.
+   */
+  private async _refreshSessionAfterPasswordChange(
+    email: string,
+    tempPassword: string,
+    fallback: { access_token: string; refresh_token: string | null },
+  ): Promise<{ access_token: string; refresh_token: string | null }> {
+    const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password: tempPassword });
     if (error || !data.session) {
-      throw { status: 401, message: 'Code Google invalide ou expiré' };
+      logger.warn('auth', `Impossible de rafraîchir la session après le mot de passe temporaire Google: ${error?.message}`);
+      return fallback;
+    }
+    return { access_token: data.session.access_token, refresh_token: data.session.refresh_token };
+  }
+
+  /**
+   * Résout une connexion/inscription Google, commune à handleGoogleCallback et
+   * handleGoogleToken. Le trigger DB handle_new_user() a déjà créé la ligne
+   * public.users à l'insertion de l'identité Supabase Auth (avec le bon prénom/
+   * nom extraits des métadonnées Google) — cette méthode ne fait que :
+   *   1. attendre que le trigger ait fini (même logique de retry que register()),
+   *   2. refuser la connexion si cet email appartient déjà à un AUTRE compte
+   *      (évite de créer un profil fantôme au lieu de réutiliser l'existant),
+   *   3. exiger un passage explicite par l'inscription (intent=register + rôle +
+   *      CGU) tant que le compte n'a jamais été inscrit,
+   *   4. garantir qu'un mot de passe temporaire a bien été généré.
+   */
+  private async _resolveGoogleSignIn(
+    supabaseUser: { id: string; email?: string | null },
+    session: { access_token: string; refresh_token: string | null },
+    options: GoogleAuthOptions,
+  ): Promise<AuthResponse> {
+    let profile: {
+      id: string;
+      first_name: string;
+      registration_completed_at: string | null;
+      google_password_set_at: string | null;
+      auth_provider: 'password' | 'google';
+    } | null = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data } = await supabaseAdmin
+        .from('users')
+        .select('id, first_name, registration_completed_at, google_password_set_at, auth_provider')
+        .eq('id', supabaseUser.id)
+        .single();
+      if (data) { profile = data; break; }
+      await new Promise((r) => setTimeout(r, 300));
     }
 
-    const supabaseUser = data.user;
+    if (!profile) {
+      throw { status: 500, message: 'Erreur lors de la création du profil Google' };
+    }
 
-    // Vérifier si le profil existe déjà
-    const { data: existing } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('id', supabaseUser.id)
-      .single();
+    const normalizedEmail = (supabaseUser.email ?? '').trim().toLowerCase();
 
-    const tempPassword = !existing
-      ? await this._provisionGoogleProfile(supabaseUser)
+    if (normalizedEmail) {
+      const { data: emailOwner } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .neq('id', supabaseUser.id)
+        .maybeSingle();
+
+      if (emailOwner) {
+        throw {
+          status: 409,
+          message: 'Un compte existe déjà avec cet email. Connectez-vous avec votre mot de passe pour y accéder.',
+        };
+      }
+    }
+
+    const isRegistered = profile.registration_completed_at !== null;
+
+    if (!isRegistered) {
+      if (options.intent !== 'register') {
+        throw { status: 404, message: 'Aucun compte associé à ce compte Google. Inscrivez-vous d\'abord.' };
+      }
+      if (!options.accept_terms) {
+        throw { status: 400, message: 'Vous devez accepter les CGU pour vous inscrire.' };
+      }
+
+      const role = options.role === 'driver' ? 'driver' : 'client';
+      const now = new Date().toISOString();
+
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          role,
+          rgpd_consent: true,
+          rgpd_consent_at: now,
+          registration_completed_at: now,
+        })
+        .eq('id', supabaseUser.id);
+
+      if (updateError) {
+        throw { status: 500, message: 'Erreur lors de la finalisation de l\'inscription Google' };
+      }
+
+      if (role === 'driver') {
+        await supabaseAdmin
+          .from('drivers')
+          .upsert({ user_id: supabaseUser.id }, { onConflict: 'user_id', ignoreDuplicates: true });
+      }
+
+      notificationsService.sendToAdmins(
+        'new_user_admin',
+        'Nouveau compte créé (Google)',
+        `Un nouveau compte ${role === 'driver' ? 'chauffeur' : 'client'} vient de s'inscrire via Google : ${profile.first_name} (${normalizedEmail}).`,
+        { user_id: supabaseUser.id, role },
+      );
+    }
+
+    // Ne jamais générer/écraser de mot de passe pour un compte 'password' — ne
+    // concerne que les comptes réellement créés via Google (auth_provider), pas
+    // un compte email/mdp que Supabase aurait lié à la même identité Google.
+    const tempPassword = profile.auth_provider === 'google' && !profile.google_password_set_at
+      ? await this._ensureGooglePassword(supabaseUser.id, normalizedEmail, profile.first_name)
       : undefined;
+
+    // Changer le mot de passe invalide la session en cours (cf. commentaire sur
+    // _refreshSessionAfterPasswordChange) — on en récupère une fraîche pour ne
+    // pas renvoyer des tokens déjà morts au mobile.
+    const finalSession = tempPassword
+      ? await this._refreshSessionAfterPasswordChange(normalizedEmail, tempPassword, session)
+      : session;
 
     const userProfile = await this.fetchFullProfile(supabaseUser.id);
 
@@ -416,45 +507,41 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
 
     return {
       user: userProfile,
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
+      access_token: finalSession.access_token,
+      refresh_token: finalSession.refresh_token,
       token_type: 'Bearer',
       ...(tempPassword ? { temp_password: tempPassword } : {}),
     };
   }
 
+  // ── GOOGLE AUTH — Échange du code ─────────────────────────────────────────
+  async handleGoogleCallback(code: string, options: GoogleAuthOptions = {}): Promise<AuthResponse> {
+    const { data, error } = await supabaseAdmin.auth.exchangeCodeForSession(code);
+
+    if (error || !data.session) {
+      throw { status: 401, message: 'Code Google invalide ou expiré' };
+    }
+
+    return this._resolveGoogleSignIn(
+      data.user,
+      { access_token: data.session.access_token, refresh_token: data.session.refresh_token },
+      options,
+    );
+  }
+
   // ── GOOGLE AUTH — Depuis access_token fragment ────────────────────────────
-  async handleGoogleToken(accessToken: string, refreshToken?: string): Promise<AuthResponse> {
+  async handleGoogleToken(accessToken: string, refreshToken?: string, options: GoogleAuthOptions = {}): Promise<AuthResponse> {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (error || !user) {
       throw { status: 401, message: 'Token Google invalide ou expiré' };
     }
 
-    // Vérifier si le profil existe déjà
-    const { data: existing } = await supabaseAdmin
-      .from('users')
-      .select('id')
-      .eq('id', user.id)
-      .single();
-
-    const tempPassword = !existing
-      ? await this._provisionGoogleProfile(user)
-      : undefined;
-
-    const userProfile = await this.fetchFullProfile(user.id);
-
-    if (userProfile.deleted_at !== null || userProfile.status !== 'active') {
-      throw { status: 403, message: 'Compte désactivé. Contactez le support.' };
-    }
-
-    return {
-      user: userProfile,
-      access_token: accessToken,
-      refresh_token: refreshToken ?? null,
-      token_type: 'Bearer',
-      ...(tempPassword ? { temp_password: tempPassword } : {}),
-    };
+    return this._resolveGoogleSignIn(
+      user,
+      { access_token: accessToken, refresh_token: refreshToken ?? null },
+      options,
+    );
   }
 
   // ── CHANGE PASSWORD (utilisateur connecté) ─────────────────────────────────

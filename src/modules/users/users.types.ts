@@ -20,6 +20,7 @@ export interface UserProfile {
   priority_level: number | null;
   rgpd_consent: boolean;
   rgpd_consent_at: string | null;
+  auth_provider: 'password' | 'google';
   marketing_email_opt_in: boolean;
   marketing_sms_opt_in: boolean;
   marketing_push_opt_in: boolean;
