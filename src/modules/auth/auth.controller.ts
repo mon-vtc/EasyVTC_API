@@ -7,6 +7,7 @@ import {
   forgotPasswordSchema,
   resetPasswordSchema,
   changePasswordSchema,
+  googleAuthSchema,
 } from './auth.validator.js';
 
 export class AuthController {
@@ -135,7 +136,10 @@ export class AuthController {
     // Cas 1 : Code PKCE dans les query params → échange serveur
     if (code) {
       try {
-        const result = await authService.handleGoogleCallback(code);
+        const intent = req.query['intent'] === 'register' ? 'register' as const : undefined;
+        const role = req.query['role'] === 'driver' ? 'driver' as const : req.query['role'] === 'client' ? 'client' as const : undefined;
+        const acceptTerms = req.query['accept_terms'] === 'true';
+        const result = await authService.handleGoogleCallback(code, { intent, role, accept_terms: acceptTerms });
         res.status(200).json({
           ok: true,
           message: 'Connexion Google réussie',
@@ -218,18 +222,15 @@ export class AuthController {
 
   // POST /auth/google/token — Reçoit access_token depuis la page HTML callback
   async googleToken(req: Request, res: Response): Promise<void> {
-    const { access_token, refresh_token } = req.body as {
-      access_token?: string;
-      refresh_token?: string;
-    };
-
-    if (!access_token) {
-      res.status(400).json({ ok: false, message: 'access_token manquant' });
+    const parsed = googleAuthSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: parsed.error.flatten().fieldErrors });
       return;
     }
 
     try {
-      const result = await authService.handleGoogleToken(access_token, refresh_token);
+      const { access_token, refresh_token, ...options } = parsed.data;
+      const result = await authService.handleGoogleToken(access_token, refresh_token, options);
       res.status(200).json({ ok: true, message: 'Connexion Google réussie', data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };

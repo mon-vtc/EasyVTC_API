@@ -107,13 +107,13 @@ export class RgpdService {
   // ══════════════════════════════════════════════════════════════════════════
   // DELETE /users/:id/anonymize — Droit à l'effacement (Art. 17 RGPD)
   // ══════════════════════════════════════════════════════════════════════════
-  async anonymize(userId: string, requesterId: string, requesterRole: UserRole, password: string): Promise<AnonymizeResult> {
+  async anonymize(userId: string, requesterId: string, requesterRole: UserRole, password?: string): Promise<AnonymizeResult> {
     this._checkAccess(userId, requesterId, requesterRole);
 
     // Récupérer l'utilisateur
     const { data: user, error: fetchErr } = await supabaseAdmin
       .from('users')
-      .select('id, email, role, deleted_at, profile_photo_url')
+      .select('id, email, role, deleted_at, profile_photo_url, auth_provider')
       .eq('id', userId)
       .single();
 
@@ -121,14 +121,22 @@ export class RgpdService {
       throw { status: 404, message: 'Utilisateur introuvable' };
     }
 
-    // Vérification du mot de passe en simulant une connexion.
-    // C'est plus sûr que de maintenir une logique de vérification séparée.
-    try {
-      await authService.login({ email: user.email!, password });
-    } catch (err: any) {
-      // Si le login échoue (401), c'est que le mot de passe est incorrect.
-      if (err.status === 401) throw { status: 403, message: 'Mot de passe incorrect.' };
-      throw err; // Propage les autres erreurs (compte bloqué, etc.)
+    // Les comptes Google n'ont pas de mot de passe fiable connu de l'utilisateur
+    // (mot de passe temporaire généré une seule fois, jamais garanti d'avoir été
+    // capturé) — la session déjà authentifiée (JWT) suffit à confirmer l'identité.
+    // Pour les comptes classiques, on vérifie le mot de passe en simulant une
+    // connexion : plus sûr que de maintenir une logique de vérification séparée.
+    if (user.auth_provider !== 'google') {
+      if (!password) {
+        throw { status: 400, message: 'Le mot de passe est requis pour confirmer la suppression.' };
+      }
+      try {
+        await authService.login({ email: user.email!, password });
+      } catch (err: any) {
+        // Si le login échoue (401), c'est que le mot de passe est incorrect.
+        if (err.status === 401) throw { status: 403, message: 'Mot de passe incorrect.' };
+        throw err; // Propage les autres erreurs (compte bloqué, etc.)
+      }
     }
 
     if (user.role === 'admin') {

@@ -4,10 +4,14 @@ import { phoneSchema } from '../../validators/common.validator.js';
 export const idParamSchema = z.object({ id: z.string().uuid('ID invalide — format UUID attendu') });
 
 // ── Mise à jour du profil (par l'utilisateur) ────────────────────────────────
+// Une chaîne vide pour phone est traitée comme "non fourni" plutôt que rejetée
+// par phoneSchema — le mobile renvoie systématiquement le champ, y compris pour
+// les comptes Google dont le téléphone est encore vide et que l'utilisateur ne
+// modifie pas à cet instant précis.
 export const updateProfileSchema = z.object({
   first_name: z.string().min(2).max(100).optional(),
   last_name:  z.string().min(2).max(100).optional(),
-  phone: phoneSchema.optional(),
+  phone: z.union([phoneSchema, z.literal('')]).optional().transform((v) => (v ? v : undefined)),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'Au moins un champ est requis' }
