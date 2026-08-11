@@ -87,7 +87,11 @@ function setupFromMock(returnData: unknown, returnError: unknown = null) {
     insert: jest.fn().mockReturnThis(),
     update: jest.fn().mockReturnThis(),
     eq:     jest.fn().mockReturnThis(),
+    neq:    jest.fn().mockReturnThis(),
     single: jest.fn().mockResolvedValue({ data: returnData, error: returnError } as never),
+    // Utilisé par la vérification d'unicité email de _resolveGoogleSignIn
+    // (Google OAuth) — par défaut, aucun autre compte ne partage cet email.
+    maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null } as never),
   };
   mockFrom.mockReturnValue(chain);
   return chain;
@@ -521,34 +525,23 @@ describe('AuthService', () => {
           error: null,
         } as never);
 
-        // 1) vérification profil existant → aucun profil trouvé
-        mockFrom.mockReturnValueOnce({
-          select: jest.fn().mockReturnThis(),
-          eq:     jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({ data: null, error: null } as never),
-        });
-        // 2) insertion du profil → succès
-        mockFrom.mockReturnValueOnce({
-          insert: jest.fn().mockReturnThis(),
-        });
-        // 3) fetchFullProfile → profil nouvellement créé
-        mockFrom.mockReturnValueOnce({
-          select: jest.fn().mockReturnThis(),
-          eq:     jest.fn().mockReturnThis(),
-          single: jest.fn().mockResolvedValue({
-            data: {
-              id: 'google-uuid-new',
-              email: 'nouveau@gmail.com',
-              role: 'client',
-              first_name: 'Nouveau',
-              last_name: 'Utilisateur',
-              phone: null,
-              status: 'active',
-              deleted_at: null,
-              created_at: '2026-03-16T10:00:00Z',
-            },
-            error: null,
-          } as never),
+        // Le trigger DB handle_new_user a déjà créé la ligne public.users à
+        // l'insertion de l'identité Supabase Auth (plus d'insert manuel côté
+        // service) — google_password_set_at est encore null car jamais généré
+        // avec succès, ce qui déclenche _ensureGooglePassword.
+        setupFromMock({
+          id: 'google-uuid-new',
+          email: 'nouveau@gmail.com',
+          role: 'client',
+          first_name: 'Nouveau',
+          last_name: 'Utilisateur',
+          phone: null,
+          status: 'active',
+          deleted_at: null,
+          created_at: '2026-03-16T10:00:00Z',
+          auth_provider: 'google',
+          registration_completed_at: '2026-03-16T10:00:00Z',
+          google_password_set_at: null,
         });
 
         mockUpdateUserById.mockResolvedValue({ error: null } as never);
