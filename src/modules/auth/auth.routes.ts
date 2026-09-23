@@ -14,6 +14,7 @@ router.post('/reset-password',   authStrictLimiter,  (req, res) => authControlle
 router.get( '/google',           (req, res) => authController.googleAuth(req, res));
 router.get( '/google/callback',  (req, res) => authController.googleCallback(req, res));
 router.post('/google/token',      (req, res) => authController.googleToken(req, res));
+router.post('/apple/token',       (req, res) => authController.appleToken(req, res));
 
 // ── Routes protégées ──────────────────────────────────────────────────────
 router.get( '/me',              authMiddleware, (req, res) => authController.me(req, res));

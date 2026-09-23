@@ -7,9 +7,19 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 const mockFrom          = jest.fn();
 const mockComputePrice  = jest.fn();
 const mockSendToUser    = jest.fn();
+const mockCreateUser    = jest.fn();
+const mockDeleteUser    = jest.fn();
 
 jest.unstable_mockModule('../../database/supabase/client.js', () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: {
+    from: mockFrom,
+    auth: { admin: { createUser: mockCreateUser, deleteUser: mockDeleteUser } },
+  },
+}));
+
+// generatePassword : utilisé par _resolveOrCreateClient pour un compte géré
+jest.unstable_mockModule('../../utils/generate-password.js', () => ({
+  generatePassword: jest.fn().mockReturnValue('Aa1!fakepassword' as never),
 }));
 
 jest.unstable_mockModule('../pricing/pricing.service.js', () => ({
@@ -161,6 +171,8 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     eq:          jest.fn().mockReturnThis(),
     neq:         jest.fn().mockReturnThis(),
     in:          jest.fn().mockReturnThis(),
+    is:          jest.fn().mockReturnThis(),
+    or:          jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
     range:       jest.fn().mockReturnThis(),  // returns this so chained .eq() still works
     single:      jest.fn().mockResolvedValue(resolved),
@@ -689,6 +701,108 @@ describe('ReservationsService', () => {
 
       await expect(service.cancelReservation(RESA_ID, CLIENT_ID, 'client'))
         .rejects.toMatchObject({ status: 400, message: expect.stringContaining('en cours') });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // createManualReservation() / searchClients()
+  // Réservation créée par un chauffeur/admin/gestionnaire au nom d'un client
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('createManualReservation()', () => {
+    const STAFF_ID = 'staff-uuid-999';
+    const manualDto = {
+      pickup_address: '1 rue de la Paix, Paris',
+      dest_address:   'CDG, Roissy',
+      vehicle_type:   'berline',
+      scheduled_at:   '2027-01-01T10:00:00Z',
+      distance_km:    30,
+      duration_min:   45,
+    };
+
+    it(' réutilise un client_id existant et actif', async () => {
+      mockFrom.mockReturnValueOnce(chain({ id: CLIENT_ID, role: 'client', status: 'active', deleted_at: null }));
+      jest.spyOn(service, 'createReservation').mockResolvedValue(mockReservation as never);
+      mockFrom.mockReturnValueOnce(chain(null)); // update created_by
+
+      const dto = { client_id: CLIENT_ID, ...manualDto } as never;
+      const result = await service.createManualReservation(STAFF_ID, dto);
+
+      expect(service.createReservation).toHaveBeenCalledWith(CLIENT_ID, dto);
+      expect(result.created_by).toBe(STAFF_ID);
+    });
+
+    it(' rejette un client_id introuvable (404)', async () => {
+      mockFrom.mockReturnValueOnce(chain(null));
+
+      await expect(service.createManualReservation(STAFF_ID, { client_id: 'inconnu' } as never))
+        .rejects.toMatchObject({ status: 404 });
+    });
+
+    it(' rejette un client_id désactivé (403)', async () => {
+      mockFrom.mockReturnValueOnce(chain({ id: CLIENT_ID, role: 'client', status: 'locked', deleted_at: null }));
+
+      await expect(service.createManualReservation(STAFF_ID, { client_id: CLIENT_ID } as never))
+        .rejects.toMatchObject({ status: 403 });
+    });
+
+    it(' réutilise un compte existant retrouvé par téléphone', async () => {
+      mockFrom.mockReturnValueOnce(chain({ id: CLIENT_ID, role: 'client', deleted_at: null }));
+      jest.spyOn(service, 'createReservation').mockResolvedValue(mockReservation as never);
+      mockFrom.mockReturnValueOnce(chain(null)); // update created_by
+
+      const dto = { client: { first_name: 'Marie', last_name: 'Dupont', phone: '+33612345678' }, ...manualDto } as never;
+      await service.createManualReservation(STAFF_ID, dto);
+
+      expect(mockCreateUser).not.toHaveBeenCalled();
+      expect(service.createReservation).toHaveBeenCalledWith(CLIENT_ID, dto);
+    });
+
+    it(' refuse un téléphone déjà associé à un compte non-client (409)', async () => {
+      mockFrom.mockReturnValueOnce(chain({ id: 'driver-uuid', role: 'driver', deleted_at: null }));
+
+      const dto = { client: { first_name: 'Marie', last_name: 'Dupont', phone: '+33612345678' } } as never;
+      await expect(service.createManualReservation(STAFF_ID, dto))
+        .rejects.toMatchObject({ status: 409 });
+    });
+
+    it(' crée un compte client géré si aucun compte ne correspond au téléphone', async () => {
+      mockFrom.mockReturnValueOnce(chain(null)); // recherche par téléphone : aucun résultat
+      mockCreateUser.mockResolvedValue({ data: { user: { id: 'new-client-uuid' } }, error: null } as never);
+      mockFrom.mockReturnValueOnce(chain({ id: 'new-client-uuid' })); // attente trigger handle_new_user
+      mockFrom.mockReturnValueOnce(chain(null)); // update is_managed_account
+      jest.spyOn(service, 'createReservation').mockResolvedValue(mockReservation as never);
+      mockFrom.mockReturnValueOnce(chain(null)); // update created_by
+
+      const dto = { client: { first_name: 'Marie', last_name: 'Dupont', phone: '+33612345678' }, ...manualDto } as never;
+      await service.createManualReservation(STAFF_ID, dto);
+
+      expect(mockCreateUser).toHaveBeenCalledWith(expect.objectContaining({
+        email: 'client.33612345678@reservation.easyvtc.local',
+        phone: '+33612345678',
+      }));
+      expect(service.createReservation).toHaveBeenCalledWith('new-client-uuid', dto);
+    });
+
+    it(' rejette si ni client_id ni client ne sont fournis (400)', async () => {
+      await expect(service.createManualReservation(STAFF_ID, {} as never))
+        .rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  describe('searchClients()', () => {
+    it(' retourne les clients correspondant à la recherche', async () => {
+      const clients = [{ id: CLIENT_ID, first_name: 'Marie', last_name: 'Dupont', phone: '+33612345678', email: 'marie@example.com', is_managed_account: false }];
+      mockFrom.mockReturnValueOnce(chain(clients));
+
+      const result = await service.searchClients('Dupont');
+
+      expect(result).toEqual(clients);
+    });
+
+    it(' propage une erreur serveur en cas d\'échec (500)', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'DB error' }));
+
+      await expect(service.searchClients('Dupont')).rejects.toMatchObject({ status: 500 });
     });
   });
 });

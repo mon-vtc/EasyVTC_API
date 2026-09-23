@@ -27,6 +27,20 @@ export const googleAuthSchema = z.object({
   accept_terms: z.boolean().optional(),
 });
 
+// ── Options d'inscription/connexion Apple (POST /auth/apple/token) ───────────
+// access_token : session Supabase obtenue côté mobile via signInWithIdToken (pas
+//   le JWT Apple brut). full_name : fourni par Apple uniquement à la toute
+//   première connexion sur l'appareil (filet de sécurité si les métadonnées
+//   Supabase ne l'ont pas capté).
+export const appleAuthSchema = z.object({
+  access_token: z.string().min(1, 'access_token manquant'),
+  refresh_token: z.string().optional(),
+  full_name: z.string().optional(),
+  intent: z.enum(['login', 'register']).optional(),
+  role: z.enum(['client', 'driver']).optional(),
+  accept_terms: z.boolean().optional(),
+});
+
 export const loginSchema = z.object({
   email: z.email('Email invalide'),
   password: z.string().min(1, 'Le mot de passe est requis'),
@@ -67,6 +81,7 @@ export const changePasswordSchema = z.object({
 
 export type RegisterInput       = z.infer<typeof registerSchema>;
 export type GoogleAuthInput     = z.infer<typeof googleAuthSchema>;
+export type AppleAuthInput      = z.infer<typeof appleAuthSchema>;
 export type LoginInput          = z.infer<typeof loginSchema>;
 export type RefreshTokenInput   = z.infer<typeof refreshTokenSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

@@ -32,8 +32,8 @@ const SIGNED_URL_EXPIRY = 3600; // 1 heure
 // En-tête société affiché sur le PDF
 const COMPANY = {
   name:    'EasyVTC',
-  address: '1 rue de la Paix, 75001 Paris, France',
-  phone:   '+33 1 00 00 00 00',
+  address: '12 A Mail Atlantis, 91300 Massy, France',
+  siret:   'SIRET 101 047 876 00012, RCS Évry',
   via:     'EasyVTC',
 };
 
@@ -444,7 +444,7 @@ export class OrdersService {
       doc.fontSize(20).fillColor(DARK).font('Helvetica-Bold').text(COMPANY.name, 50, 50);
       doc.fontSize(9).fillColor(GRAY).font('Helvetica')
         .text(COMPANY.address, 50, 75)
-        .text(COMPANY.phone,   50, 87);
+        .text(COMPANY.siret,   50, 87);
 
       // Date d'édition (coin droit)
       doc.fontSize(9).fillColor(GRAY).font('Helvetica')

@@ -5,6 +5,7 @@ import type { UserStatus } from '../users/users.types.js';
 export const MANAGER_PERMISSIONS = [
   // Réservations
   'view_reservations',
+  'create_reservation',
   'assign_reservation',
   'cancel_reservation',
   // Utilisateurs & chauffeurs

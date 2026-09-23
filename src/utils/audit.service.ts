@@ -32,6 +32,7 @@ export type AuditAction =
   // Réservations
   | 'RESERVATION_ASSIGNED'
   | 'RESERVATION_CANCELLED'
+  | 'RESERVATION_CREATED_MANUALLY'
 
   // Factures & commandes
   | 'INVOICE_PRICE_ADJUSTED'

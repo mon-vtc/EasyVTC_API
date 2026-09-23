@@ -33,12 +33,6 @@ import type { UserRole } from '../auth/auth.types.js';
 const BUCKET_NAME       = 'invoices-pdfs';
 const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
-const COMPANY = {
-  name:    'EasyVTC',
-  address: '1 rue de la Paix, 75001 Paris, France',
-  phone:   '+33 1 00 00 00 00',
-};
-
 const PAYMENT_MENTION = 'Réglé hors application (espèces / CB fin de course)';
 
 // ── Sélect enrichi ────────────────────────────────────────────────────────────
