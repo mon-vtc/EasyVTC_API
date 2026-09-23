@@ -1053,6 +1053,29 @@ export const swaggerSpec: OpenAPIV3.Document = {
         responses: { '200': { description: 'Tokens JWT retournés' } },
       },
     },
+    '/auth/apple/token': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Échange de session Supabase Apple (Sign in with Apple, flux mobile)',
+        description: 'Reçoit l\'access_token de session Supabase obtenu côté mobile via signInWithIdToken({ provider: "apple" }). full_name est fourni par Apple uniquement à la toute première connexion sur l\'appareil.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { type: 'object', required: ['access_token'], properties: {
+                access_token: { type: 'string' },
+                refresh_token: { type: 'string' },
+                full_name: { type: 'string' },
+                intent: { type: 'string', enum: ['login', 'register'] },
+                role: { type: 'string', enum: ['client', 'driver'] },
+                accept_terms: { type: 'boolean' },
+              } },
+            },
+          },
+        },
+        responses: { '200': { description: 'Tokens JWT retournés' } },
+      },
+    },
 
     // ════════════════════════════════════════════════════════════════════════════
     // USERS

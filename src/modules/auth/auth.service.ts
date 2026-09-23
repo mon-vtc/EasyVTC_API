@@ -5,7 +5,7 @@ import { notificationsService } from '../notifications/notifications.service.js'
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 import type { Vehicle } from '../vehicles/vehicles.types.js'
-import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile, GoogleAuthOptions } from './auth.types.js';
+import type { RegisterDto, LoginDto, AuthResponse, AuthUser, DriverProfile, GoogleAuthOptions, OAuthProvider } from './auth.types.js';
 import type { ManagerPermission } from '../admin/admin.types.js';
 
 export class AuthService {
@@ -334,41 +334,42 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   }
 
   /**
-   * Génère un mot de passe temporaire pour un compte Google — Google ne fournit
-   * aucun mot de passe applicatif, ce qui bloquait la suppression/anonymisation
-   * RGPD du compte (nécessitait un mot de passe pour confirmer, cf. auth_provider
-   * dans rgpd.service.ts qui dispense désormais ces comptes de cette étape).
-   * Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en clair),
-   * envoyé une seule fois par email, et retourné une seule fois dans la réponse
-   * pour affichage côté mobile. Rappelée à chaque connexion tant qu'elle n'a
-   * jamais réussi (google_password_set_at NULL) — évite qu'un échec silencieux
-   * (ex: updateUserById en erreur) ne bloque le compte définitivement.
+   * Génère un mot de passe temporaire pour un compte Google/Apple — ni l'un ni
+   * l'autre ne fournit de mot de passe applicatif, ce qui bloquait la suppression/
+   * anonymisation RGPD du compte (nécessitait un mot de passe pour confirmer, cf.
+   * auth_provider dans rgpd.service.ts qui dispense désormais ces comptes de cette
+   * étape). Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en
+   * clair), envoyé une seule fois par email, et retourné une seule fois dans la
+   * réponse pour affichage côté mobile. Rappelée à chaque connexion tant qu'elle
+   * n'a jamais réussi ({provider}_password_set_at NULL) — évite qu'un échec
+   * silencieux (ex: updateUserById en erreur) ne bloque le compte définitivement.
    */
-  private async _ensureGooglePassword(userId: string, email: string, firstName: string): Promise<string | undefined> {
+  private async _ensureOAuthPassword(provider: OAuthProvider, userId: string, email: string, firstName: string): Promise<string | undefined> {
     const tempPassword = generatePassword();
     const { error: pwError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
       password: tempPassword,
     });
     if (pwError) {
-      logger.warn('auth', `Mot de passe temporaire Google non défini: ${pwError.message}`);
+      logger.warn('auth', `Mot de passe temporaire ${provider} non défini: ${pwError.message}`);
       return undefined;
     }
 
+    const passwordSetAtColumn = provider === 'apple' ? 'apple_password_set_at' : 'google_password_set_at';
     await supabaseAdmin
       .from('users')
-      .update({ google_password_set_at: new Date().toISOString() })
+      .update({ [passwordSetAtColumn]: new Date().toISOString() })
       .eq('id', userId);
 
     if (email) {
       sendWelcomeEmail(email, firstName || 'Utilisateur', undefined, tempPassword).catch((err) =>
-        console.warn('[Email] Welcome Google email failed:', err)
+        console.warn(`[Email] Welcome ${provider} email failed:`, err)
       );
     }
     return tempPassword;
   }
 
   /**
-   * Rafraîchit la session après _ensureGooglePassword : changer le mot de passe
+   * Rafraîchit la session après _ensureOAuthPassword : changer le mot de passe
    * d'un utilisateur via l'API admin invalide sa session en cours (constaté en
    * test — le access_token utilisé pour l'appel devient un 401 immédiat juste
    * après). Sans ce rafraîchissement, la réponse renverrait au mobile un couple
@@ -388,34 +389,41 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   }
 
   /**
-   * Résout une connexion/inscription Google, commune à handleGoogleCallback et
-   * handleGoogleToken. Le trigger DB handle_new_user() a déjà créé la ligne
-   * public.users à l'insertion de l'identité Supabase Auth (avec le bon prénom/
-   * nom extraits des métadonnées Google) — cette méthode ne fait que :
+   * Résout une connexion/inscription Google ou Apple, commune à handleGoogleCallback,
+   * handleGoogleToken et handleAppleToken. Le trigger DB handle_new_user() a déjà créé
+   * la ligne public.users à l'insertion de l'identité Supabase Auth (avec le prénom/nom
+   * extraits des métadonnées pour Google — jamais pour Apple, cf. point 4) — cette
+   * méthode ne fait que :
    *   1. attendre que le trigger ait fini (même logique de retry que register()),
    *   2. refuser la connexion si cet email appartient déjà à un AUTRE compte
    *      (évite de créer un profil fantôme au lieu de réutiliser l'existant),
    *   3. exiger un passage explicite par l'inscription (intent=register + rôle +
    *      CGU) tant que le compte n'a jamais été inscrit,
-   *   4. garantir qu'un mot de passe temporaire a bien été généré.
+   *   4. si fourni (Apple, 1ère connexion uniquement — seul moyen de l'obtenir),
+   *      reporter le nom sur le profil,
+   *   5. garantir qu'un mot de passe temporaire a bien été généré.
    */
-  private async _resolveGoogleSignIn(
+  private async _resolveOAuthSignIn(
+    provider: OAuthProvider,
     supabaseUser: { id: string; email?: string | null },
     session: { access_token: string; refresh_token: string | null },
     options: GoogleAuthOptions,
+    extra: { fullName?: string } = {},
   ): Promise<AuthResponse> {
     let profile: {
       id: string;
       first_name: string;
+      last_name: string;
       registration_completed_at: string | null;
       google_password_set_at: string | null;
-      auth_provider: 'password' | 'google';
+      apple_password_set_at: string | null;
+      auth_provider: 'password' | 'google' | 'apple';
     } | null = null;
 
     for (let attempt = 0; attempt < 5; attempt++) {
       const { data } = await supabaseAdmin
         .from('users')
-        .select('id, first_name, registration_completed_at, google_password_set_at, auth_provider')
+        .select('id, first_name, last_name, registration_completed_at, google_password_set_at, apple_password_set_at, auth_provider')
         .eq('id', supabaseUser.id)
         .single();
       if (data) { profile = data; break; }
@@ -423,7 +431,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     }
 
     if (!profile) {
-      throw { status: 500, message: 'Erreur lors de la création du profil Google' };
+      throw { status: 500, message: `Erreur lors de la création du profil ${provider}` };
     }
 
     const normalizedEmail = (supabaseUser.email ?? '').trim().toLowerCase();
@@ -444,11 +452,27 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       }
     }
 
+    // Apple ne renvoie le nom qu'à la toute première connexion sur l'appareil, et
+    // uniquement dans la réponse native (jamais dans l'identityToken lui-même) —
+    // signInWithIdToken() n'acceptant pas de métadonnées custom, le trigger
+    // handle_new_user() ne peut donc jamais le capter pour un compte Apple : ce
+    // report explicite après coup est le seul moyen de le stocker.
+    if (extra.fullName && !profile.first_name) {
+      const [firstName, ...rest] = extra.fullName.trim().split(/\s+/);
+      const lastName = rest.join(' ');
+      await supabaseAdmin
+        .from('users')
+        .update({ first_name: firstName, last_name: lastName || profile.last_name })
+        .eq('id', supabaseUser.id);
+      profile.first_name = firstName;
+      profile.last_name = lastName || profile.last_name;
+    }
+
     const isRegistered = profile.registration_completed_at !== null;
 
     if (!isRegistered) {
       if (options.intent !== 'register') {
-        throw { status: 404, message: 'Aucun compte associé à ce compte Google. Inscrivez-vous d\'abord.' };
+        throw { status: 404, message: `Aucun compte associé à ce compte ${provider === 'apple' ? 'Apple' : 'Google'}. Inscrivez-vous d'abord.` };
       }
       if (!options.accept_terms) {
         throw { status: 400, message: 'Vous devez accepter les CGU pour vous inscrire.' };
@@ -468,7 +492,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
         .eq('id', supabaseUser.id);
 
       if (updateError) {
-        throw { status: 500, message: 'Erreur lors de la finalisation de l\'inscription Google' };
+        throw { status: 500, message: `Erreur lors de la finalisation de l'inscription ${provider}` };
       }
 
       if (role === 'driver') {
@@ -479,17 +503,18 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
 
       notificationsService.sendToAdmins(
         'new_user_admin',
-        'Nouveau compte créé (Google)',
-        `Un nouveau compte ${role === 'driver' ? 'chauffeur' : 'client'} vient de s'inscrire via Google : ${profile.first_name} (${normalizedEmail}).`,
+        `Nouveau compte créé (${provider === 'apple' ? 'Apple' : 'Google'})`,
+        `Un nouveau compte ${role === 'driver' ? 'chauffeur' : 'client'} vient de s'inscrire via ${provider === 'apple' ? 'Apple' : 'Google'} : ${profile.first_name} (${normalizedEmail}).`,
         { user_id: supabaseUser.id, role },
       );
     }
 
     // Ne jamais générer/écraser de mot de passe pour un compte 'password' — ne
-    // concerne que les comptes réellement créés via Google (auth_provider), pas
-    // un compte email/mdp que Supabase aurait lié à la même identité Google.
-    const tempPassword = profile.auth_provider === 'google' && !profile.google_password_set_at
-      ? await this._ensureGooglePassword(supabaseUser.id, normalizedEmail, profile.first_name)
+    // concerne que les comptes réellement créés via Google/Apple (auth_provider),
+    // pas un compte email/mdp que Supabase aurait lié à la même identité.
+    const passwordAlreadySet = provider === 'apple' ? profile.apple_password_set_at : profile.google_password_set_at;
+    const tempPassword = profile.auth_provider === provider && !passwordAlreadySet
+      ? await this._ensureOAuthPassword(provider, supabaseUser.id, normalizedEmail, profile.first_name)
       : undefined;
 
     // Changer le mot de passe invalide la session en cours (cf. commentaire sur
@@ -522,7 +547,8 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       throw { status: 401, message: 'Code Google invalide ou expiré' };
     }
 
-    return this._resolveGoogleSignIn(
+    return this._resolveOAuthSignIn(
+      'google',
       data.user,
       { access_token: data.session.access_token, refresh_token: data.session.refresh_token },
       options,
@@ -537,10 +563,30 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
       throw { status: 401, message: 'Token Google invalide ou expiré' };
     }
 
-    return this._resolveGoogleSignIn(
+    return this._resolveOAuthSignIn(
+      'google',
       user,
       { access_token: accessToken, refresh_token: refreshToken ?? null },
       options,
+    );
+  }
+
+  // ── APPLE AUTH — Depuis la session Supabase (signInWithIdToken côté mobile) ──
+  // accessToken : token de session Supabase (PAS le identityToken Apple brut —
+  // Supabase l'a déjà vérifié via signInWithIdToken côté client).
+  async handleAppleToken(accessToken: string, refreshToken?: string, fullName?: string, options: GoogleAuthOptions = {}): Promise<AuthResponse> {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);
+
+    if (error || !user) {
+      throw { status: 401, message: 'Token Apple invalide ou expiré' };
+    }
+
+    return this._resolveOAuthSignIn(
+      'apple',
+      user,
+      { access_token: accessToken, refresh_token: refreshToken ?? null },
+      options,
+      { fullName },
     );
   }
 

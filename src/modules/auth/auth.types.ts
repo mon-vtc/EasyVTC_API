@@ -22,9 +22,9 @@ export interface LoginDto {
   password: string;
 }
 
-// ── Options d'inscription/connexion Google ────────────────────────────────────
-// intent='register' : complète l'inscription (rôle + CGU) d'un compte Google qui
-//   n'a jamais été explicitement inscrit — voir registration_completed_at.
+// ── Options d'inscription/connexion Google/Apple ───────────────────────────────
+// intent='register' : complète l'inscription (rôle + CGU) d'un compte Google/Apple
+//   qui n'a jamais été explicitement inscrit — voir registration_completed_at.
 // intent='login' (ou absent) : connexion simple, refusée si le compte n'a jamais
 //   été inscrit.
 export interface GoogleAuthOptions {
@@ -32,6 +32,9 @@ export interface GoogleAuthOptions {
   role?: 'client' | 'driver';
   accept_terms?: boolean;
 }
+
+// Fournisseur OAuth pris en charge par _resolveOAuthSignIn (auth.service.ts).
+export type OAuthProvider = 'google' | 'apple';
 
 // ── Profil chauffeur joint à la réponse auth ──────────────────────────────────
 export interface DriverProfile {
@@ -64,10 +67,10 @@ export interface AuthUser {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
-  // 'google' si le compte n'a pas de mot de passe fiable connu de l'utilisateur
+  // 'google'/'apple' si le compte n'a pas de mot de passe fiable connu de l'utilisateur
   // (généré une seule fois côté serveur) — utilisé côté mobile pour adapter le
   // flux de suppression de compte (pas de champ mot de passe à saisir).
-  auth_provider: 'password' | 'google';
+  auth_provider: 'password' | 'google' | 'apple';
   // Profil chauffeur — présent uniquement si role === 'driver'
   driver: DriverProfile | null;
   // Véhicule actif — présent uniquement si role === 'driver'

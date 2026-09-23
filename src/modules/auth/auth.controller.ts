@@ -8,6 +8,7 @@ import {
   resetPasswordSchema,
   changePasswordSchema,
   googleAuthSchema,
+  appleAuthSchema,
 } from './auth.validator.js';
 
 export class AuthController {
@@ -232,6 +233,24 @@ export class AuthController {
       const { access_token, refresh_token, ...options } = parsed.data;
       const result = await authService.handleGoogleToken(access_token, refresh_token, options);
       res.status(200).json({ ok: true, message: 'Connexion Google réussie', data: result });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // POST /auth/apple/token — Reçoit la session Supabase depuis signInWithIdToken (mobile)
+  async appleToken(req: Request, res: Response): Promise<void> {
+    const parsed = appleAuthSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    try {
+      const { access_token, refresh_token, full_name, ...options } = parsed.data;
+      const result = await authService.handleAppleToken(access_token, refresh_token, full_name, options);
+      res.status(200).json({ ok: true, message: 'Connexion Apple réussie', data: result });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

@@ -126,7 +126,7 @@ export class RgpdService {
     // capturé) — la session déjà authentifiée (JWT) suffit à confirmer l'identité.
     // Pour les comptes classiques, on vérifie le mot de passe en simulant une
     // connexion : plus sûr que de maintenir une logique de vérification séparée.
-    if (user.auth_provider !== 'google') {
+    if (user.auth_provider !== 'google' && user.auth_provider !== 'apple') {
       if (!password) {
         throw { status: 400, message: 'Le mot de passe est requis pour confirmer la suppression.' };
       }
