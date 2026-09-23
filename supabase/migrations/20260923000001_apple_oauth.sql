@@ -1,13 +1,13 @@
 -- ══════════════════════════════════════════════════════════════════════════════
 -- Migration : ajout de "Sign in with Apple" (Guideline 4.8 App Store)
--- Sprint 8 — EasyVTC
+-- Sprint 8 : EasyVTC
 --
 -- Étend l'infrastructure google_oauth_fixes.sql (20260807000001) aux comptes
 -- Apple : mêmes mécanismes (auth_provider, mot de passe temporaire tracé par
 -- colonne dédiée, inscription explicite requise) que pour Google.
 -- ══════════════════════════════════════════════════════════════════════════════
 
--- ── 1. Traçabilité du mode d'authentification — ajout de 'apple' ──────────────
+-- ── 1. Traçabilité du mode d'authentification, ajout de 'apple' ──────────────
 
 alter table public.users
   drop constraint if exists chk_users_auth_provider;
@@ -17,9 +17,9 @@ alter table public.users
 alter table public.users
   add column if not exists apple_password_set_at timestamptz null;
 comment on column public.users.apple_password_set_at is
-  'Date à laquelle un mot de passe temporaire a été généré avec succès pour un compte Apple. NULL tant que ça n''a jamais réussi — permet de réessayer à chaque connexion plutôt que d''abandonner silencieusement.';
+  'Date à laquelle un mot de passe temporaire a été généré avec succès pour un compte Apple. NULL tant que ça n''a jamais réussi, ce qui permet de réessayer à chaque connexion plutôt que d''abandonner silencieusement.';
 
--- ── 2. handle_new_user — reconnaître provider = apple comme provider = google ──
+-- ── 2. handle_new_user : reconnaître provider = apple comme provider = google ──
 -- Apple ne transmet JAMAIS le nom dans l'identityToken lui-même (uniquement dans
 -- la réponse native, à la toute première connexion) et signInWithIdToken() côté
 -- mobile n'accepte pas de métadonnées custom : raw_user_meta_data.full_name sera

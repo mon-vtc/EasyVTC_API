@@ -334,14 +334,14 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   }
 
   /**
-   * Génère un mot de passe temporaire pour un compte Google/Apple — ni l'un ni
+   * Génère un mot de passe temporaire pour un compte Google/Apple : ni l'un ni
    * l'autre ne fournit de mot de passe applicatif, ce qui bloquait la suppression/
    * anonymisation RGPD du compte (nécessitait un mot de passe pour confirmer, cf.
    * auth_provider dans rgpd.service.ts qui dispense désormais ces comptes de cette
    * étape). Le mot de passe est défini côté Supabase Auth (hashé, jamais stocké en
    * clair), envoyé une seule fois par email, et retourné une seule fois dans la
    * réponse pour affichage côté mobile. Rappelée à chaque connexion tant qu'elle
-   * n'a jamais réussi ({provider}_password_set_at NULL) — évite qu'un échec
+   * n'a jamais réussi ({provider}_password_set_at NULL), pour éviter qu'un échec
    * silencieux (ex: updateUserById en erreur) ne bloque le compte définitivement.
    */
   private async _ensureOAuthPassword(provider: OAuthProvider, userId: string, email: string, firstName: string): Promise<string | undefined> {
@@ -392,14 +392,14 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
    * Résout une connexion/inscription Google ou Apple, commune à handleGoogleCallback,
    * handleGoogleToken et handleAppleToken. Le trigger DB handle_new_user() a déjà créé
    * la ligne public.users à l'insertion de l'identité Supabase Auth (avec le prénom/nom
-   * extraits des métadonnées pour Google — jamais pour Apple, cf. point 4) — cette
+   * extraits des métadonnées pour Google, jamais pour Apple, cf. point 4) : cette
    * méthode ne fait que :
    *   1. attendre que le trigger ait fini (même logique de retry que register()),
    *   2. refuser la connexion si cet email appartient déjà à un AUTRE compte
    *      (évite de créer un profil fantôme au lieu de réutiliser l'existant),
    *   3. exiger un passage explicite par l'inscription (intent=register + rôle +
    *      CGU) tant que le compte n'a jamais été inscrit,
-   *   4. si fourni (Apple, 1ère connexion uniquement — seul moyen de l'obtenir),
+   *   4. si fourni (Apple, 1ère connexion uniquement, seul moyen de l'obtenir),
    *      reporter le nom sur le profil,
    *   5. garantir qu'un mot de passe temporaire a bien été généré.
    */
@@ -453,7 +453,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     }
 
     // Apple ne renvoie le nom qu'à la toute première connexion sur l'appareil, et
-    // uniquement dans la réponse native (jamais dans l'identityToken lui-même) —
+    // uniquement dans la réponse native (jamais dans l'identityToken lui-même) ;
     // signInWithIdToken() n'acceptant pas de métadonnées custom, le trigger
     // handle_new_user() ne peut donc jamais le capter pour un compte Apple : ce
     // report explicite après coup est le seul moyen de le stocker.
@@ -571,8 +571,8 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
     );
   }
 
-  // ── APPLE AUTH — Depuis la session Supabase (signInWithIdToken côté mobile) ──
-  // accessToken : token de session Supabase (PAS le identityToken Apple brut —
+  // -- APPLE AUTH : depuis la session Supabase (signInWithIdToken côté mobile) --
+  // accessToken : token de session Supabase (PAS le identityToken Apple brut,
   // Supabase l'a déjà vérifié via signInWithIdToken côté client).
   async handleAppleToken(accessToken: string, refreshToken?: string, fullName?: string, options: GoogleAuthOptions = {}): Promise<AuthResponse> {
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(accessToken);

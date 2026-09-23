@@ -239,7 +239,7 @@ export class AuthController {
     }
   }
 
-  // POST /auth/apple/token — Reçoit la session Supabase depuis signInWithIdToken (mobile)
+  // POST /auth/apple/token : reçoit la session Supabase depuis signInWithIdToken (mobile)
   async appleToken(req: Request, res: Response): Promise<void> {
     const parsed = appleAuthSchema.safeParse(req.body);
     if (!parsed.success) {

@@ -30,8 +30,8 @@ export const googleAuthSchema = z.object({
 // ── Options d'inscription/connexion Apple (POST /auth/apple/token) ───────────
 // access_token : session Supabase obtenue côté mobile via signInWithIdToken (pas
 //   le JWT Apple brut). full_name : fourni par Apple uniquement à la toute
-//   première connexion sur l'appareil — filet de sécurité si les métadonnées
-//   Supabase ne l'ont pas capté.
+//   première connexion sur l'appareil (filet de sécurité si les métadonnées
+//   Supabase ne l'ont pas capté).
 export const appleAuthSchema = z.object({
   access_token: z.string().min(1, 'access_token manquant'),
   refresh_token: z.string().optional(),

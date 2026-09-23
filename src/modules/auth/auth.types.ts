@@ -24,7 +24,7 @@ export interface LoginDto {
 
 // ── Options d'inscription/connexion Google/Apple ───────────────────────────────
 // intent='register' : complète l'inscription (rôle + CGU) d'un compte Google/Apple
-//   qui n'a jamais été explicitement inscrit — voir registration_completed_at.
+//   qui n'a jamais été explicitement inscrit (voir registration_completed_at).
 // intent='login' (ou absent) : connexion simple, refusée si le compte n'a jamais
 //   été inscrit.
 export interface GoogleAuthOptions {
