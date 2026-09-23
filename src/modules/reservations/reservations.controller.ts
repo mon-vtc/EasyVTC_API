@@ -8,6 +8,8 @@ import { reservationsService } from './reservations.service.js';
 import { auditLog } from '../../utils/audit.service.js';
 import {
   createReservationSchema,
+  createManualReservationSchema,
+  clientSearchQuerySchema,
   assignDriverSchema,
   completeReservationSchema,
   cancelReservationSchema,
@@ -27,6 +29,46 @@ export class ReservationsController {
     try {
       const reservation = await reservationsService.createReservation(req.user!.id, parsed.data);
       res.status(201).json({ ok: true, message: 'Réservation créée avec succès', data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── POST /reservations/manual : chauffeur/admin/gestionnaire, réservation pour un client ──
+  async createManual(req: Request, res: Response): Promise<void> {
+    const parsed = createManualReservationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: parsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const reservation = await reservationsService.createManualReservation(req.user!.id, parsed.data);
+
+      void auditLog(req, {
+        action:     'RESERVATION_CREATED_MANUALLY',
+        entityType: 'reservation',
+        entityId:   reservation.id,
+        newValue:   { client_id: reservation.client_id, via: parsed.data.client_id ? 'existing_client' : 'new_client' },
+      });
+
+      res.status(201).json({ ok: true, message: 'Réservation créée avec succès', data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // ── GET /reservations/clients/search : chauffeur/admin/gestionnaire, recherche client ──
+  async searchClients(req: Request, res: Response): Promise<void> {
+    const parsed = clientSearchQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+      res.status(200).json({ ok: true, data: [] });
+      return;
+    }
+    try {
+      const clients = await reservationsService.searchClients(parsed.data.q);
+      res.status(200).json({ ok: true, data: clients });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

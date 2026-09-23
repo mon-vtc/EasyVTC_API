@@ -24,6 +24,9 @@ export interface Reservation {
   client_id: string;
   driver_id: string | null;
   assigned_by: string | null;
+  // Chauffeur/admin/gestionnaire ayant créé la réservation au nom du client.
+  // Null si le client l'a créée lui-même depuis l'application.
+  created_by: string | null;
   status: ReservationStatus;
 
   // Localisation
@@ -72,6 +75,13 @@ export interface ReservationWithRelations extends Reservation {
     profile_photo_url: string | null;
   };
   driver?: AvailableDriverDto | null;
+  /** Chauffeur/admin/gestionnaire ayant créé la réservation, si créée manuellement. */
+  creator?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    role: string;
+  } | null;
 }
 
 // ── DTOs — Création ───────────────────────────────────────────────────────────
@@ -94,6 +104,30 @@ export interface CreateReservationDto {
   flat_rate_id?: string;          // Prioritaire sur distance/durée si fourni
 
   promo_code?: string;            // Code promo optionnel (appliqué au prix estimé)
+}
+
+// ── DTO : réservation créée par le personnel au nom d'un client ───────────────
+
+export interface ManualClientInput {
+  first_name: string;
+  last_name: string;
+  phone: string;
+}
+
+export interface CreateManualReservationDto extends Omit<CreateReservationDto, 'promo_code'> {
+  /** Client déjà inscrit, exclusif avec `client` */
+  client_id?: string;
+  /** Nouveau client à créer à la volée, exclusif avec `client_id` */
+  client?: ManualClientInput;
+}
+
+export interface ClientSearchResult {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string | null;
+  email: string;
+  is_managed_account: boolean;
 }
 
 // ── DTOs — Actions ────────────────────────────────────────────────────────────

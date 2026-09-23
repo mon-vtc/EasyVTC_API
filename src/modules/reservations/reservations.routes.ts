@@ -23,6 +23,10 @@
 //   GET    /reservations                     Toutes les réservations + filtres
 //   GET    /reservations/drivers/available   Chauffeurs disponibles pour assignation
 //   POST   /reservations/:id/assign          Affecter un chauffeur
+//
+// CHAUFFEUR / ADMIN / GESTIONNAIRE (réservation au nom d'un client)
+//   GET    /reservations/clients/search      Rechercher un client (nom ou téléphone)
+//   POST   /reservations/manual              Créer une réservation pour un client
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { Router } from 'express';
@@ -42,6 +46,25 @@ router.post('/', requireRole('client'), (req, res) => reservationsController.cre
 
 // Mes réservations (client)
 router.get('/mine', requireRole('client'), (req, res) => reservationsController.listMine(req, res));
+
+// ── Routes personnel : réservation créée pour un client ────────────────────────
+// Chauffeur, admin et gestionnaire (avec permission create_reservation) peuvent
+// réserver au nom d'un client qui ne peut pas le faire lui-même (ex : personne
+// âgée, appel téléphonique).
+
+// Recherche de client par nom/téléphone (doit être avant /:id)
+router.get('/clients/search',
+  requireRole('driver', 'admin', 'manager'),
+  requirePermissionIfManager('create_reservation'),
+  (req, res) => reservationsController.searchClients(req, res),
+);
+
+// Créer une réservation au nom d'un client
+router.post('/manual',
+  requireRole('driver', 'admin', 'manager'),
+  requirePermissionIfManager('create_reservation'),
+  (req, res) => reservationsController.createManual(req, res),
+);
 
 // ── Routes chauffeur ──────────────────────────────────────────────────────────
 

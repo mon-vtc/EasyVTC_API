@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
+import { phoneSchema } from '../../validators/common.validator.js';
 
 const statuses  = ['pending', 'assigned', 'driver_arrived', 'in_progress', 'completed', 'cancelled'] as const;
 
@@ -52,6 +53,66 @@ export const createReservationSchema = z.object({
   },
 );
 
+// ── Création de réservation pour un client : chauffeur/admin/gestionnaire ─────
+// Reprend les mêmes champs trajet/véhicule/horaire que createReservationSchema
+// (sans promo_code, non applicable à une réservation créée par le personnel),
+// plus l'identification du client : soit un compte existant (client_id), soit
+// une fiche minimale à créer à la volée (client), jamais les deux.
+
+const manualClientSchema = z.object({
+  first_name: z.string().min(2, 'Prénom trop court').max(100),
+  last_name:  z.string().min(2, 'Nom trop court').max(100),
+  phone:      phoneSchema,
+});
+
+export const createManualReservationSchema = z.object({
+  client_id: z.string().uuid('ID client invalide').optional(),
+  client:    manualClientSchema.optional(),
+
+  pickup_address: z.string().min(5, "L'adresse de départ est requise").max(300),
+  pickup_lat:     z.number().min(-90).max(90).optional(),
+  pickup_lng:     z.number().min(-180).max(180).optional(),
+
+  dest_address:   z.string().min(5, "L'adresse de destination est requise").max(300),
+  dest_lat:       z.number().min(-90).max(90).optional(),
+  dest_lng:       z.number().min(-180).max(180).optional(),
+
+  vehicle_type:   vehicleTypeField,
+
+  scheduled_at:   z.string()
+    .datetime({ message: 'scheduled_at doit être une date ISO 8601 valide' })
+    .refine(
+      (v) => new Date(v) > new Date(),
+      { message: 'La date de réservation doit être dans le futur' },
+    ),
+
+  nb_passengers:  z.number().int().min(1).max(20).default(1).optional(),
+  comment:        z.string().max(500).optional(),
+
+  distance_km:    z.number().positive('La distance doit être positive').optional(),
+  duration_min:   z.number().positive('La durée doit être positive').optional(),
+  flat_rate_id:   z.string().uuid('ID de forfait invalide').optional(),
+
+}).refine(
+  (d) => Boolean(d.client_id) !== Boolean(d.client),
+  {
+    message: 'Fournissez soit client_id (client existant), soit client (prénom, nom, téléphone), mais pas les deux',
+    path:    ['client_id'],
+  },
+).refine(
+  (d) => d.flat_rate_id || (d.distance_km !== undefined && d.duration_min !== undefined),
+  {
+    message: 'Fournissez soit un flat_rate_id, soit distance_km ET duration_min pour le calcul du prix',
+    path:    ['distance_km'],
+  },
+);
+
+// ── Recherche de client (personnel, création d'une réservation manuelle) ─────
+
+export const clientSearchQuerySchema = z.object({
+  q: z.string().trim().min(2, 'Recherche trop courte'),
+});
+
 // ── Assignation chauffeur ─────────────────────────────────────────────────────
 
 export const assignDriverSchema = z.object({
@@ -95,6 +156,8 @@ export const reservationIdParamSchema = z.object({
 // ── Types inférés ─────────────────────────────────────────────────────────────
 
 export type CreateReservationInput       = z.infer<typeof createReservationSchema>;
+export type CreateManualReservationInput = z.infer<typeof createManualReservationSchema>;
+export type ClientSearchQueryInput       = z.infer<typeof clientSearchQuerySchema>;
 export type AssignDriverInput            = z.infer<typeof assignDriverSchema>;
 export type CompleteReservationInput     = z.infer<typeof completeReservationSchema>;
 export type CancelReservationInput       = z.infer<typeof cancelReservationSchema>;

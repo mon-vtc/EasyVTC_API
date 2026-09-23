@@ -22,10 +22,13 @@ import { ordersService } from '../orders/orders.service.js';
 import { invoicesService } from '../invoices/invoices.service.js';
 import { commissionSettingsService } from '../commission-settings/commission-settings.service.js';
 import { promoCodesService } from '../promo-codes/promo-codes.service.js';
+import { generatePassword } from '../../utils/generate-password.js';
 import type {
   Reservation,
   ReservationWithRelations,
   CreateReservationDto,
+  CreateManualReservationDto,
+  ClientSearchResult,
   AssignDriverDto,
   CompleteReservationDto,
   ReservationListFilters,
@@ -58,7 +61,8 @@ const RESERVATION_SELECT = `
     vehicle_type,
     user:users!user_id(id, email, first_name, last_name, phone, profile_photo_url),
     vehicles:vehicles!driver_id(id, model, plate_number, brand, color, type, photo_url, is_active)
-  )
+  ),
+  creator:users!created_by(id, first_name, last_name, role)
 ` as const;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -181,6 +185,144 @@ export class ReservationsService {
     );
 
     return reservation;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1 bis. CRÉATION : Chauffeur / Admin / Gestionnaire, au nom d'un client
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Résout l'identifiant du client visé par une réservation manuelle :
+   *   - client_id fourni : vérifie que le compte existe, est bien un client et
+   *     est actif.
+   *   - client fourni (prénom, nom, téléphone) : recherche un client existant
+   *     par téléphone (évite les doublons) ; sinon crée un compte minimal
+   *     (email synthétique, mot de passe aléatoire jamais communiqué) marqué
+   *     is_managed_account : ce client ne se connectera jamais lui-même, le
+   *     personnel gère ses réservations par téléphone.
+   */
+  private async _resolveOrCreateClient(dto: CreateManualReservationDto): Promise<string> {
+    if (dto.client_id) {
+      const { data: existing } = await supabaseAdmin
+        .from('users')
+        .select('id, role, status, deleted_at')
+        .eq('id', dto.client_id)
+        .maybeSingle();
+
+      if (!existing || existing.role !== 'client' || existing.deleted_at !== null) {
+        throw { status: 404, message: 'Client introuvable' };
+      }
+      if (existing.status !== 'active') {
+        throw { status: 403, message: 'Ce compte client est désactivé' };
+      }
+      return existing.id;
+    }
+
+    if (!dto.client) {
+      throw { status: 400, message: 'client_id ou client (prénom, nom, téléphone) requis' };
+    }
+
+    const { first_name, last_name, phone } = dto.client;
+
+    const { data: found } = await supabaseAdmin
+      .from('users')
+      .select('id, role, deleted_at')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (found) {
+      if (found.role !== 'client' || found.deleted_at !== null) {
+        throw { status: 409, message: 'Ce numéro de téléphone est déjà associé à un autre compte' };
+      }
+      return found.id;
+    }
+
+    // Email synthétique : ce compte ne reçoit jamais de courrier, il sert
+    // uniquement à satisfaire la contrainte d'identifiant unique de Supabase Auth.
+    const syntheticEmail = `client.${phone.replace(/\D/g, '')}@reservation.easyvtc.local`;
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email:         syntheticEmail,
+      password:      generatePassword(),
+      phone,
+      email_confirm: true,
+      user_metadata: {
+        first_name,
+        last_name,
+        role:         'client',
+        rgpd_consent: false,
+      },
+    });
+
+    if (authError || !authData.user) {
+      throw { status: 500, message: 'Erreur lors de la création de la fiche client' };
+    }
+
+    // Attendre que le trigger handle_new_user crée le profil dans public.users
+    let profileExists = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data } = await supabaseAdmin.from('users').select('id').eq('id', authData.user.id).single();
+      if (data) { profileExists = true; break; }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    if (!profileExists) {
+      const { error: insertError } = await supabaseAdmin.from('users').insert({
+        id:                         authData.user.id,
+        email:                      syntheticEmail,
+        phone,
+        first_name,
+        last_name,
+        role:                       'client',
+        registration_completed_at: new Date().toISOString(),
+      });
+      if (insertError) {
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        throw { status: 500, message: 'Erreur lors de la création de la fiche client' };
+      }
+    }
+
+    await supabaseAdmin.from('users').update({ is_managed_account: true }).eq('id', authData.user.id);
+
+    return authData.user.id;
+  }
+
+  /**
+   * Crée une réservation au nom d'un client, à l'initiative d'un chauffeur,
+   * d'un admin ou d'un gestionnaire. Cas d'usage principal : un client ne
+   * pouvant pas réserver lui-même (personne âgée, appel téléphonique).
+   * Réutilise createReservation() pour la tarification, l'insertion et les
+   * notifications, puis trace l'auteur de la réservation.
+   */
+  async createManualReservation(actorId: string, dto: CreateManualReservationDto): Promise<ReservationWithRelations> {
+    const clientId = await this._resolveOrCreateClient(dto);
+    const reservation = await this.createReservation(clientId, dto);
+
+    await supabaseAdmin.from('reservations').update({ created_by: actorId }).eq('id', reservation.id);
+    reservation.created_by = actorId;
+
+    return reservation;
+  }
+
+  /**
+   * Recherche de clients (nom ou téléphone) pour la création d'une réservation
+   * manuelle. Accès restreint au personnel via le controller/routes.
+   */
+  async searchClients(query: string): Promise<ClientSearchResult[]> {
+    const term = `%${query}%`;
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('id, first_name, last_name, phone, email, is_managed_account')
+      .eq('role', 'client')
+      .is('deleted_at', null)
+      .or(`phone.ilike.${term},first_name.ilike.${term},last_name.ilike.${term}`)
+      .order('first_name', { ascending: true })
+      .limit(10);
+
+    if (error) {
+      throw { status: 500, message: 'Erreur lors de la recherche de clients' };
+    }
+    return data ?? [];
   }
 
   // ──────────────────────────────────────────────────────────────────────────
