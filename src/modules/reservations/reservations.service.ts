@@ -23,6 +23,7 @@ import { invoicesService } from '../invoices/invoices.service.js';
 import { commissionSettingsService } from '../commission-settings/commission-settings.service.js';
 import { promoCodesService } from '../promo-codes/promo-codes.service.js';
 import { generatePassword } from '../../utils/generate-password.js';
+import { toE164France } from '../../utils/phone.js';
 import type {
   Reservation,
   ReservationWithRelations,
@@ -222,13 +223,22 @@ export class ReservationsService {
       throw { status: 400, message: 'client_id ou client (prénom, nom, téléphone) requis' };
     }
 
-    const { first_name, last_name, phone } = dto.client;
+    const { first_name, last_name } = dto.client;
+    // Supabase Auth exige l'E.164 ; le formulaire de réservation manuelle invite
+    // au format national ("06 XX XX XX XX"), d'où le 500 systématique observé
+    // sans cette conversion (auth.admin.createUser rejette le format national).
+    const phone = toE164France(dto.client.phone);
 
-    const { data: found } = await supabaseAdmin
+    const { data: found, error: findError } = await supabaseAdmin
       .from('users')
       .select('id, role, deleted_at')
       .eq('phone', phone)
       .maybeSingle();
+
+    if (findError) {
+      console.error('[Reservations] Erreur recherche client par téléphone:', findError);
+      throw { status: 500, message: 'Erreur lors de la recherche du client' };
+    }
 
     if (found) {
       if (found.role !== 'client' || found.deleted_at !== null) {
@@ -255,6 +265,7 @@ export class ReservationsService {
     });
 
     if (authError || !authData.user) {
+      console.error('[Reservations] Erreur création compte client (réservation manuelle):', authError);
       throw { status: 500, message: 'Erreur lors de la création de la fiche client' };
     }
 

@@ -13,3 +13,11 @@ export const phoneSchema = z
   .trim()
   .regex(PHONE_REGEX, 'Numéro de téléphone invalide')
   .transform((val) => val.replace(/[\s.-]/g, ''));
+
+// ── Distance de trajet maximale plausible ────────────────────────────────────
+// Service France uniquement : la plus grande diagonale du pays fait ~1100 km
+// (Dunkerque–Perpignan/Menton). 1500 km laisse une marge raisonnable (trajet
+// transfrontalier) tout en rejetant les distances aberrantes dues à un mauvais
+// géocodage (ex: adresse "BP 35051" confondue avec une station-service "BP" à
+// l'étranger, donnant une distance calculée de plusieurs milliers de km).
+export const MAX_TRIP_DISTANCE_KM = 1500;
