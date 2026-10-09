@@ -563,6 +563,28 @@ export class PromoCodesService {
     throw { status: 500, message: 'Impossible de générer un code unique après plusieurs tentatives' };
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Recalcule le montant de la remise d'un code déjà appliqué, sur un nouveau
+  // montant de base — utilisé par reservations.completeTrip() quand le prix
+  // formule est recalculé avec la distance/durée réelle, pour ne pas perdre la
+  // remise initialement accordée. Ne revalide PAS l'éligibilité (plafond
+  // d'utilisation, montant minimum, zone géographique…) : ces règles ont déjà
+  // été satisfaites et consommées à la création de la réservation ; les
+  // revérifier ici échouerait à tort (ex: max_uses_per_user déjà atteint par
+  // cette réservation elle-même).
+  // ────────────────────────────────────────────────────────────────────────────
+  async recomputeDiscountForAmount(promoCodeId: string, orderAmount: number): Promise<number> {
+    const { data } = await supabaseAdmin
+      .from('promo_codes')
+      .select('discount_type, discount_value')
+      .eq('id', promoCodeId)
+      .maybeSingle();
+
+    if (!data) return 0;
+
+    return this._computeDiscount(data as PromoCode, orderAmount);
+  }
+
   private _computeDiscount(promo: PromoCode, orderAmount: number): number {
     if (promo.discount_type === 'percent') {
       return Math.round((orderAmount * promo.discount_value / 100) * 100) / 100;
