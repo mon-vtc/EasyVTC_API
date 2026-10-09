@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendWelcomeEmail, sendResetPasswordEmail, sendPasswordChangedEmail } from '../../utils/email.service.js';
 import { generatePassword } from '../../utils/generate-password.js';
+import { toE164France } from '../../utils/phone.js';
 import { notificationsService } from '../notifications/notifications.service.js';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
@@ -60,10 +61,14 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
  
   // ── REGISTER ──────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<AuthResponse> {
+    // Supabase Auth exige l'E.164 ; phoneSchema accepte aussi le format national
+    // ("0612345678") pour ne pas gêner la saisie — on convertit donc ici.
+    const phone = toE164France(dto.phone);
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: dto.email,
       password: dto.password,
-      phone: dto.phone,
+      phone,
       email_confirm: true,
       user_metadata: {
         first_name: dto.first_name,
@@ -112,7 +117,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
           email:           dto.email,
           first_name:      dto.first_name,
           last_name:       dto.last_name,
-          phone:           dto.phone,
+          phone,
           role:            dto.role,
           rgpd_consent:    dto.rgpd_consent ?? false,
           rgpd_consent_at: dto.rgpd_consent ? new Date().toISOString() : null,

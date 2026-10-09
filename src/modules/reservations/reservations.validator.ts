@@ -4,7 +4,12 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
-import { phoneSchema } from '../../validators/common.validator.js';
+import { phoneSchema, MAX_TRIP_DISTANCE_KM } from '../../validators/common.validator.js';
+
+const distanceKmField = () =>
+  z.number()
+   .positive('La distance doit être positive')
+   .max(MAX_TRIP_DISTANCE_KM, `Distance invalide (supérieure à ${MAX_TRIP_DISTANCE_KM} km, hors zone de service)`);
 
 const statuses  = ['pending', 'assigned', 'driver_arrived', 'in_progress', 'completed', 'cancelled'] as const;
 
@@ -39,7 +44,7 @@ export const createReservationSchema = z.object({
   comment:        z.string().max(500).optional(),
 
   // Tarification — l'un ou l'autre obligatoire
-  distance_km:    z.number().positive('La distance doit être positive').optional(),
+  distance_km:    distanceKmField().optional(),
   duration_min:   z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:   z.string().uuid('ID de forfait invalide').optional(),
 
@@ -89,7 +94,7 @@ export const createManualReservationSchema = z.object({
   nb_passengers:  z.number().int().min(1).max(20).default(1).optional(),
   comment:        z.string().max(500).optional(),
 
-  distance_km:    z.number().positive('La distance doit être positive').optional(),
+  distance_km:    distanceKmField().optional(),
   duration_min:   z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:   z.string().uuid('ID de forfait invalide').optional(),
 
@@ -122,7 +127,7 @@ export const assignDriverSchema = z.object({
 // ── Fin de course ─────────────────────────────────────────────────────────────
 
 export const completeReservationSchema = z.object({
-  actual_distance_km:  z.number().positive().optional(),
+  actual_distance_km:  distanceKmField().optional(),
   actual_duration_min: z.number().int().positive().optional(),
   driver_notes:        z.string().max(1000).optional(),
   price_adjusted:      z.number().positive().max(9999.99, 'Le montant ajusté ne peut pas dépasser 9 999,99').optional(),

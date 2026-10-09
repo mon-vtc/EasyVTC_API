@@ -4,6 +4,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { z } from 'zod';
+import { MAX_TRIP_DISTANCE_KM } from '../../validators/common.validator.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ export const updateFlatRateSchema = z.object({
 // ── Estimation de prix ───────────────────────────────────────────────────────
 
 export const priceEstimateSchema = z.object({
-  distance_km:   z.number().positive('La distance doit être positive').optional(),
+  distance_km:   z.number().positive('La distance doit être positive').max(MAX_TRIP_DISTANCE_KM, `Distance invalide (supérieure à ${MAX_TRIP_DISTANCE_KM} km, hors zone de service)`).optional(),
   duration_min:  z.number().positive('La durée doit être positive').optional(),
   flat_rate_id:  z.string().uuid('ID de forfait invalide').optional(),
   nb_passengers: z.number().int('Doit être un entier').min(1, 'Minimum 1 passager').optional(),
