@@ -574,13 +574,16 @@ export class PromoCodesService {
   // cette réservation elle-même).
   // ────────────────────────────────────────────────────────────────────────────
   async recomputeDiscountForAmount(promoCodeId: string, orderAmount: number): Promise<number> {
-    const { data } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from('promo_codes')
       .select('discount_type, discount_value')
       .eq('id', promoCodeId)
       .maybeSingle();
 
-    if (!data) return 0;
+    // Remise inconnue : ne pas la ramener à 0, l'appelant conserve le prix estimé
+    if (error || !data) {
+      throw { status: 500, message: 'Impossible de recalculer la remise du code promo' };
+    }
 
     return this._computeDiscount(data as PromoCode, orderAmount);
   }

@@ -68,10 +68,12 @@ jest.unstable_mockModule('../vehicle-types/vehicle-types.service.js', () => ({
 }));
 
 // promoCodesService — validateCode appelé si dto.promo_code est fourni
+const mockRecomputeDiscount = jest.fn<any>();
 jest.unstable_mockModule('../promo-codes/promo-codes.service.js', () => ({
   promoCodesService: {
     validateCode:    jest.fn().mockResolvedValue({ promo_code_id: 'promo-id', code: 'TEST10', discount_type: 'percent', discount_value: 10, discount_amount: 5, final_price: 45 } as never),
     incrementUsage:  jest.fn().mockResolvedValue(undefined as never),
+    recomputeDiscountForAmount: mockRecomputeDiscount,
   },
 }));
 
@@ -590,6 +592,47 @@ describe('ReservationsService', () => {
       expect(result.status).toBe('completed');
       expect(mockComputePrice).toHaveBeenCalledTimes(1);
       expect(mockSendToUser).toHaveBeenCalledTimes(1);
+    });
+
+    it(' réapplique le code promo sur le prix recalculé', async () => {
+      const promoInProgress = { ...mockInProgressReservation, promo_code_id: 'promo-id', discount_amount: 5 };
+      const updateChain = chain({ ...promoInProgress, status: 'completed' });
+      mockComputePrice.mockResolvedValue({ ...mockPriceResult, final_price: 48.00 } as never);
+      mockRecomputeDiscount.mockResolvedValueOnce(4.8);
+
+      mockFrom
+        .mockReturnValueOnce(chain(promoInProgress))
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ started_at: '2026-06-05T09:00:00Z' }))
+        .mockReturnValueOnce(updateChain)
+        .mockReturnValueOnce(chain(null));
+
+      await service.completeTrip(RESA_ID, DRIVER_USER_ID, { actual_distance_km: 32, actual_duration_min: 47 });
+
+      expect(mockRecomputeDiscount).toHaveBeenCalledWith('promo-id', 48);
+      expect(updateChain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ price_final: 43.2, discount_amount: 4.8 }),
+      );
+    });
+
+    it(' garde le prix estimé et la remise initiale si le recalcul de la remise échoue', async () => {
+      const promoInProgress = { ...mockInProgressReservation, promo_code_id: 'promo-id', discount_amount: 5, price_estimated: 45 };
+      const updateChain = chain({ ...promoInProgress, status: 'completed' });
+      mockComputePrice.mockResolvedValue({ ...mockPriceResult, final_price: 48.00 } as never);
+      mockRecomputeDiscount.mockRejectedValueOnce({ status: 500 });
+
+      mockFrom
+        .mockReturnValueOnce(chain(promoInProgress))
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ started_at: '2026-06-05T09:00:00Z' }))
+        .mockReturnValueOnce(updateChain)
+        .mockReturnValueOnce(chain(null));
+
+      await service.completeTrip(RESA_ID, DRIVER_USER_ID, { actual_distance_km: 32, actual_duration_min: 47 });
+
+      expect(updateChain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ price_final: 45, discount_amount: 5 }),
+      );
     });
 
     it(' conserve le prix estimé si pas de métriques réelles (flat_rate)', async () => {

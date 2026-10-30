@@ -750,6 +750,32 @@ describe('PromoCodesService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   // incrementUsage — version atomique via RPC
   // ──────────────────────────────────────────────────────────────────────────
+  describe('recomputeDiscountForAmount()', () => {
+    it(' recalcule une remise en pourcentage sur le nouveau montant', async () => {
+      mockFrom.mockReturnValueOnce(chain({ discount_type: 'percent', discount_value: 10 }));
+
+      await expect(service.recomputeDiscountForAmount('promo-id', 48)).resolves.toBe(4.8);
+    });
+
+    it(' plafonne une remise fixe au montant de la course', async () => {
+      mockFrom.mockReturnValueOnce(chain({ discount_type: 'fixed', discount_value: 20 }));
+
+      await expect(service.recomputeDiscountForAmount('promo-id', 15)).resolves.toBe(15);
+    });
+
+    it(' lève une erreur si le code est introuvable, sans ramener la remise à 0', async () => {
+      mockFrom.mockReturnValueOnce(chain(null));
+
+      await expect(service.recomputeDiscountForAmount('promo-id', 48)).rejects.toMatchObject({ status: 500 });
+    });
+
+    it(' lève une erreur si la lecture échoue', async () => {
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'db down' }));
+
+      await expect(service.recomputeDiscountForAmount('promo-id', 48)).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
   describe('incrementUsage()', () => {
 
     it('appelle rpc increment_promo_uses avec le bon id', async () => {
