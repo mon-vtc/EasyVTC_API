@@ -42,7 +42,7 @@ export class RgpdService {
 
       supabaseAdmin
         .from('drivers')
-        .select('id, status, vehicle_type, siret, created_at')
+        .select('id, status, vehicle_type, siret, company_name, company_address, created_at')
         .eq('user_id', userId)
         .maybeSingle(),
     ]);
@@ -167,6 +167,18 @@ export class RgpdService {
 
     if (updateErr) {
       console.error('[RGPD] anonymize DB error:', updateErr);
+      throw { status: 500, message: "Erreur lors de l'anonymisation du compte" };
+    }
+
+    // L'adresse de facturation peut être un domicile. Les factures émises gardent
+    // leur snapshot (obligation comptable).
+    const { error: driverErr } = await supabaseAdmin
+      .from('drivers')
+      .update({ company_name: null, company_address: null, updated_at: now })
+      .eq('user_id', userId);
+
+    if (driverErr) {
+      console.error('[RGPD] anonymize driver DB error:', driverErr);
       throw { status: 500, message: "Erreur lors de l'anonymisation du compte" };
     }
 

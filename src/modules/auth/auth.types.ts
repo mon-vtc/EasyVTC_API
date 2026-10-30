@@ -42,6 +42,8 @@ export interface DriverProfile {
   status: DriverStatus;
   vehicle_type: VehicleType | null;
   siret: string | null;
+  company_name: string | null;
+  company_address: string | null;
   tva_rate: number;
   is_online: boolean;
   created_at: string;

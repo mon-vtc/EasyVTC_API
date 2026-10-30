@@ -35,6 +35,9 @@ const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
 const PAYMENT_MENTION = 'Réglé hors application (espèces / CB fin de course)';
 
+// Domaine des e-mails générés pour les comptes créés par le personnel (jamais à afficher)
+const SYNTHETIC_EMAIL_DOMAIN = '@reservation.easyvtc.local';
+
 // ── Sélect enrichi ────────────────────────────────────────────────────────────
 
 const INVOICE_WITH_TRIP_SELECT = `
@@ -80,7 +83,7 @@ export class InvoicesService {
           scheduled_at, price_final, price_estimated, discount_amount,
           client:users!client_id(first_name, last_name, phone, email),
           driver:drivers!driver_id(
-            id, siret, tva_rate,
+            id, siret, company_name, company_address, tva_rate,
             user:users!user_id(first_name, last_name, phone, email)
           )
         )
@@ -107,8 +110,14 @@ export class InvoicesService {
       phone:      driverUser?.phone      ?? null,
       email:      driverUser?.email      ?? null,
       siret:      driverData?.siret      ?? null,
+      company_name:    driverData?.company_name    ?? null,
+      company_address: driverData?.company_address ?? null,
       tva_rate:   Number(driverData?.tva_rate ?? 0),
     };
+
+    if (!driverBilling.company_name || !driverBilling.company_address || !driverBilling.siret) {
+      console.warn(`[Invoices] Identité de facturation incomplète pour le chauffeur ${driverData?.id} (trip ${tripId})`);
+    }
 
     const clientSnapshot: ClientInvoiceSnapshot = {
       first_name: clientData?.first_name ?? '',
@@ -264,7 +273,6 @@ export class InvoicesService {
         amountTtc:      invoice.amount_ttc,
         discountAmount: invoice.discount_amount ?? null,
         issuedAt:       new Date(invoice.issued_at),
-        adjustments:    invoice.adjustments ?? [],
       });
 
       const pdfPath = await this._uploadPdf(pdfBuffer, invoice.invoice_number);
@@ -450,7 +458,6 @@ export class InvoicesService {
       amountTtc:      dto.new_amount_ttc,
       discountAmount: invoice.discount_amount ?? null,
       issuedAt:       new Date(invoice.issued_at),
-      adjustments:    updatedAdjustments,
     });
 
     await this._uploadPdf(pdfBuffer, invoice.invoice_number);
@@ -550,12 +557,11 @@ export class InvoicesService {
     amountTtc:      number;
     discountAmount?: number | null;
     issuedAt:       Date;
-    adjustments?:   InvoiceAdjustment[];
   }): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const {
         invoiceNumber, driverBilling, clientSnapshot, tripSnapshot,
-        amountHt, tvaRate, amountTtc, discountAmount = null, issuedAt, adjustments = [],
+        amountHt, tvaRate, amountTtc, discountAmount = null, issuedAt,
       } = params;
 
       const doc    = new PDFDocument({ size: 'A4', margin: 50 });
@@ -593,7 +599,7 @@ export class InvoicesService {
       doc.fontSize(6).fillColor(BORDEAUX).font('Helvetica')
         .text('EasyVTC', PW - 97, 66, { width: 50, align: 'center', lineBreak: false });
 
-      // ── 2. IDENTITÉS (À l'attention de | Chauffeur) ────────────────────
+      // ── 2. IDENTITÉS (À l'attention de | Facturé par) ──────────────────
       let y  = 138;
       const COL2 = M + CW / 2 + 8;
 
@@ -608,18 +614,35 @@ export class InvoicesService {
           .text(`Téléphone : ${clientSnapshot.phone}`, M, yL, { lineBreak: false });
         yL += 13;
       }
-      if (clientSnapshot.email) {
+      if (clientSnapshot.email && !clientSnapshot.email.endsWith(SYNTHETIC_EMAIL_DOMAIN)) {
         doc.fontSize(8.5).fillColor(GRAY)
           .text(`Email : ${clientSnapshot.email}`, M, yL, { lineBreak: false });
         yL += 13;
       }
 
-      // Colonne droite : CHAUFFEUR
+      // Colonne droite : ÉMETTEUR (le chauffeur partenaire facture)
       doc.fontSize(8).fillColor(BORDEAUX).font('Helvetica-Bold')
-        .text('Chauffeur', COL2, y, { lineBreak: false });
+        .text('Facturé par', COL2, y, { lineBreak: false });
+      const driverName = `${driverBilling.first_name} ${driverBilling.last_name}`;
+      const COL2_W     = PW - M - COL2;
       doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
-        .text(`${driverBilling.first_name} ${driverBilling.last_name}`, COL2, y + 15, { lineBreak: false });
-      let yR = y + 32;
+        .text(driverBilling.company_name || driverName, COL2, y + 15, { width: COL2_W });
+      let yR = doc.y + 3;
+      if (driverBilling.company_name) {
+        doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
+          .text(driverName, COL2, yR, { width: COL2_W });
+        yR = doc.y + 2;
+      }
+      if (driverBilling.company_address) {
+        doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
+          .text(driverBilling.company_address, COL2, yR, { width: COL2_W });
+        yR = doc.y + 2;
+      }
+      if (driverBilling.siret) {
+        doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
+          .text(`SIRET : ${driverBilling.siret}`, COL2, yR, { lineBreak: false });
+        yR += 13;
+      }
       if (driverBilling.phone) {
         doc.fontSize(8.5).fillColor(GRAY).font('Helvetica')
           .text(`Téléphone : ${driverBilling.phone}`, COL2, yR, { lineBreak: false });
@@ -628,11 +651,6 @@ export class InvoicesService {
       if (driverBilling.email) {
         doc.fontSize(8.5).fillColor(GRAY)
           .text(`Email : ${driverBilling.email}`, COL2, yR, { lineBreak: false });
-        yR += 13;
-      }
-      if (driverBilling.siret) {
-        doc.fontSize(8.5).fillColor(GRAY)
-          .text(`SIRET : ${driverBilling.siret}`, COL2, yR, { lineBreak: false });
         yR += 13;
       }
 
@@ -767,27 +785,7 @@ export class InvoicesService {
         .text('Mode de paiement : Espèces / CB fin de course', M + 12, y + 27, { lineBreak: false });
       y += 60;
 
-      // ── 8. TRAÇABILITÉ AJUSTEMENTS (si applicable) ────────────────────
-      if (adjustments.length > 0) {
-        doc.moveTo(M, y).lineTo(PW - M, y).strokeColor(DIVIDER).lineWidth(0.3).stroke();
-        y += 12;
-        doc.fontSize(9).fillColor(BORDEAUX).font('Helvetica-Bold')
-          .text('Historique des modifications de prix', M, y, { lineBreak: false });
-        y += 14;
-        for (const adj of adjustments) {
-          doc.fontSize(8).fillColor(GRAY).font('Helvetica')
-            .text(
-              `${this._fmtDate(new Date(adj.adjusted_at))} — ${adj.adjusted_by_name} : ` +
-              `${this._fmtAmount(adj.old_amount_ttc)} ${currency} → ` +
-              `${this._fmtAmount(adj.new_amount_ttc)} ${currency} — Motif : ${adj.reason}`,
-              M, y, { width: CW },
-            );
-          y = doc.y + 4;
-        }
-        y += 8;
-      }
-
-      // ── 9. PIED DE PAGE LÉGAL ─────────────────────────────────────────
+      // ── 8. PIED DE PAGE LÉGAL ─────────────────────────────────────────
       const footerY = doc.page.height - 65;
 
       doc.moveTo(M, footerY - 8).lineTo(PW - M, footerY - 8)

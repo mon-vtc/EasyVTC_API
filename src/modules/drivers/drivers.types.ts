@@ -14,6 +14,8 @@ export interface DriverWithUser {
   status: DriverStatus;
   vehicle_type: VehicleType | null;
   siret: string | null;
+  company_name: string | null;
+  company_address: string | null;
   tva_rate: number;
   is_online: boolean;
   status_reason: string | null;
@@ -58,6 +60,8 @@ export interface DriverWithUserAndVehicle extends DriverWithUser {
 // ── DTO mise à jour profil chauffeur (par le chauffeur lui-même) ──────────────
 export interface UpdateDriverDto {
   siret?: string;
+  company_name?: string;
+  company_address?: string;
   vehicle_type?: VehicleType;
 }
 
@@ -71,6 +75,8 @@ export interface ChangeDriverStatusDto {
 export interface AdminUpdateDriverDto {
   tva_rate?: number;
   siret?: string;
+  company_name?: string;
+  company_address?: string;
   vehicle_type?: VehicleType;
 }
 
