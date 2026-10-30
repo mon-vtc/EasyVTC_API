@@ -20,6 +20,14 @@ export const updateDriverSchema = z.object({
       .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
       .optional()
   ),
+  company_name: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().min(2, 'Le nom de la société est trop court').max(150).optional()
+  ),
+  company_address: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().min(5, "L'adresse est trop courte").max(300).optional()
+  ),
   vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(
   (data) => Object.values(data).some((v) => v !== undefined),
@@ -55,6 +63,14 @@ export const adminUpdateDriverSchema = z.object({
       .string()
       .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
       .optional()
+  ),
+  company_name: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().min(2, 'Le nom de la société est trop court').max(150).optional()
+  ),
+  company_address: z.preprocess(
+    emptyToUndefined,
+    z.string().trim().min(5, "L'adresse est trop courte").max(300).optional()
   ),
   vehicle_type: z.preprocess(emptyToUndefined, z.string().min(1).max(50).optional()),
 }).refine(

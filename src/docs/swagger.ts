@@ -146,6 +146,8 @@ export const swaggerSpec: OpenAPIV3.Document = {
           user_id: { type: 'string', format: 'uuid' },
           status: { type: 'string', enum: ['offline', 'online', 'on_trip', 'pending', 'suspended'] },
           siret: { type: 'string', nullable: true },
+          company_name: { type: 'string', nullable: true },
+          company_address: { type: 'string', nullable: true },
           tva_rate: { type: 'number', example: 10 },
           vehicle_type: { type: 'string' },
           created_at: { type: 'string', format: 'date-time' },
@@ -1309,7 +1311,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         summary: 'Modifier mon profil chauffeur',
         security: [{ BearerAuth: [] }],
         requestBody: {
-          content: { 'application/json': { schema: { type: 'object', properties: { siret: { type: 'string' } } } } },
+          content: { 'application/json': { schema: { type: 'object', properties: { siret: { type: 'string' }, company_name: { type: 'string' }, company_address: { type: 'string' } } } } },
         },
         responses: { '200': { description: 'Profil mis à jour' } },
       },

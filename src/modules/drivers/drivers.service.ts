@@ -30,7 +30,7 @@ import type {
 
 // ── Colonnes du join drivers + user ──────────────────────────────────────────
 const DRIVER_WITH_USER_SELECT = `
-  id, user_id, status, vehicle_type, siret, tva_rate, is_online, status_reason, created_at, updated_at,
+  id, user_id, status, vehicle_type, siret, company_name, company_address, tva_rate, is_online, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
   )
@@ -38,7 +38,7 @@ const DRIVER_WITH_USER_SELECT = `
 
 // ── Colonnes du join drivers + user + véhicule actif ────────────────────────
 const DRIVER_WITH_USER_AND_VEHICLE_SELECT = `
-  id, user_id, status, vehicle_type, siret, tva_rate, is_online, status_reason, created_at, updated_at,
+  id, user_id, status, vehicle_type, siret, company_name, company_address, tva_rate, is_online, status_reason, created_at, updated_at,
   user:users!inner (
     id, email, first_name, last_name, phone, profile_photo_url, status, created_at
   ),
@@ -92,7 +92,7 @@ export class DriversService {
   }
 
   // ────────────────────────────────────────────────────────────────────────────
-  // PATCH /drivers/me — siret, vehicle_type
+  // PATCH /drivers/me — siret, company_name, company_address, vehicle_type
   // ────────────────────────────────────────────────────────────────────────────
   async updateMyProfile(userId: string, dto: UpdateDriverDto): Promise<DriverWithUser> {
     if (dto.vehicle_type) {

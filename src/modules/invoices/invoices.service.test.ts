@@ -203,6 +203,40 @@ describe('InvoicesService', () => {
       expect(result.pdf_url).toBeTruthy();
     });
 
+    it(' fige la société, l\'adresse et le SIRET du chauffeur sur la facture', async () => {
+      mockStorageOk();
+      const insertChain = chain(mockInvoice);
+      const trip = {
+        ...mockTripFull,
+        reservation: {
+          ...mockTripFull.reservation,
+          driver: {
+            ...mockTripFull.reservation.driver,
+            company_name:    'Transports Dupont',
+            company_address: '12 rue de Paris, 91300 Massy',
+          },
+        },
+      };
+
+      mockFrom
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain(trip))
+        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(insertChain);
+
+      await service.createFromTrip(TRIP_ID);
+
+      expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({
+        driver_billing: expect.objectContaining({
+          first_name:      mockDriverUser.first_name,
+          last_name:       mockDriverUser.last_name,
+          company_name:    'Transports Dupont',
+          company_address: '12 rue de Paris, 91300 Massy',
+          siret:           '12345678900011',
+        }),
+      }));
+    });
+
     it(' idempotent — retourne la facture existante sans en créer une autre', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ id: INVOICE_ID }))  // existing check → trouvé

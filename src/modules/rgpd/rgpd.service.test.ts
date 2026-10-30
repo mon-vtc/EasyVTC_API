@@ -218,14 +218,15 @@ describe('RgpdService', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // anonymize — 2 appels from() : 1 select (user) + 1 update
+  // anonymize — 3 appels from() : 1 select (user) + 2 update (users, drivers)
   // ──────────────────────────────────────────────────────────────────────────
   describe('anonymize()', () => {
 
     it('anonymise le compte avec succès et retourne le résultat', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize)) // select user
-        .mockReturnValueOnce(chain(null));                // update → OK
+        .mockReturnValueOnce(chain(null))                // update → OK
+        .mockReturnValueOnce(chain(null));
 
       const result = await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
 
@@ -234,9 +235,25 @@ describe('RgpdService', () => {
       expect(result.message).toContain('anonymisé');
     });
 
+    it('efface la société et l\'adresse de facturation du chauffeur', async () => {
+      const driversChain = chain(null);
+      mockFrom
+        .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(driversChain);
+
+      await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
+
+      expect(mockFrom).toHaveBeenCalledWith('drivers');
+      expect(driversChain.update).toHaveBeenCalledWith(
+        expect.objectContaining({ company_name: null, company_address: null }),
+      );
+    });
+
     it('met à jour Supabase Auth avec l\'email anonymisé', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
@@ -250,6 +267,7 @@ describe('RgpdService', () => {
     it('invalide toutes les sessions Auth', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
@@ -260,6 +278,7 @@ describe('RgpdService', () => {
     it('supprime la photo de profil du Storage si elle existe', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
@@ -271,6 +290,7 @@ describe('RgpdService', () => {
     it('ne touche pas le Storage si profile_photo_url est null', async () => {
       mockFrom
         .mockReturnValueOnce(chain({ ...mockUserForAnonymize, profile_photo_url: null }))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       await service.anonymize(USER_ID, USER_ID, 'client', 'password123');
@@ -325,6 +345,7 @@ describe('RgpdService', () => {
     it('un admin peut anonymiser n\'importe quel compte (hors admin)', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       const result = await service.anonymize(USER_ID, ADMIN_ID, 'admin', 'password123');
@@ -335,6 +356,7 @@ describe('RgpdService', () => {
     it('reste non bloquant même si Supabase Auth est injoignable', async () => {
       mockFrom
         .mockReturnValueOnce(chain(mockUserForAnonymize))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null));
 
       // Les appels Auth échouent mais sont fire-and-forget avec .catch()

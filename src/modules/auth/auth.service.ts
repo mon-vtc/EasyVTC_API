@@ -30,7 +30,7 @@ private async fetchFullProfile(userId: string): Promise<AuthUser> {
   if (user.role === 'driver') {
     const { data: driverData } = await supabaseAdmin
       .from('drivers')
-      .select('id, status, vehicle_type, siret, tva_rate, is_online, created_at, updated_at')
+      .select('id, status, vehicle_type, siret, company_name, company_address, tva_rate, is_online, created_at, updated_at')
       .eq('user_id', userId)
       .single();
 

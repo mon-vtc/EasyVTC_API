@@ -18,6 +18,9 @@ export interface DriverBillingSnapshot {
   phone: string | null;
   email: string | null;
   siret: string | null;
+  /** Absents des factures émises avant le 30/10/2026 */
+  company_name?: string | null;
+  company_address?: string | null;
   /** Taux de TVA en % (ex: 10 pour 10%) — 0 si non assujetti */
   tva_rate: number;
 }

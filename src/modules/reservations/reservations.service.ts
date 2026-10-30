@@ -697,8 +697,9 @@ export class ReservationsService {
     const finalDurationMin = dto.actual_duration_min ?? autoActualDurationMin ?? reservation.duration_min ?? null;
     const finalDistanceKm  = dto.actual_distance_km  ?? reservation.distance_km ?? null;
 
-    // Recalculer le prix final si les métriques réelles sont fournies (mode formule uniquement)
+    // Recalculer le prix final si des métriques réelles sont fournies (mode formule uniquement)
     let price_final = reservation.price_estimated;
+    let discount_amount_final = reservation.discount_amount ?? null;
     if (finalDistanceKm && finalDurationMin && reservation.pricing_type === 'formula') {
       try {
         const recalc = await pricingService.computePrice({
@@ -708,6 +709,17 @@ export class ReservationsService {
           is_airport:   isAirportTrip(reservation.pickup_address, reservation.dest_address),
         });
         price_final = recalc.final_price;
+
+        // Réappliquer le code promo (s'il y en avait un) sur le montant recalculé —
+        // sans ça, la remise accordée à la réservation disparaît silencieusement dès
+        // que la distance/durée réelle diffère de l'estimation (quasi systématique).
+        if (reservation.promo_code_id) {
+          discount_amount_final = await promoCodesService.recomputeDiscountForAmount(
+            reservation.promo_code_id,
+            price_final,
+          );
+          price_final = Math.max(0, Math.round((price_final - discount_amount_final) * 100) / 100);
+        }
       } catch {
         price_final = reservation.price_estimated;
       }
@@ -717,11 +729,12 @@ export class ReservationsService {
     const { data, error } = await supabaseAdmin
       .from('reservations')
       .update({
-        status:         'completed',
-        price_final:    dto.price_adjusted ?? price_final,
-        price_adjusted: dto.price_adjusted ?? null,
-        distance_km:    finalDistanceKm,
-        duration_min:   finalDurationMin,
+        status:          'completed',
+        price_final:     dto.price_adjusted ?? price_final,
+        price_adjusted:  dto.price_adjusted ?? null,
+        distance_km:     finalDistanceKm,
+        duration_min:    finalDurationMin,
+        discount_amount: discount_amount_final,
       })
       .eq('id', reservationId)
       .select(RESERVATION_SELECT)
