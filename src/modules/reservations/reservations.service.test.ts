@@ -591,6 +591,9 @@ describe('ReservationsService', () => {
 
       expect(result.status).toBe('completed');
       expect(mockComputePrice).toHaveBeenCalledTimes(1);
+      expect(mockComputePrice).toHaveBeenCalledWith(
+        expect.objectContaining({ vehicle_type: mockInProgressReservation.vehicle_type }),
+      );
       expect(mockSendToUser).toHaveBeenCalledTimes(1);
     });
 

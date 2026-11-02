@@ -705,6 +705,7 @@ export class ReservationsService {
         const recalc = await pricingService.computePrice({
           distance_km:  finalDistanceKm,
           duration_min: finalDurationMin,
+          vehicle_type: reservation.vehicle_type,
           scheduled_at: currentTrip?.started_at ?? reservation.scheduled_at,
           is_airport:   isAirportTrip(reservation.pickup_address, reservation.dest_address),
         });
