@@ -27,6 +27,8 @@ import type { UserRole } from '../auth/auth.types.js';
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const BUCKET_NAME       = 'orders-pdfs';
+// Le serveur tourne en UTC : les dates et heures imprimées doivent être celles de la France
+const PDF_TIME_ZONE     = 'Europe/Paris';
 const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
 // En-tête société affiché sur le PDF
@@ -402,17 +404,23 @@ export class OrdersService {
   private async _generateOrderNumber(): Promise<string> {
     const year = new Date().getFullYear();
 
-    // Compter les bons de l'année courante
-    const { count } = await supabaseAdmin
+    const prefix = `BC-${year}-`;
+
+    // Repart du plus grand numéro existant : un comptage redonnerait un numéro
+    // déjà pris dès qu'un document manque dans la séquence.
+    const { data: last } = await supabaseAdmin
       .from('orders')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', `${year}-01-01T00:00:00.000Z`)
-      .lt('created_at',  `${year + 1}-01-01T00:00:00.000Z`);
+      .select('order_number')
+      .like('order_number', `${prefix}%`)
+      .order('order_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const seq    = (count ?? 0) + 1;
-    const padded = String(seq).padStart(6, '0');
+    const lastSeq = last ? Number(String((last as any).order_number).slice(prefix.length)) : 0;
+    const seq     = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
+    const padded  = String(seq).padStart(6, '0');
 
-    return `BC-${year}-${padded}`;
+    return `${prefix}${padded}`;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -595,11 +603,12 @@ export class OrdersService {
   }
 
   private _fmtDate(d: Date): string {
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: PDF_TIME_ZONE });
   }
 
   private _fmtDateTime(d: Date): string {
     return d.toLocaleDateString('fr-FR', {
+      timeZone: PDF_TIME_ZONE,
       day:    '2-digit',
       month:  'long',
       year:   'numeric',

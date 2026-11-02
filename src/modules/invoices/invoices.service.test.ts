@@ -137,6 +137,8 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     update:      jest.fn().mockReturnThis(),
     eq:          jest.fn().mockReturnThis(),
     gte:         jest.fn().mockReturnThis(),
+    like:        jest.fn().mockReturnThis(),
+    limit:       jest.fn().mockReturnThis(),
     lt:          jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
     range:       jest.fn().mockReturnThis(),
@@ -190,7 +192,7 @@ describe('InvoicesService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))                         // idempotence check → null
         .mockReturnValueOnce(chain(mockTripFull))                 // fetch trip + relations
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))        // count invoices de l'année
+        .mockReturnValueOnce(chain(null))                          // aucun numéro cette année
         .mockReturnValueOnce(chain(mockInvoice));                 // insert
 
       const result = await service.createFromTrip(TRIP_ID);
@@ -221,7 +223,7 @@ describe('InvoicesService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(trip))
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(insertChain);
 
       await service.createFromTrip(TRIP_ID);
@@ -235,6 +237,24 @@ describe('InvoicesService', () => {
           siret:           '12345678900011',
         }),
       }));
+    });
+
+    it(' prend le numéro suivant le plus grand existant, même avec un trou dans la séquence', async () => {
+      mockStorageOk();
+      const insertChain = chain(mockInvoice);
+      const year = new Date().getFullYear();
+
+      mockFrom
+        .mockReturnValueOnce(chain(null))
+        .mockReturnValueOnce(chain(mockTripFull))
+        .mockReturnValueOnce(chain({ invoice_number: `FA-${year}-000024` })) // 000023 supprimée
+        .mockReturnValueOnce(insertChain);
+
+      await service.createFromTrip(TRIP_ID);
+
+      expect(insertChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ invoice_number: `FA-${year}-000025` }),
+      );
     });
 
     it(' idempotent — retourne la facture existante sans en créer une autre', async () => {
@@ -288,7 +308,7 @@ describe('InvoicesService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(tripWithPromo))
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(invoiceWithDiscount));
 
       const result = await service.createFromTrip(TRIP_ID);
@@ -310,7 +330,7 @@ describe('InvoicesService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(driverNoTva))
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(invoiceNoTva));
 
       const result = await service.createFromTrip(TRIP_ID);
