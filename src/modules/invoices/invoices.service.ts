@@ -33,6 +33,9 @@ import type { UserRole } from '../auth/auth.types.js';
 const BUCKET_NAME       = 'invoices-pdfs';
 const SIGNED_URL_EXPIRY = 3600; // 1 heure
 
+// Le serveur tourne en UTC : les dates et heures imprimées doivent être celles de la France
+const PDF_TIME_ZONE = 'Europe/Paris';
+
 const PAYMENT_MENTION = 'Réglé hors application (espèces / CB fin de course)';
 
 // Domaine des e-mails générés pour les comptes créés par le personnel (jamais à afficher)
@@ -531,16 +534,23 @@ export class InvoicesService {
   private async _generateInvoiceNumber(): Promise<string> {
     const year = new Date().getFullYear();
 
-    const { count } = await supabaseAdmin
+    const prefix = `FA-${year}-`;
+
+    // Repart du plus grand numéro existant : un comptage redonnerait un numéro
+    // déjà pris dès qu'un document manque dans la séquence.
+    const { data: last } = await supabaseAdmin
       .from('invoices')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', `${year}-01-01T00:00:00.000Z`)
-      .lt('created_at',  `${year + 1}-01-01T00:00:00.000Z`);
+      .select('invoice_number')
+      .like('invoice_number', `${prefix}%`)
+      .order('invoice_number', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const seq    = (count ?? 0) + 1;
-    const padded = String(seq).padStart(6, '0');
+    const lastSeq = last ? Number(String((last as any).invoice_number).slice(prefix.length)) : 0;
+    const seq     = (Number.isFinite(lastSeq) ? lastSeq : 0) + 1;
+    const padded  = String(seq).padStart(6, '0');
 
-    return `FA-${year}-${padded}`;
+    return `${prefix}${padded}`;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -686,7 +696,7 @@ export class InvoicesService {
       // Date + Heure sur la même ligne
       const tripDt  = new Date(tripSnapshot.scheduled_at);
       const dateStr = this._fmtDate(tripDt);
-      const timeStr = tripDt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const timeStr = tripDt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: PDF_TIME_ZONE });
       doc.fontSize(9).fillColor(DARK).font('Helvetica')
         .text(dateStr, M, y, { lineBreak: false });
       doc.fontSize(9).fillColor(DARK)
@@ -845,11 +855,12 @@ export class InvoicesService {
   }
 
   private _fmtDate(d: Date): string {
-    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: PDF_TIME_ZONE });
   }
 
   private _fmtDateTime(d: Date): string {
     return d.toLocaleDateString('fr-FR', {
+      timeZone: PDF_TIME_ZONE,
       day: '2-digit', month: 'long', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });

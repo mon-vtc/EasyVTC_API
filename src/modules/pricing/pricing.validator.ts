@@ -35,7 +35,7 @@ const timeHHMM = () =>
 export const createPricingGridSchema = z.object({
   base_price:            positiveNumber(),
   price_per_km:          positiveNumber(),
-  price_per_min:         positiveNumber(),
+  price_per_min:         nonNegativeNumber(),
   minimum_price:         positiveNumber(),
   tva_rate:              rateBetween0and1().optional(),
   airport_supplement:    nonNegativeNumber().optional(),
@@ -50,7 +50,7 @@ export const createPricingGridSchema = z.object({
 export const updatePricingGridSchema = z.object({
   base_price:            positiveNumber().optional(),
   price_per_km:          positiveNumber().optional(),
-  price_per_min:         positiveNumber().optional(),
+  price_per_min:         nonNegativeNumber().optional(),
   minimum_price:         positiveNumber().optional(),
   is_active:             z.boolean().optional(),
   tva_rate:              rateBetween0and1().optional(),
@@ -123,7 +123,7 @@ export const updatePricingConfigSchema = z.object({
   // Champs grille
   base_price:            positiveNumber().optional(),
   price_per_km:          positiveNumber().optional(),
-  price_per_min:         positiveNumber().optional(),
+  price_per_min:         nonNegativeNumber().optional(),
   minimum_price:         positiveNumber().optional(),
   tva_rate:              rateBetween0and1().optional(),
   airport_supplement:    nonNegativeNumber().optional(),

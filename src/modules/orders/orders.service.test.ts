@@ -152,6 +152,7 @@ function chain(data: unknown, error: unknown = null, count: number | null = null
     lt:          jest.fn().mockReturnThis(),
     lte:         jest.fn().mockReturnThis(),
     order:       jest.fn().mockReturnThis(),
+    like:        jest.fn().mockReturnThis(),
     range:       jest.fn().mockReturnThis(),
     limit:       jest.fn().mockReturnThis(),
     head:        jest.fn().mockReturnThis(),
@@ -207,7 +208,7 @@ describe('OrdersService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))                           // existing order check → null
         .mockReturnValueOnce(chain(mockReservationFormule))         // fetch réservation + relations
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))          // count orders de l'année
+        .mockReturnValueOnce(chain(null))          // count orders de l'année
         .mockReturnValueOnce(chain(mockOrder));                     // insert order
 
       const result = await service.createFromReservation(RESA_ID);
@@ -229,7 +230,7 @@ describe('OrdersService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))                           // existing order check → null
         .mockReturnValueOnce(chain(mockReservationFlatRate))        // fetch réservation
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(orderFlatRate));                 // insert order
 
       const result = await service.createFromReservation(RESA_ID);
@@ -276,7 +277,7 @@ describe('OrdersService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(mockReservationFormule))
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0));
+        .mockReturnValueOnce(chain(null));
 
       await expect(service.createFromReservation(RESA_ID))
         .rejects.toMatchObject({ status: 500, message: expect.stringContaining('upload') });
@@ -288,7 +289,7 @@ describe('OrdersService', () => {
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(mockReservationFormule))
-        .mockReturnValueOnce(chain({ count: 0 }, null, 0))
+        .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(null, { message: 'DB error' })); // insert KO
 
       await expect(service.createFromReservation(RESA_ID))
@@ -299,16 +300,20 @@ describe('OrdersService', () => {
       mockStorageUpload();
 
       const orderWithSeq2 = { ...mockOrder, order_number: 'BC-2026-000002' };
+      const insertChain   = chain(orderWithSeq2);
 
       mockFrom
         .mockReturnValueOnce(chain(null))
         .mockReturnValueOnce(chain(mockReservationFormule))
-        .mockReturnValueOnce(chain({ count: 1 }, null, 1))          // 1 bon déjà en BDD
-        .mockReturnValueOnce(chain(orderWithSeq2));
+        .mockReturnValueOnce(chain({ order_number: `BC-${new Date().getFullYear()}-000001` })) // dernier numéro
+        .mockReturnValueOnce(insertChain);
 
       const result = await service.createFromReservation(RESA_ID);
 
       expect(result.order_number).toBe('BC-2026-000002');
+      expect(insertChain.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ order_number: `BC-${new Date().getFullYear()}-000002` }),
+      );
     });
   });
 
