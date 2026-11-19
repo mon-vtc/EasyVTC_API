@@ -2,6 +2,8 @@ import { supabaseAdmin } from '../../database/supabase/client.js';
 import { sendManagerAccessEmail } from '../../utils/email.service.js';
 import { generatePassword } from '../../utils/generate-password.js';
 import { ratingsService } from '../ratings/ratings.service.js';
+import { ordersService } from '../orders/orders.service.js';
+import { invoicesService } from '../invoices/invoices.service.js';
 import type {
   CreateManagerDto, UpdateManagerDto, ChangeManagerStatusDto, ManagerListFilters,
   ClientListFilters, ClientListResult, ClientWithStats,
@@ -404,6 +406,56 @@ export class AdminService {
       last_trip_date,
       avg_rating,
       cancellation_rate: total_trips > 0 ? Math.round((cancelled / total_trips) * 100) : 0,
+    };
+  }
+
+  // ── PATCH /admin/clients/:id — Correction du nom / prénom ──────────────────
+  /**
+   * Corrige l'identité d'un client et la reporte sur ses bons de commande et
+   * ses factures (PDF régénérés à la prochaine consultation).
+   */
+  async updateClient(
+    id: string,
+    dto: { first_name?: string; last_name?: string },
+  ): Promise<{ client: ClientWithStats; previous: { first_name: string; last_name: string } }> {
+    const { data: existing } = await supabaseAdmin
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', id)
+      .eq('role', 'client')
+      .is('deleted_at', null)
+      .single();
+
+    if (!existing) throw { status: 404, message: 'Client introuvable' };
+
+    const { error } = await supabaseAdmin
+      .from('users')
+      .update({ ...dto, updated_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      console.error('[Admin] Erreur correction identité client:', error);
+      throw { status: 500, message: 'Erreur lors de la mise à jour du client' };
+    }
+
+    // Documents : bons de commande puis factures du client
+    const { data: reservations } = await supabaseAdmin
+      .from('reservations')
+      .select('id')
+      .eq('client_id', id);
+
+    for (const r of reservations ?? []) {
+      await ordersService.refreshFromReservation(r.id as string).catch((err) => {
+        console.error('[Admin] Erreur mise à jour bon de commande', r.id, err);
+      });
+    }
+    await invoicesService.refreshClientIdentity(id).catch((err) => {
+      console.error('[Admin] Erreur mise à jour factures du client', id, err);
+    });
+
+    return {
+      client:   await this.getClientById(id),
+      previous: existing as { first_name: string; last_name: string },
     };
   }
 

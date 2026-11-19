@@ -515,4 +515,53 @@ describe('InvoicesService', () => {
       expect(result.invoice_number).toMatch(/^FA-\d{4}-000001$/);
     });
   });
+
+  describe('fillMissingDriverBilling()', () => {
+    it(' complète uniquement les champs vides des anciennes factures', async () => {
+      const oldInvoice = { id: 'inv-old', driver_billing: { first_name: 'Jean', last_name: 'Dupont', siret: null, tva_rate: 0 } };
+      const fullInvoice = { id: 'inv-full', driver_billing: { siret: '11111111100011', company_name: 'X', company_address: 'Y' } };
+      const updateChain = chain(null);
+      mockFrom
+        .mockReturnValueOnce(chain({ siret: '12345678900011', company_name: 'Dupont VTC', company_address: '1 rue A, Paris' }))
+        .mockReturnValueOnce(chain([oldInvoice, fullInvoice]))
+        .mockReturnValueOnce(updateChain);
+
+      const count = await service.fillMissingDriverBilling('driver-1');
+
+      expect(count).toBe(1);
+      expect(updateChain.update).toHaveBeenCalledWith({
+        pdf_url: null,
+        driver_billing: {
+          ...oldInvoice.driver_billing,
+          siret: '12345678900011', company_name: 'Dupont VTC', company_address: '1 rue A, Paris',
+        },
+      });
+    });
+
+    it(' ne fait rien si le chauffeur n\'a aucune identité de facturation', async () => {
+      mockFrom.mockReturnValueOnce(chain({ siret: null, company_name: null, company_address: null }));
+
+      await expect(service.fillMissingDriverBilling('driver-1')).resolves.toBe(0);
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('refreshClientIdentity()', () => {
+    it(' reporte le nom corrigé sur les factures du client', async () => {
+      const updateChain = chain(null);
+      mockFrom
+        .mockReturnValueOnce(chain({ first_name: 'Khadija', last_name: 'Martin' }))
+        .mockReturnValueOnce(chain([
+          { id: 'inv-1', client_snapshot: { first_name: 'Kadija', last_name: 'Martin', phone: null, email: null } },
+          { id: 'inv-2', client_snapshot: { first_name: 'Khadija', last_name: 'Martin', phone: null, email: null } },
+        ]))
+        .mockReturnValueOnce(updateChain);
+
+      await expect(service.refreshClientIdentity('client-1')).resolves.toBe(1);
+      expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+        pdf_url: null,
+        client_snapshot: expect.objectContaining({ first_name: 'Khadija' }),
+      }));
+    });
+  });
 });

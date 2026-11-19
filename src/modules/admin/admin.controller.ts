@@ -11,6 +11,7 @@ import {
   adminStatsFiltersSchema,
   adminDashboardFiltersSchema,
   idParamSchema,
+  updateClientSchema,
 } from './admin.validator.js';
 
 export class AdminController {
@@ -220,6 +221,33 @@ export class AdminController {
     try {
       const client = await adminService.getClientById(paramParsed.data.id);
       res.json({ ok: true, data: client });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
+  // PATCH /admin/clients/:id — correction du nom / prénom
+  async updateClient(req: Request, res: Response): Promise<void> {
+    const paramParsed = idParamSchema.safeParse(req.params);
+    if (!paramParsed.success) { res.status(400).json({ ok: false, message: 'ID client invalide' }); return; }
+    const bodyParsed = updateClientSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: bodyParsed.error.flatten().fieldErrors });
+      return;
+    }
+    try {
+      const { client, previous } = await adminService.updateClient(paramParsed.data.id, bodyParsed.data);
+
+      void auditLog(req, {
+        action:     'CLIENT_IDENTITY_UPDATED',
+        entityType: 'user',
+        entityId:   paramParsed.data.id,
+        oldValue:   previous,
+        newValue:   bodyParsed.data,
+      });
+
+      res.json({ ok: true, message: 'Client mis à jour', data: client });
     } catch (err: unknown) {
       const e = err as { status?: number; message?: string };
       res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });

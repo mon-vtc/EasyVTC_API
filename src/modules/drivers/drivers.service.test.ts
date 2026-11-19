@@ -10,6 +10,12 @@ jest.unstable_mockModule('../../database/supabase/client.js', () => ({
   supabaseAdmin: { from: mockFrom },
 }));
 
+// Complément des factures émises sans SIRET / société (fire-and-forget après mise à jour)
+const mockFillMissingDriverBilling = jest.fn<any>().mockResolvedValue(0);
+jest.unstable_mockModule('../invoices/invoices.service.js', () => ({
+  invoicesService: { fillMissingDriverBilling: mockFillMissingDriverBilling },
+}));
+
 const { DriversService } = await import('./drivers.service.js');
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -91,6 +97,7 @@ describe('DriversService', () => {
   beforeEach(() => {
     service = new DriversService();
     jest.resetAllMocks();
+    mockFillMissingDriverBilling.mockResolvedValue(0);
   });
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -122,6 +129,23 @@ describe('DriversService', () => {
 
       const result = await service.updateMyProfile(DRIVER_USER_ID, { siret: '99999999900099' });
       expect(result.siret).toBe('99999999900099');
+      // Les anciennes factures sans SIRET sont complétées
+      expect(mockFillMissingDriverBilling).toHaveBeenCalledWith(mockDriverWithUser.id);
+    });
+
+    it(' ne touche pas aux factures sans changement d’identité de facturation', async () => {
+      mockFillMissingDriverBilling.mockClear();
+      mockFrom.mockReturnValueOnce(chain(mockDriverWithUser));
+      await service.updateMyProfile(DRIVER_USER_ID, {});
+      expect(mockFillMissingDriverBilling).not.toHaveBeenCalled();
+    });
+
+    it(' ne déclenche rien si la mise à jour échoue', async () => {
+      mockFillMissingDriverBilling.mockClear();
+      mockFrom.mockReturnValueOnce(chain(null, { message: 'db error' }));
+      await expect(service.updateMyProfile(DRIVER_USER_ID, { company_name: 'Dupont VTC' }))
+        .rejects.toMatchObject({ status: 500 });
+      expect(mockFillMissingDriverBilling).not.toHaveBeenCalled();
     });
 
     it(' lève 500 si la mise à jour échoue', async () => {
@@ -505,6 +529,27 @@ describe('DriversService', () => {
 
       const result = await service.adminUpdateDriver(DRIVER_ID, { tva_rate: 20, siret: '99999999900099' });
       expect(result.tva_rate).toBe(20);
+      expect(mockFillMissingDriverBilling).toHaveBeenCalledWith(mockDriverWithUser.id);
+    });
+
+    it(" complète les factures quand l'admin saisit la société d'un ancien compte", async () => {
+      mockFillMissingDriverBilling.mockClear();
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ ...mockDriverWithUser, company_name: 'Dupont VTC', company_address: '1 rue A, Paris' }));
+
+      await service.adminUpdateDriver(DRIVER_ID, { company_name: 'Dupont VTC', company_address: '1 rue A, Paris' });
+      expect(mockFillMissingDriverBilling).toHaveBeenCalledTimes(1);
+    });
+
+    it(' ne touche pas aux factures pour un simple changement de TVA', async () => {
+      mockFillMissingDriverBilling.mockClear();
+      mockFrom
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))
+        .mockReturnValueOnce(chain({ ...mockDriverWithUser, tva_rate: 10 }));
+
+      await service.adminUpdateDriver(DRIVER_ID, { tva_rate: 10 });
+      expect(mockFillMissingDriverBilling).not.toHaveBeenCalled();
     });
 
     it(' lève 404 si le chauffeur est introuvable', async () => {

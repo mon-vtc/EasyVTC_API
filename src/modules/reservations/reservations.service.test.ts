@@ -47,9 +47,11 @@ jest.unstable_mockModule('../drivers/drivers.service.js', () => ({
   },
 }));
 
+const mockRefreshOrder = jest.fn().mockResolvedValue(undefined as never);
 jest.unstable_mockModule('../orders/orders.service.js', () => ({
   ordersService: {
-    createFromReservation: jest.fn().mockResolvedValue({} as never),
+    createFromReservation:  jest.fn().mockResolvedValue({} as never),
+    refreshFromReservation: mockRefreshOrder,
   },
 }));
 
@@ -433,11 +435,41 @@ describe('ReservationsService', () => {
       expect(mockSetOnTripStatus).not.toHaveBeenCalled();
     });
 
-    it(' lève 400 si la réservation n\'est pas en pending', async () => {
-      mockFrom.mockReturnValueOnce(chain(mockAssignedReservation)); // déjà assigned
+    it(' réattribue une course déjà assignée à un autre chauffeur', async () => {
+      const OTHER_DRIVER_ID = 'driver-uuid-999';
+      const updateChain = chain({ ...mockAssignedReservation, driver_id: OTHER_DRIVER_ID });
+      mockFrom
+        .mockReturnValueOnce(chain(mockDriverArrivedReservation))                 // _getReservationOrThrow
+        .mockReturnValueOnce(chain({ ...mockDriver, id: OTHER_DRIVER_ID }))       // driver check
+        .mockReturnValueOnce(chain(null))                                         // _checkSchedulingConflict
+        .mockReturnValueOnce(updateChain)                                         // update réservation
+        .mockReturnValueOnce(chain({ user_id: DRIVER_USER_ID }));                 // ancien chauffeur
+
+      const result = await service.assignDriver(RESA_ID, { driver_id: OTHER_DRIVER_ID }, ADMIN_ID);
+      await new Promise((r) => setImmediate(r)); // laisse finir le fire-and-forget
+
+      expect(result.driver_id).toBe(OTHER_DRIVER_ID);
+      expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+        driver_id: OTHER_DRIVER_ID, status: 'assigned', driver_arrived_at: null,
+      }));
+      expect(mockRefreshOrder).toHaveBeenCalledWith(RESA_ID);
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        DRIVER_USER_ID, 'reservation_cancelled', 'Course réattribuée', expect.any(String), {},
+      );
+    });
+
+    it(' lève 400 si on réattribue au chauffeur déjà assigné', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockAssignedReservation));
 
       await expect(service.assignDriver(RESA_ID, { driver_id: DRIVER_ID }, ADMIN_ID))
-        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('assigned') });
+        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('déjà assigné') });
+    });
+
+    it(' lève 400 si la course a démarré', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockInProgressReservation));
+
+      await expect(service.assignDriver(RESA_ID, { driver_id: 'driver-uuid-999' }, ADMIN_ID))
+        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('in_progress') });
     });
 
     it(' lève 404 si le chauffeur n\'existe pas', async () => {
@@ -677,6 +709,75 @@ describe('ReservationsService', () => {
   // ──────────────────────────────────────────────────────────────────────────
   // cancelReservation
   // ──────────────────────────────────────────────────────────────────────────
+  describe('updateAddresses()', () => {
+    const NEW_DEST = { dest_address: '10 avenue de la Défense, Puteaux', dest_lat: 48.892, dest_lng: 2.236 };
+
+    it(' le client change la destination : prix recalculé et bon de commande mis à jour', async () => {
+      mockComputePrice.mockResolvedValue({ ...mockPriceResult, final_price: 30 } as never);
+      const updateChain = chain({ ...mockAssignedReservation, ...NEW_DEST, price_estimated: 30 });
+      mockFrom
+        .mockReturnValueOnce(chain(mockAssignedReservation))      // _getReservationOrThrow
+        .mockReturnValueOnce(updateChain)                         // update
+        .mockReturnValueOnce(chain({ user_id: DRIVER_USER_ID })); // chauffeur à notifier
+
+      const result = await service.updateAddresses(RESA_ID, CLIENT_ID, 'client', NEW_DEST);
+      await new Promise((r) => setImmediate(r));
+
+      expect(result.dest_address).toBe(NEW_DEST.dest_address);
+      expect(mockComputePrice).toHaveBeenCalledWith(expect.objectContaining({ vehicle_type: 'berline' }));
+      expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({
+        dest_address:    NEW_DEST.dest_address,
+        pickup_address:  mockReservation.pickup_address,
+        price_estimated: 30,
+        pricing_type:    'formula',
+      }));
+      expect(mockRefreshOrder).toHaveBeenCalledWith(RESA_ID);
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        DRIVER_USER_ID, 'trip_assigned', 'Course modifiée', expect.any(String), { reservation_id: RESA_ID },
+      );
+    });
+
+    it(' le chauffeur assigné peut modifier pendant la course', async () => {
+      mockComputePrice.mockResolvedValue(mockPriceResult as never);
+      mockFrom
+        .mockReturnValueOnce(chain(mockInProgressReservation))
+        .mockReturnValueOnce(chain({ id: DRIVER_ID }))          // _assertDriverOwnsReservation
+        .mockReturnValueOnce(chain({ ...mockInProgressReservation, ...NEW_DEST }));
+
+      await expect(service.updateAddresses(RESA_ID, DRIVER_USER_ID, 'driver', NEW_DEST))
+        .resolves.toMatchObject({ dest_address: NEW_DEST.dest_address });
+    });
+
+    it(' refuse au client une course déjà démarrée', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockInProgressReservation));
+
+      await expect(service.updateAddresses(RESA_ID, CLIENT_ID, 'client', NEW_DEST))
+        .rejects.toMatchObject({ status: 400, message: expect.stringContaining('chauffeur') });
+    });
+
+    it(' refuse un client qui n\'est pas le titulaire', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockAssignedReservation));
+
+      await expect(service.updateAddresses(RESA_ID, 'autre-client', 'client', NEW_DEST))
+        .rejects.toMatchObject({ status: 403 });
+    });
+
+    it(' refuse une course terminée, même au personnel', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockCompletedReservation));
+
+      await expect(service.updateAddresses(RESA_ID, ADMIN_ID, 'admin', NEW_DEST))
+        .rejects.toMatchObject({ status: 400 });
+    });
+
+    it(' lève 400 si les adresses ne changent pas', async () => {
+      mockFrom.mockReturnValueOnce(chain(mockAssignedReservation));
+
+      await expect(service.updateAddresses(RESA_ID, ADMIN_ID, 'admin', {
+        dest_address: mockReservation.dest_address, dest_lat: 49.009, dest_lng: 2.547,
+      })).rejects.toMatchObject({ status: 400, message: expect.stringContaining('identiques') });
+    });
+  });
+
   describe('cancelReservation()', () => {
 
     it(' un client annule sa propre réservation (pending)', async () => {

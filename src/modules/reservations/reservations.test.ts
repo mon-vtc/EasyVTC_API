@@ -19,6 +19,8 @@ const mockListReservations       = jest.fn() as any;
 const mockListMyReservations     = jest.fn() as any;
 const mockListDriverReservations = jest.fn() as any;
 const mockGetDriverActive        = jest.fn() as any;
+const mockUpdateAddresses        = jest.fn() as any;
+const mockAssignDriver           = jest.fn() as any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ── Mocks modules ─────────────────────────────────────────────────────────────
@@ -38,7 +40,8 @@ jest.unstable_mockModule('./reservations.service.js', () => ({
     listDriverReservations:     mockListDriverReservations,
     getDriverActiveReservation: mockGetDriverActive,
     getById:                    jest.fn(),
-    assignDriver:               jest.fn(),
+    assignDriver:               mockAssignDriver,
+    updateAddresses:            mockUpdateAddresses,
     markDriverArrived:          jest.fn(),
     startTrip:                  jest.fn(),
     completeTrip:               jest.fn(),
@@ -322,6 +325,150 @@ describe('Reservations routes', () => {
       const res = await request(app)
         .get('/reservations/driver/active')
         .set('Authorization', 'Bearer client-token');
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── PATCH /reservations/:id/addresses ──────────────────────────────────────
+
+  describe('PATCH /reservations/:id/addresses', () => {
+    const RESA_UUID = '11111111-1111-4111-8111-111111111111';
+    const VALID_BODY = { dest_address: '10 avenue de la Défense, Puteaux', dest_lat: 48.892, dest_lng: 2.236 };
+
+    it('retourne 401 sans token', async () => {
+      const res = await request(app).patch(`/reservations/${RESA_UUID}/addresses`).send(VALID_BODY);
+
+      expect(res.status).toBe(401);
+    });
+
+    it('retourne 200 et transmet le rôle du demandeur au service (client)', async () => {
+      setupValidToken(MOCK_CLIENT);
+      mockUpdateAddresses.mockResolvedValue({ ...MOCK_RESERVATION, dest_address: VALID_BODY.dest_address });
+
+      const res = await request(app)
+        .patch(`/reservations/${RESA_UUID}/addresses`)
+        .set('Authorization', 'Bearer client-token')
+        .send(VALID_BODY);
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(mockUpdateAddresses).toHaveBeenCalledWith(RESA_UUID, MOCK_CLIENT.id, 'client', VALID_BODY);
+    });
+
+    it('accepte le chauffeur et l\'admin', async () => {
+      mockUpdateAddresses.mockResolvedValue(MOCK_RESERVATION);
+
+      for (const [user, token] of [[MOCK_DRIVER, 'driver-token'], [MOCK_ADMIN, 'admin-token']] as const) {
+        setupValidToken(user);
+        const res = await request(app)
+          .patch(`/reservations/${RESA_UUID}/addresses`)
+          .set('Authorization', `Bearer ${token}`)
+          .send(VALID_BODY);
+        expect(res.status).toBe(200);
+      }
+    });
+
+    it('retourne 403 pour un gestionnaire sans la permission assign_reservation', async () => {
+      setupValidToken({ ...MOCK_ADMIN, id: 'manager-uuid', role: 'manager' } as typeof MOCK_ADMIN);
+
+      const res = await request(app)
+        .patch(`/reservations/${RESA_UUID}/addresses`)
+        .set('Authorization', 'Bearer manager-token')
+        .send(VALID_BODY);
+
+      expect(res.status).toBe(403);
+      expect(mockUpdateAddresses).not.toHaveBeenCalled();
+    });
+
+    it('retourne 400 si une adresse arrive sans coordonnées', async () => {
+      setupValidToken(MOCK_CLIENT);
+
+      const res = await request(app)
+        .patch(`/reservations/${RESA_UUID}/addresses`)
+        .set('Authorization', 'Bearer client-token')
+        .send({ dest_address: '10 avenue de la Défense, Puteaux' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.errors?.dest_address).toBeDefined();
+      expect(mockUpdateAddresses).not.toHaveBeenCalled();
+    });
+
+    it('retourne 400 si aucune adresse n\'est fournie', async () => {
+      setupValidToken(MOCK_CLIENT);
+
+      const res = await request(app)
+        .patch(`/reservations/${RESA_UUID}/addresses`)
+        .set('Authorization', 'Bearer client-token')
+        .send({});
+
+      expect(res.status).toBe(400);
+    });
+
+    it('retourne 400 si l\'ID n\'est pas un UUID', async () => {
+      setupValidToken(MOCK_CLIENT);
+
+      const res = await request(app)
+        .patch('/reservations/pas-un-uuid/addresses')
+        .set('Authorization', 'Bearer client-token')
+        .send(VALID_BODY);
+
+      expect(res.status).toBe(400);
+    });
+
+    it('relaie le statut d\'erreur du service (course démarrée)', async () => {
+      setupValidToken(MOCK_CLIENT);
+      mockUpdateAddresses.mockRejectedValue({ status: 400, message: 'La course a démarré' });
+
+      const res = await request(app)
+        .patch(`/reservations/${RESA_UUID}/addresses`)
+        .set('Authorization', 'Bearer client-token')
+        .send(VALID_BODY);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('démarré');
+    });
+  });
+
+  // ── POST /reservations/:id/assign (réattribution) ──────────────────────────
+
+  describe('POST /reservations/:id/assign', () => {
+    const RESA_UUID   = '11111111-1111-4111-8111-111111111111';
+    const DRIVER_UUID = '22222222-2222-4222-8222-222222222222';
+
+    it('retourne 200 pour une réattribution par l\'admin', async () => {
+      setupValidToken(MOCK_ADMIN);
+      mockAssignDriver.mockResolvedValue({ ...MOCK_RESERVATION, status: 'assigned', driver_id: DRIVER_UUID });
+
+      const res = await request(app)
+        .post(`/reservations/${RESA_UUID}/assign`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({ driver_id: DRIVER_UUID });
+
+      expect(res.status).toBe(200);
+      expect(mockAssignDriver).toHaveBeenCalledWith(RESA_UUID, { driver_id: DRIVER_UUID }, MOCK_ADMIN.id);
+    });
+
+    it('relaie le 400 « déjà assigné » du service', async () => {
+      setupValidToken(MOCK_ADMIN);
+      mockAssignDriver.mockRejectedValue({ status: 400, message: 'Ce chauffeur est déjà assigné à cette course' });
+
+      const res = await request(app)
+        .post(`/reservations/${RESA_UUID}/assign`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({ driver_id: DRIVER_UUID });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('déjà assigné');
+    });
+
+    it('retourne 403 pour un client', async () => {
+      setupValidToken(MOCK_CLIENT);
+
+      const res = await request(app)
+        .post(`/reservations/${RESA_UUID}/assign`)
+        .set('Authorization', 'Bearer client-token')
+        .send({ driver_id: DRIVER_UUID });
 
       expect(res.status).toBe(403);
     });

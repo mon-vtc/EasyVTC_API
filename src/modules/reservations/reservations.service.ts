@@ -24,6 +24,7 @@ import { commissionSettingsService } from '../commission-settings/commission-set
 import { promoCodesService } from '../promo-codes/promo-codes.service.js';
 import { generatePassword } from '../../utils/generate-password.js';
 import { toE164France } from '../../utils/phone.js';
+import { MAX_TRIP_DISTANCE_KM } from '../../validators/common.validator.js';
 import type {
   Reservation,
   ReservationWithRelations,
@@ -32,6 +33,7 @@ import type {
   ClientSearchResult,
   AssignDriverDto,
   CompleteReservationDto,
+  UpdateAddressesDto,
   ReservationListFilters,
   ReservationListResult,
   AvailableDriverDto,
@@ -49,6 +51,31 @@ const TRIP_CONFLICT_FALLBACK_MIN = 180; // 3 heures
 const AIRPORT_KEYWORD_RE = /a[eé]roport|airport/i;
 function isAirportTrip(pickupAddress: string, destAddress: string): boolean {
   return AIRPORT_KEYWORD_RE.test(pickupAddress) || AIRPORT_KEYWORD_RE.test(destAddress);
+}
+
+// Statuts dans lesquels chaque rôle peut encore modifier les adresses : le client
+// jusqu'au départ, le chauffeur assigné et le personnel aussi pendant la course
+// (ex : le passager change de destination à bord).
+const ADDRESS_EDITABLE_STATUSES: Record<UserRole, string[]> = {
+  client:  ['pending', 'assigned', 'driver_arrived'],
+  driver:  ['assigned', 'driver_arrived', 'in_progress'],
+  admin:   ['pending', 'assigned', 'driver_arrived', 'in_progress'],
+  manager: ['pending', 'assigned', 'driver_arrived', 'in_progress'],
+};
+
+// Distance à vol d'oiseau et durée estimée — même calcul que l'estimation de
+// l'application mobile à la réservation, pour un prix cohérent après modification.
+function estimateRouteMetrics(
+  fromLat: number, fromLng: number, toLat: number, toLng: number,
+): { distance_km: number; duration_min: number } {
+  const R    = 6371;
+  const dLat = ((toLat - fromLat) * Math.PI) / 180;
+  const dLon = ((toLng - fromLng) * Math.PI) / 180;
+  const a    =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(fromLat * Math.PI / 180) * Math.cos(toLat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  const distance_km = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
+  return { distance_km, duration_min: Math.round(distance_km * 1.8) };
 }
 
 // ── Sélect enrichi (jointures client + chauffeur) ────────────────────────────
@@ -460,7 +487,8 @@ export class ReservationsService {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Affecte un chauffeur à une réservation en attente.
+   * Affecte un chauffeur à une réservation en attente, ou la réattribue à un
+   * autre chauffeur tant que la course n'a pas démarré (assigned / driver_arrived).
    * Vérifie que le chauffeur est actif et disponible.
    */
   async assignDriver(
@@ -468,13 +496,18 @@ export class ReservationsService {
     dto:           AssignDriverDto,
     adminId:       string,
   ): Promise<ReservationWithRelations> {
-    // Vérifier que la réservation est en pending
     const reservation = await this._getReservationOrThrow(reservationId);
-    if (reservation.status !== 'pending') {
+    if (!['pending', 'assigned', 'driver_arrived'].includes(reservation.status)) {
       throw {
         status: 400,
         message: `Impossible d'assigner : la réservation est en statut "${reservation.status}"`,
       };
+    }
+
+    const previousDriverId = reservation.driver_id;
+    const isReassignment   = reservation.status !== 'pending' && !!previousDriverId;
+    if (isReassignment && previousDriverId === dto.driver_id) {
+      throw { status: 400, message: 'Ce chauffeur est déjà assigné à cette course' };
     }
 
     // Vérifier que le chauffeur existe et est actif (status 'on_trip' est refusé ici)
@@ -506,7 +539,9 @@ export class ReservationsService {
       .update({
         driver_id:   dto.driver_id,
         assigned_by: adminId,
+        // Une réattribution repart de 'assigned' : le nouveau chauffeur n'est pas encore sur place
         status:      'assigned',
+        driver_arrived_at: null,
       })
       .eq('id', reservationId)
       .select(RESERVATION_SELECT)
@@ -520,14 +555,37 @@ export class ReservationsService {
       ? `${driverUserData.first_name} ${driverUserData.last_name}`
       : 'Votre chauffeur';
 
-    // Générer le bon de commande puis notifier avec l'order_id (fire-and-forget)
+    // Générer le bon de commande (ou le mettre au nom du nouveau chauffeur) puis
+    // notifier avec l'order_id (fire-and-forget)
     void (async () => {
       let orderId: string | undefined;
       try {
+        if (isReassignment) await ordersService.refreshFromReservation(reservationId);
         const order = await ordersService.createFromReservation(reservationId);
         orderId = order?.id as string | undefined;
       } catch (err) {
         console.error('[Reservations] Erreur génération bon de commande pour réservation', reservationId, err);
+      }
+
+      // Prévenir l'ancien chauffeur que la course lui est retirée
+      if (isReassignment) {
+        const { data: previousDriver } = await supabaseAdmin
+          .from('drivers')
+          .select('user_id')
+          .eq('id', previousDriverId!)
+          .single();
+
+        if (previousDriver) {
+          notificationsService.sendToUser(
+            previousDriver.user_id as string,
+            'reservation_cancelled',
+            'Course réattribuée',
+            `La course du ${this._formatDate(reservation.scheduled_at)} a été confiée à un autre chauffeur.`,
+            // Sans reservation_id : la course ne lui étant plus accessible, le tap
+            // ouvre le détail de la notification plutôt qu'un écran en erreur 403
+            {},
+          );
+        }
       }
 
       // Notification au chauffeur
@@ -907,6 +965,163 @@ export class ReservationsService {
         { reservation_id: reservationId, driver_id: reservation.driver_id },
       );
     }
+
+    return updated;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 10 bis. MODIFICATION DES ADRESSES — Client, chauffeur assigné, personnel
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Change le départ et/ou la destination d'une réservation sans l'annuler.
+   * Recalcule distance, durée et prix estimé (mode formule ; un forfait, lié à
+   * un trajet précis, repasse en formule), met le bon de commande à jour et
+   * prévient les autres parties.
+   */
+  async updateAddresses(
+    reservationId: string,
+    requesterId:   string,
+    requesterRole: UserRole,
+    dto:           UpdateAddressesDto,
+  ): Promise<ReservationWithRelations> {
+    const reservation = await this._getReservationOrThrow(reservationId);
+
+    if (requesterRole === 'client' && reservation.client_id !== requesterId) {
+      throw { status: 403, message: 'Accès refusé' };
+    }
+    if (requesterRole === 'driver') {
+      await this._assertDriverOwnsReservation(reservation, requesterId);
+    }
+
+    if (!ADDRESS_EDITABLE_STATUSES[requesterRole].includes(reservation.status)) {
+      throw {
+        status: 400,
+        message: requesterRole === 'client' && reservation.status === 'in_progress'
+          ? 'La course a démarré : demandez directement le changement à votre chauffeur.'
+          : `Impossible de modifier les adresses : la course est en statut "${reservation.status}"`,
+      };
+    }
+
+    const pickup = {
+      address: dto.pickup_address ?? reservation.pickup_address,
+      lat:     dto.pickup_address !== undefined ? dto.pickup_lat! : reservation.pickup_lat,
+      lng:     dto.pickup_address !== undefined ? dto.pickup_lng! : reservation.pickup_lng,
+    };
+    const dest = {
+      address: dto.dest_address ?? reservation.dest_address,
+      lat:     dto.dest_address !== undefined ? dto.dest_lat! : reservation.dest_lat,
+      lng:     dto.dest_address !== undefined ? dto.dest_lng! : reservation.dest_lng,
+    };
+
+    if (pickup.address === reservation.pickup_address && dest.address === reservation.dest_address) {
+      throw { status: 400, message: 'Les adresses sont identiques aux adresses actuelles' };
+    }
+
+    const update: Record<string, unknown> = {
+      pickup_address: pickup.address,
+      pickup_lat:     pickup.lat,
+      pickup_lng:     pickup.lng,
+      dest_address:   dest.address,
+      dest_lat:       dest.lat,
+      dest_lng:       dest.lng,
+    };
+
+    // Recalcul du prix : impossible sans coordonnées pour les deux extrémités
+    // (anciennes réservations) — on garde alors le prix et la distance existants.
+    if (pickup.lat != null && pickup.lng != null && dest.lat != null && dest.lng != null) {
+      const { distance_km, duration_min } = estimateRouteMetrics(pickup.lat, pickup.lng, dest.lat, dest.lng);
+      if (distance_km > MAX_TRIP_DISTANCE_KM) {
+        throw { status: 400, message: `Distance invalide (supérieure à ${MAX_TRIP_DISTANCE_KM} km, hors zone de service)` };
+      }
+
+      const { final_price, breakdown } = await pricingService.computePrice({
+        distance_km,
+        duration_min,
+        vehicle_type: reservation.vehicle_type,
+        scheduled_at: reservation.scheduled_at,
+        is_airport:   isAirportTrip(pickup.address, dest.address),
+      });
+
+      let price_estimated = final_price;
+      let discount_amount = reservation.discount_amount ?? null;
+      if (reservation.promo_code_id) {
+        discount_amount = await promoCodesService.recomputeDiscountForAmount(reservation.promo_code_id, final_price);
+        price_estimated = Math.max(0, Math.round((final_price - discount_amount) * 100) / 100);
+      }
+
+      Object.assign(update, {
+        distance_km,
+        duration_min,
+        price_estimated,
+        price_breakdown: breakdown,
+        discount_amount,
+        pricing_type:    'formula',
+        flat_rate_id:    null,
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('reservations')
+      .update(update)
+      .eq('id', reservationId)
+      .select(RESERVATION_SELECT)
+      .single();
+
+    if (error || !data) {
+      console.error('[Reservations] Erreur modification adresses:', error);
+      throw { status: 500, message: 'Erreur lors de la modification des adresses' };
+    }
+
+    const updated = await this._mapReservation(data);
+
+    // Bon de commande + notifications (fire-and-forget)
+    void (async () => {
+      try {
+        await ordersService.refreshFromReservation(reservationId);
+      } catch (err) {
+        console.error('[Reservations] Erreur mise à jour du bon de commande après modification des adresses', reservationId, err);
+      }
+
+      const body = `Nouvel itinéraire : ${pickup.address} → ${dest.address}.`;
+
+      if (requesterRole !== 'client') {
+        notificationsService.sendToUser(
+          reservation.client_id,
+          'trip_assigned',
+          'Course modifiée',
+          `Votre course du ${this._formatDate(reservation.scheduled_at)} a été modifiée. ${body}`,
+          { reservation_id: reservationId },
+        );
+      }
+
+      if (reservation.driver_id && requesterRole !== 'driver') {
+        const { data: driverRecord } = await supabaseAdmin
+          .from('drivers')
+          .select('user_id')
+          .eq('id', reservation.driver_id)
+          .single();
+
+        if (driverRecord) {
+          notificationsService.sendToUser(
+            driverRecord.user_id as string,
+            'trip_assigned',
+            'Course modifiée',
+            `La course du ${this._formatDate(reservation.scheduled_at)} a été modifiée. ${body}`,
+            { reservation_id: reservationId },
+          );
+        }
+      }
+
+      if (requesterRole === 'client' || requesterRole === 'driver') {
+        notificationsService.sendToAdmins(
+          'trip_assigned',
+          'Adresses modifiées',
+          `${requesterRole === 'client' ? 'Le client' : 'Le chauffeur'} a modifié la course du ${this._formatDate(reservation.scheduled_at)}. ${body}`,
+          { reservation_id: reservationId },
+        );
+      }
+    })();
 
     return updated;
   }

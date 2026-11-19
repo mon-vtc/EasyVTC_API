@@ -73,65 +73,7 @@ export class OrdersService {
       return this._getOrderOrThrow(existing.id as string);
     }
 
-    // Charger la réservation avec ses relations
-    const { data: reservation, error: resError } = await supabaseAdmin
-      .from('reservations')
-      .select(`
-        *,
-        client:users!client_id(first_name, last_name, phone),
-        driver:drivers!driver_id(
-          siret,
-          user:users!user_id(first_name, last_name, phone)
-        )
-      `)
-      .eq('id', reservationId)
-      .single();
-
-    if (resError || !reservation) {
-      throw { status: 404, message: 'Réservation introuvable pour la génération du bon' };
-    }
-
-    if (!reservation.driver_id) {
-      throw { status: 400, message: 'Aucun chauffeur assigné à cette réservation' };
-    }
-
-    // Construire les snapshots (données figées)
-    const clientData  = (reservation as any).client;
-    const driverData  = (reservation as any).driver;
-    const driverUser  = driverData?.user;
-
-    const driverSnapshot: DriverSnapshot = {
-      first_name: driverUser?.first_name ?? '',
-      last_name:  driverUser?.last_name  ?? '',
-      phone:      driverUser?.phone      ?? null,
-      siret:      driverData?.siret      ?? null,
-    };
-
-    const passengerSnapshot: PassengerSnapshot = {
-      first_name: clientData?.first_name ?? '',
-      last_name:  clientData?.last_name  ?? '',
-      phone:      clientData?.phone      ?? null,
-    };
-
-    // Plateforme limitée à la France — devise toujours EUR.
-    const currency = 'EUR';
-
-    // Montant estimé de la course, affiché quel que soit le mode de tarification
-    const finalPrice = (reservation as any).price_estimated ?? null;
-
-    const tripSnapshot: TripSnapshot = {
-      pickup_address: (reservation as any).pickup_address,
-      dest_address:   (reservation as any).dest_address,
-      vehicle_type:   (reservation as any).vehicle_type,
-      scheduled_at:   (reservation as any).scheduled_at,
-      nb_passengers:  (reservation as any).nb_passengers ?? 1,
-      comment:        (reservation as any).comment ?? null,
-      via:            COMPANY.via,
-      pricing_type:   (reservation as any).pricing_type ?? 'formula',
-      final_price:    finalPrice,
-      distance_km:    (reservation as any).distance_km ?? null,
-      currency,
-    };
+    const { driverSnapshot, passengerSnapshot, tripSnapshot } = await this._buildSnapshots(reservationId);
 
     // Générer le numéro de bon unique
     const orderNumber = await this._generateOrderNumber();
@@ -169,6 +111,44 @@ export class OrdersService {
     }
 
     return order as Order;
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1 bis. RAFRAÎCHISSEMENT après réassignation / correction client / adresses
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Reconstruit les snapshots du bon depuis l'état courant de la réservation
+   * (nouveau chauffeur, nom client corrigé, adresses modifiées). Le numéro et la
+   * date d'émission sont conservés ; le PDF est effacé puis régénéré à la
+   * prochaine consultation (getPdfSignedUrl).
+   * Sans effet si aucun bon n'existe encore pour la réservation.
+   */
+  async refreshFromReservation(reservationId: string): Promise<void> {
+    const { data: existing } = await supabaseAdmin
+      .from('orders')
+      .select('id')
+      .eq('reservation_id', reservationId)
+      .maybeSingle();
+
+    if (!existing) return;
+
+    const { driverSnapshot, passengerSnapshot, tripSnapshot } = await this._buildSnapshots(reservationId);
+
+    const { error } = await supabaseAdmin
+      .from('orders')
+      .update({
+        pdf_url:            null,
+        driver_snapshot:    driverSnapshot,
+        passenger_snapshot: passengerSnapshot,
+        trip_snapshot:      tripSnapshot,
+      })
+      .eq('id', existing.id as string);
+
+    if (error) {
+      console.error('[Orders] Erreur rafraîchissement du bon', existing.id, error);
+      throw { status: 500, message: 'Erreur lors de la mise à jour du bon de commande' };
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -568,6 +548,75 @@ export class OrdersService {
   // ──────────────────────────────────────────────────────────────────────────
   // PRIVÉ — Upload PDF vers Supabase Storage
   // ──────────────────────────────────────────────────────────────────────────
+
+  /** Snapshots figés (chauffeur, passager, trajet) construits depuis la réservation. */
+  private async _buildSnapshots(reservationId: string): Promise<{
+    driverSnapshot:    DriverSnapshot;
+    passengerSnapshot: PassengerSnapshot;
+    tripSnapshot:      TripSnapshot;
+  }> {
+    // Charger la réservation avec ses relations
+    const { data: reservation, error: resError } = await supabaseAdmin
+      .from('reservations')
+      .select(`
+        *,
+        client:users!client_id(first_name, last_name, phone),
+        driver:drivers!driver_id(
+          siret,
+          user:users!user_id(first_name, last_name, phone)
+        )
+      `)
+      .eq('id', reservationId)
+      .single();
+
+    if (resError || !reservation) {
+      throw { status: 404, message: 'Réservation introuvable pour la génération du bon' };
+    }
+
+    if (!reservation.driver_id) {
+      throw { status: 400, message: 'Aucun chauffeur assigné à cette réservation' };
+    }
+
+    // Construire les snapshots (données figées)
+    const clientData  = (reservation as any).client;
+    const driverData  = (reservation as any).driver;
+    const driverUser  = driverData?.user;
+
+    const driverSnapshot: DriverSnapshot = {
+      first_name: driverUser?.first_name ?? '',
+      last_name:  driverUser?.last_name  ?? '',
+      phone:      driverUser?.phone      ?? null,
+      siret:      driverData?.siret      ?? null,
+    };
+
+    const passengerSnapshot: PassengerSnapshot = {
+      first_name: clientData?.first_name ?? '',
+      last_name:  clientData?.last_name  ?? '',
+      phone:      clientData?.phone      ?? null,
+    };
+
+    // Plateforme limitée à la France — devise toujours EUR.
+    const currency = 'EUR';
+
+    // Montant estimé de la course, affiché quel que soit le mode de tarification
+    const finalPrice = (reservation as any).price_estimated ?? null;
+
+    const tripSnapshot: TripSnapshot = {
+      pickup_address: (reservation as any).pickup_address,
+      dest_address:   (reservation as any).dest_address,
+      vehicle_type:   (reservation as any).vehicle_type,
+      scheduled_at:   (reservation as any).scheduled_at,
+      nb_passengers:  (reservation as any).nb_passengers ?? 1,
+      comment:        (reservation as any).comment ?? null,
+      via:            COMPANY.via,
+      pricing_type:   (reservation as any).pricing_type ?? 'formula',
+      final_price:    finalPrice,
+      distance_km:    (reservation as any).distance_km ?? null,
+      currency,
+    };
+
+    return { driverSnapshot, passengerSnapshot, tripSnapshot };
+  }
 
   private async _uploadPdf(pdfBuffer: Buffer, orderNumber: string): Promise<string> {
     const filePath = `${new Date().getFullYear()}/${orderNumber}.pdf`;

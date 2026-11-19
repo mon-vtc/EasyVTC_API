@@ -485,6 +485,100 @@ export class InvoicesService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // 8. RAFRAÎCHISSEMENT DES IDENTITÉS FIGÉES
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Correction du nom/prénom d'un client par le personnel : reporte la nouvelle
+   * identité sur toutes ses factures. Numéros, dates et montants inchangés ; le
+   * PDF est régénéré à la prochaine consultation.
+   */
+  async refreshClientIdentity(clientId: string): Promise<number> {
+    const { data: client } = await supabaseAdmin
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', clientId)
+      .single();
+
+    if (!client) return 0;
+
+    const invoices = await this._listByReservationField('client_id', clientId);
+    let updatedCount = 0;
+
+    for (const inv of invoices) {
+      const snapshot = (inv.client_snapshot ?? {}) as ClientInvoiceSnapshot;
+      if (snapshot.first_name === client.first_name && snapshot.last_name === client.last_name) continue;
+
+      const { error } = await supabaseAdmin
+        .from('invoices')
+        .update({
+          pdf_url:         null,
+          client_snapshot: { ...snapshot, first_name: client.first_name, last_name: client.last_name },
+        })
+        .eq('id', inv.id);
+
+      if (error) console.error('[Invoices] Erreur mise à jour identité client facture', inv.id, error);
+      else updatedCount++;
+    }
+
+    return updatedCount;
+  }
+
+  /**
+   * Complète l'identité de facturation (SIRET, société, adresse) des factures
+   * d'un chauffeur émises avant qu'il ne l'ait renseignée. Seuls les champs vides
+   * du snapshot sont remplis : une valeur déjà imprimée n'est jamais remplacée.
+   */
+  async fillMissingDriverBilling(driverId: string): Promise<number> {
+    const { data: driver } = await supabaseAdmin
+      .from('drivers')
+      .select('siret, company_name, company_address')
+      .eq('id', driverId)
+      .single();
+
+    if (!driver || (!driver.siret && !driver.company_name && !driver.company_address)) return 0;
+
+    const invoices = await this._listByReservationField('driver_id', driverId);
+    let updatedCount = 0;
+
+    for (const inv of invoices) {
+      const billing = (inv.driver_billing ?? {}) as DriverBillingSnapshot;
+      const patch: Partial<DriverBillingSnapshot> = {};
+      if (!billing.siret           && driver.siret)           patch.siret           = driver.siret;
+      if (!billing.company_name    && driver.company_name)    patch.company_name    = driver.company_name;
+      if (!billing.company_address && driver.company_address) patch.company_address = driver.company_address;
+      if (Object.keys(patch).length === 0) continue;
+
+      const { error } = await supabaseAdmin
+        .from('invoices')
+        .update({ pdf_url: null, driver_billing: { ...billing, ...patch } })
+        .eq('id', inv.id);
+
+      if (error) console.error('[Invoices] Erreur complément identité chauffeur facture', inv.id, error);
+      else updatedCount++;
+    }
+
+    return updatedCount;
+  }
+
+  /** Factures dont la réservation d'origine a `field` = `value` (client_id ou driver_id). */
+  private async _listByReservationField(
+    field: 'client_id' | 'driver_id',
+    value: string,
+  ): Promise<Pick<Invoice, 'id' | 'client_snapshot' | 'driver_billing'>[]> {
+    const { data, error } = await supabaseAdmin
+      .from('invoices')
+      .select(`id, client_snapshot, driver_billing, trip:trips!trip_id!inner(
+        reservation:reservations!reservation_id!inner(${field})
+      )`)
+      .eq(`trip.reservation.${field}`, value);
+
+    if (error) throw { status: 500, message: 'Erreur lors de la récupération des factures' };
+
+    return ((data ?? []) as any[]).map(({ trip: _t, ...inv }) => inv);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // PRIVÉ — Contrôle d'accès
   // ──────────────────────────────────────────────────────────────────────────
 

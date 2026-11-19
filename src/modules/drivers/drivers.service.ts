@@ -5,6 +5,7 @@
 
 import { supabaseAdmin } from '../../database/supabase/client.js';
 import { vehicleTypesService } from '../vehicle-types/vehicle-types.service.js';
+import { invoicesService } from '../invoices/invoices.service.js';
 import { computeZonedDateRange } from '../../utils/timezone.js';
 import type {
   DriverWithUser,
@@ -109,6 +110,13 @@ export class DriversService {
     if (error || !data) {
       console.error('[Drivers] Update profile error:', error);
       throw { status: 500, message: 'Erreur lors de la mise à jour du profil' };
+    }
+
+    // Factures émises avant la saisie du SIRET / de la société : on complète les champs manquants
+    if (dto.siret || dto.company_name || dto.company_address) {
+      invoicesService.fillMissingDriverBilling((data as any).id).catch((err) => {
+        console.error('[Drivers] Erreur complément identité de facturation', (data as any).id, err);
+      });
     }
 
     return data as unknown as DriverWithUser;
@@ -1139,6 +1147,13 @@ export class DriversService {
     if (error || !data) {
       console.error('[Drivers] Admin update error:', error);
       throw { status: 500, message: 'Erreur lors de la mise à jour' };
+    }
+
+    // Factures émises avant la saisie du SIRET / de la société : on complète les champs manquants
+    if (dto.siret || dto.company_name || dto.company_address) {
+      invoicesService.fillMissingDriverBilling((data as any).id).catch((err) => {
+        console.error('[Drivers] Erreur complément identité de facturation', (data as any).id, err);
+      });
     }
 
     return data as unknown as DriverWithUser;

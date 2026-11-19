@@ -137,6 +137,15 @@ export interface AssignDriverDto {
   driver_id: string;
 }
 
+export interface UpdateAddressesDto {
+  pickup_address?: string;
+  pickup_lat?:     number;
+  pickup_lng?:     number;
+  dest_address?:   string;
+  dest_lat?:       number;
+  dest_lng?:       number;
+}
+
 export interface CompleteReservationDto {
   /** Distance réelle parcourue en km */
   actual_distance_km?: number;

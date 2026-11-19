@@ -37,6 +37,7 @@ router.put(   '/managers/:id/permissions',    requireAdmin, (req, res) => adminC
 router.get('/clients',            requireStaff, requirePermission('view_clients'), (req, res) => adminController.listClients(req, res));
 router.get('/clients/:id',        requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientById(req, res));
 router.get('/clients/:id/trips',  requireStaff, requirePermission('view_clients'), (req, res) => adminController.getClientTrips(req, res));
+router.patch('/clients/:id',      requireAdmin, (req, res) => adminController.updateClient(req, res));
 
 // ── Réservations & statistiques ───────────────────────────────────────────────
 router.get('/reservations',            requireStaff, requirePermission('view_reservations'), (req, res) => adminController.listReservations(req, res));

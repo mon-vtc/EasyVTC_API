@@ -521,4 +521,71 @@ describe('OrdersService', () => {
         .rejects.toMatchObject({ status: 500 });
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // refreshFromReservation — réattribution / correction client / adresses
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('refreshFromReservation()', () => {
+
+    it(' reconstruit les snapshots depuis la réservation et efface le PDF (numéro conservé)', async () => {
+      const newDriverUser = { first_name: 'Paul', last_name: 'Nouveau', phone: '+33600000009' };
+      const updateChain = chain(null);
+      mockFrom
+        .mockReturnValueOnce(chain({ id: 'order-uuid-1' }))                 // bon existant
+        .mockReturnValueOnce(chain({                                        // réservation à jour
+          ...mockReservationFormule,
+          dest_address: '10 avenue de la Défense, Puteaux',
+          client:       { ...mockClient, last_name: 'Martin-Corrigé' },
+          driver:       { siret: '99999999900099', user: newDriverUser },
+        }))
+        .mockReturnValueOnce(updateChain);                                   // update order
+
+      await service.refreshFromReservation(RESA_ID);
+
+      const payload = (updateChain.update as jest.Mock).mock.calls[0][0] as Record<string, any>;
+      expect(payload.pdf_url).toBeNull();
+      expect(payload.driver_snapshot).toMatchObject({ first_name: 'Paul', siret: '99999999900099' });
+      expect(payload.passenger_snapshot).toMatchObject({ last_name: 'Martin-Corrigé' });
+      expect(payload.trip_snapshot).toMatchObject({ dest_address: '10 avenue de la Défense, Puteaux' });
+      // Le numéro et la date d'émission du bon ne sont jamais réécrits
+      expect(payload).not.toHaveProperty('order_number');
+      expect(payload).not.toHaveProperty('issued_at');
+      // Pas de génération PDF immédiate : elle se fait à la prochaine consultation
+      expect(mockStorage.from).not.toHaveBeenCalled();
+    });
+
+    it(' ne fait rien si aucun bon n\'existe encore pour la réservation', async () => {
+      mockFrom.mockReturnValueOnce(chain(null));
+
+      await expect(service.refreshFromReservation(RESA_ID)).resolves.toBeUndefined();
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
+
+    it(' lève 500 si la mise à jour du bon échoue', async () => {
+      mockFrom
+        .mockReturnValueOnce(chain({ id: 'order-uuid-1' }))
+        .mockReturnValueOnce(chain(mockReservationFormule))
+        .mockReturnValueOnce(chain(null, { message: 'db down' }));
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      await expect(service.refreshFromReservation(RESA_ID)).rejects.toMatchObject({ status: 500 });
+    });
+  });
+
+  describe('getPdfSignedUrl() après rafraîchissement', () => {
+    it(' régénère le PDF avec les nouveaux snapshots quand pdf_url a été effacé', async () => {
+      const refreshed = { ...mockOrderWithReservation, pdf_url: null };
+      mockFrom
+        .mockReturnValueOnce(chain(refreshed))                                         // getById
+        .mockReturnValueOnce(chain({ ...refreshed, pdf_url: '2026/BC-2026-000001.pdf' })); // update pdf_url
+      const upload = jest.fn().mockResolvedValue({ error: null } as never);
+      const createSignedUrl = jest.fn().mockResolvedValue({ data: { signedUrl: 'https://signed' }, error: null } as never);
+      mockStorage.from.mockReturnValue({ upload, createSignedUrl });
+
+      const url = await service.getPdfSignedUrl('order-uuid-1', ADMIN_ID, 'admin');
+
+      expect(upload).toHaveBeenCalledTimes(1);
+      expect(url).toBe('https://signed');
+    });
+  });
 });
