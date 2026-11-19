@@ -13,6 +13,7 @@ import {
   assignDriverSchema,
   completeReservationSchema,
   cancelReservationSchema,
+  updateAddressesSchema,
   reservationListFiltersSchema,
   reservationIdParamSchema,
 } from './reservations.validator.js';
@@ -294,6 +295,44 @@ export class ReservationsController {
   }
 
   // ── PATCH /reservations/:id/cancel — Client ou Admin : annuler ────────────
+  async updateAddresses(req: Request, res: Response): Promise<void> {
+    const paramParsed = reservationIdParamSchema.safeParse(req.params);
+    if (!paramParsed.success) {
+      res.status(400).json({ ok: false, message: 'ID invalide' });
+      return;
+    }
+    const bodyParsed = updateAddressesSchema.safeParse(req.body);
+    if (!bodyParsed.success) {
+      res.status(400).json({ ok: false, message: 'Données invalides', errors: bodyParsed.error.flatten().fieldErrors });
+      return;
+    }
+
+    try {
+      const reservation = await reservationsService.updateAddresses(
+        paramParsed.data.id,
+        req.user!.id,
+        req.user!.role,
+        bodyParsed.data,
+      );
+
+      void auditLog(req, {
+        action:     'RESERVATION_ADDRESSES_UPDATED',
+        entityType: 'reservation',
+        entityId:   paramParsed.data.id,
+        newValue:   {
+          pickup_address:  reservation.pickup_address,
+          dest_address:    reservation.dest_address,
+          price_estimated: reservation.price_estimated,
+        },
+      });
+
+      res.status(200).json({ ok: true, message: 'Adresses modifiées', data: reservation });
+    } catch (err: unknown) {
+      const e = err as { status?: number; message?: string };
+      res.status(e.status ?? 500).json({ ok: false, message: e.message ?? 'Erreur serveur' });
+    }
+  }
+
   async cancel(req: Request, res: Response): Promise<void> {
     const paramParsed = reservationIdParamSchema.safeParse(req.params);
     if (!paramParsed.success) {

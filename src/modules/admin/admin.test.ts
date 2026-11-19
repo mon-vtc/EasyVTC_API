@@ -23,6 +23,7 @@ const mockGetManagerPermissions  = jest.fn() as any;
 const mockSetManagerPermissions  = jest.fn() as any;
 const mockGetStats               = jest.fn() as any;
 const mockListClients            = jest.fn() as any;
+const mockUpdateClient           = jest.fn() as any;
 
 // usersService
 const mockListUsers              = jest.fn() as any;
@@ -52,6 +53,7 @@ jest.unstable_mockModule('./admin.service.js', () => ({
     getStats:              mockGetStats,
     listClients:           mockListClients,
     getClientById:         jest.fn(),
+    updateClient:          mockUpdateClient,
     getClientTrips:        jest.fn(),
     getDashboard:          jest.fn(),
   },
@@ -445,6 +447,87 @@ describe('Admin routes', () => {
         .set('Authorization', 'Bearer admin-token');
       expect(res.status).toBe(200);
       expect(res.body.ok).toBe(true);
+    });
+  });
+
+  // ── PATCH /admin/clients/:id — correction du nom / prénom ─────────────────
+
+  describe('PATCH /admin/clients/:id', () => {
+    const CLIENT_UUID = '33333333-3333-4333-8333-333333333333';
+
+    it('retourne 401 sans token', async () => {
+      const res = await request(app).patch(`/admin/clients/${CLIENT_UUID}`).send({ last_name: 'Martin' });
+      expect(res.status).toBe(401);
+    });
+
+    it('retourne 200 et transmet la correction au service (admin)', async () => {
+      setupValidToken(MOCK_ADMIN);
+      mockUpdateClient.mockResolvedValue({
+        client:   { ...MOCK_CLIENT, id: CLIENT_UUID, last_name: 'Martin' },
+        previous: { first_name: 'Jean', last_name: 'Dupond' },
+      });
+
+      const res = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({ last_name: 'Martin' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.data.last_name).toBe('Martin');
+      expect(mockUpdateClient).toHaveBeenCalledWith(CLIENT_UUID, { last_name: 'Martin' });
+    });
+
+    it('retourne 403 pour un gestionnaire (correction réservée à l\'admin)', async () => {
+      setupValidToken({ ...MOCK_ADMIN, id: 'manager-uuid', role: 'manager' } as typeof MOCK_ADMIN);
+
+      const res = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer manager-token')
+        .send({ last_name: 'Martin' });
+
+      expect(res.status).toBe(403);
+      expect(mockUpdateClient).not.toHaveBeenCalled();
+    });
+
+    it('retourne 403 pour un client', async () => {
+      setupValidToken(MOCK_CLIENT);
+
+      const res = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer client-token')
+        .send({ last_name: 'Martin' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('retourne 400 si aucun champ ou un nom trop court', async () => {
+      setupValidToken(MOCK_ADMIN);
+
+      const empty = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({});
+      const tooShort = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({ first_name: 'J' });
+
+      expect(empty.status).toBe(400);
+      expect(tooShort.status).toBe(400);
+      expect(mockUpdateClient).not.toHaveBeenCalled();
+    });
+
+    it('relaie le 404 du service', async () => {
+      setupValidToken(MOCK_ADMIN);
+      mockUpdateClient.mockRejectedValue({ status: 404, message: 'Client introuvable' });
+
+      const res = await request(app)
+        .patch(`/admin/clients/${CLIENT_UUID}`)
+        .set('Authorization', 'Bearer admin-token')
+        .send({ last_name: 'Martin' });
+
+      expect(res.status).toBe(404);
     });
   });
 });

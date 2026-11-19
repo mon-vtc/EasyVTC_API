@@ -23,6 +23,7 @@ export type AuditAction =
   // Utilisateurs
   | 'USER_STATUS_CHANGED'
   | 'USER_ANONYMIZED'
+  | 'CLIENT_IDENTITY_UPDATED'
 
   // Documents chauffeur
   | 'DOCUMENT_VALIDATED'
@@ -33,6 +34,7 @@ export type AuditAction =
   | 'RESERVATION_ASSIGNED'
   | 'RESERVATION_CANCELLED'
   | 'RESERVATION_CREATED_MANUALLY'
+  | 'RESERVATION_ADDRESSES_UPDATED'
 
   // Factures & commandes
   | 'INVOICE_PRICE_ADJUSTED'

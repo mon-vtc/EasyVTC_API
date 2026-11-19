@@ -32,6 +32,16 @@ jest.unstable_mockModule('../users/users.service.js', () => ({
   },
 }));
 
+// Correction d'identité client : répercussion sur bons de commande et factures
+const mockRefreshOrder          = jest.fn<any>().mockResolvedValue(undefined);
+const mockRefreshClientInvoices = jest.fn<any>().mockResolvedValue(0);
+jest.unstable_mockModule('../orders/orders.service.js', () => ({
+  ordersService: { refreshFromReservation: mockRefreshOrder },
+}));
+jest.unstable_mockModule('../invoices/invoices.service.js', () => ({
+  invoicesService: { refreshClientIdentity: mockRefreshClientInvoices },
+}));
+
 // Import dynamique APRÈS les mocks (obligatoire ESM)
 const { AdminService } = await import('./admin.service.js');
 
@@ -127,6 +137,8 @@ describe('AdminService', () => {
     service = new AdminService();
     // mockReset sur mockFrom uniquement : vide la queue Once sans perturber les autres mocks
     mockFrom.mockReset();
+    mockRefreshOrder.mockClear();
+    mockRefreshClientInvoices.mockClear();
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -373,6 +385,79 @@ describe('AdminService', () => {
       ).rejects.toMatchObject({ status: 404 });
 
       expect(mockChangeUserStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // updateClient() — correction du nom / prénom
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('updateClient()', () => {
+    const CLIENT_ID = 'client-uuid-777';
+
+    /** Chaîne awaitable (update/select sans terminal) + single() */
+    function thenableChain(data: unknown, error: unknown = null) {
+      const resolved = { data, error };
+      const c: Record<string, unknown> = {
+        select: jest.fn().mockReturnThis(),
+        update: jest.fn().mockReturnThis(),
+        eq:     jest.fn().mockReturnThis(),
+        is:     jest.fn().mockReturnThis(),
+        single: jest.fn().mockResolvedValue(resolved as never),
+        then:   (onFulfilled: (v: unknown) => unknown) => Promise.resolve(resolved).then(onFulfilled),
+      };
+      return c;
+    }
+
+    it(' met à jour le profil puis répercute sur les bons de commande et les factures', async () => {
+      const updateChain = thenableChain(null);
+      mockFrom
+        .mockReturnValueOnce(thenableChain({ first_name: 'Jean', last_name: 'Dupond' })) // client existant
+        .mockReturnValueOnce(updateChain)                                               // update users
+        .mockReturnValueOnce(thenableChain([{ id: 'resa-1' }, { id: 'resa-2' }]));      // ses réservations
+      const getClientSpy = jest.spyOn(service, 'getClientById')
+        .mockResolvedValue({ id: CLIENT_ID, first_name: 'Jean', last_name: 'Martin' } as never);
+
+      const result = await service.updateClient(CLIENT_ID, { last_name: 'Martin' });
+
+      expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({ last_name: 'Martin' }));
+      expect(mockRefreshOrder).toHaveBeenCalledTimes(2);
+      expect(mockRefreshOrder).toHaveBeenCalledWith('resa-1');
+      expect(mockRefreshClientInvoices).toHaveBeenCalledWith(CLIENT_ID);
+      expect(result.previous).toEqual({ first_name: 'Jean', last_name: 'Dupond' });
+      expect(result.client.last_name).toBe('Martin');
+      getClientSpy.mockRestore();
+    });
+
+    it(' lève 404 si le client n\'existe pas (ou n\'est pas un client)', async () => {
+      mockFrom.mockReturnValueOnce(thenableChain(null));
+
+      await expect(service.updateClient(CLIENT_ID, { last_name: 'Martin' }))
+        .rejects.toMatchObject({ status: 404 });
+      expect(mockRefreshOrder).not.toHaveBeenCalled();
+    });
+
+    it(' lève 500 si la mise à jour échoue, sans toucher aux documents', async () => {
+      mockFrom
+        .mockReturnValueOnce(thenableChain({ first_name: 'Jean', last_name: 'Dupond' }))
+        .mockReturnValueOnce(thenableChain(null, { message: 'db down' }));
+
+      await expect(service.updateClient(CLIENT_ID, { last_name: 'Martin' }))
+        .rejects.toMatchObject({ status: 500 });
+      expect(mockRefreshClientInvoices).not.toHaveBeenCalled();
+    });
+
+    it(' ne bloque pas la correction si un bon de commande échoue', async () => {
+      mockFrom
+        .mockReturnValueOnce(thenableChain({ first_name: 'Jean', last_name: 'Dupond' }))
+        .mockReturnValueOnce(thenableChain(null))
+        .mockReturnValueOnce(thenableChain([{ id: 'resa-1' }]));
+      mockRefreshOrder.mockRejectedValueOnce(new Error('pdf') as never);
+      jest.spyOn(service, 'getClientById').mockResolvedValue({ id: CLIENT_ID } as never);
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      await expect(service.updateClient(CLIENT_ID, { first_name: 'Jeanne' })).resolves.toBeDefined();
+      expect(mockRefreshClientInvoices).toHaveBeenCalledWith(CLIENT_ID);
     });
   });
 });

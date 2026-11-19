@@ -10,6 +10,7 @@
 //   GET    /reservations/driver/active       Chauffeur : sa course active
 //   GET    /reservations/:id                 Tous : détail (contrôle d'accès par rôle)
 //   PATCH  /reservations/:id/cancel          Client ou Admin : annuler
+//   PATCH  /reservations/:id/addresses       Client, chauffeur assigné, personnel : changer départ/destination
 //
 // CHAUFFEUR UNIQUEMENT
 //   PATCH  /reservations/:id/arrive          Signaler l'arrivée au pickup
@@ -99,6 +100,14 @@ router.post('/:id/assign', requireStaff, requirePermission('assign_reservation')
 // Détail d'une réservation (accès contrôlé par rôle dans le service)
 router.get('/:id', requireRole('client', 'driver', 'admin', 'manager'), (req, res) =>
   reservationsController.getById(req, res),
+);
+
+// Modification départ/destination : client (avant départ), chauffeur assigné et
+// personnel (aussi pendant la course) — contrôles de propriété/statut dans le service
+router.patch('/:id/addresses',
+  requireRole('client', 'driver', 'admin', 'manager'),
+  requirePermissionIfManager('assign_reservation'),
+  (req, res) => reservationsController.updateAddresses(req, res),
 );
 
 // Annulation : client sans restriction, manager doit avoir cancel_reservation

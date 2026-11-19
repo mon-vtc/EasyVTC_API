@@ -124,6 +124,29 @@ export const assignDriverSchema = z.object({
   driver_id: z.string().uuid('ID de chauffeur invalide'),
 });
 
+// ── Modification des adresses (client, chauffeur assigné, personnel) ─────────
+// Chaque adresse modifiée arrive avec ses coordonnées : le serveur en déduit la
+// nouvelle distance et recalcule le prix estimé.
+
+export const updateAddressesSchema = z.object({
+  pickup_address: z.string().trim().min(5, "L'adresse de départ est requise").max(300).optional(),
+  pickup_lat:     z.number().min(-90).max(90).optional(),
+  pickup_lng:     z.number().min(-180).max(180).optional(),
+
+  dest_address:   z.string().trim().min(5, "L'adresse de destination est requise").max(300).optional(),
+  dest_lat:       z.number().min(-90).max(90).optional(),
+  dest_lng:       z.number().min(-180).max(180).optional(),
+}).refine(
+  (d) => d.pickup_address !== undefined || d.dest_address !== undefined,
+  { message: 'Indiquez au moins une adresse à modifier', path: ['dest_address'] },
+).refine(
+  (d) => d.pickup_address === undefined || (d.pickup_lat !== undefined && d.pickup_lng !== undefined),
+  { message: "Sélectionnez l'adresse de départ dans la liste proposée", path: ['pickup_address'] },
+).refine(
+  (d) => d.dest_address === undefined || (d.dest_lat !== undefined && d.dest_lng !== undefined),
+  { message: 'Sélectionnez la destination dans la liste proposée', path: ['dest_address'] },
+);
+
 // ── Fin de course ─────────────────────────────────────────────────────────────
 
 export const completeReservationSchema = z.object({
@@ -165,5 +188,6 @@ export type CreateManualReservationInput = z.infer<typeof createManualReservatio
 export type ClientSearchQueryInput       = z.infer<typeof clientSearchQuerySchema>;
 export type AssignDriverInput            = z.infer<typeof assignDriverSchema>;
 export type CompleteReservationInput     = z.infer<typeof completeReservationSchema>;
+export type UpdateAddressesInput         = z.infer<typeof updateAddressesSchema>;
 export type CancelReservationInput       = z.infer<typeof cancelReservationSchema>;
 export type ReservationListFiltersInput  = z.infer<typeof reservationListFiltersSchema>;

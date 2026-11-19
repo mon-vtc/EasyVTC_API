@@ -27,6 +27,15 @@ export const updateManagerSchema = z.object({
   priority_level: z.number().int().min(1, 'Niveau invalide').max(3, 'Niveau invalide').optional(),
 });
 
+// Correction de l'identité d'un client (erreur de saisie, trajets pro)
+export const updateClientSchema = z.object({
+  first_name: z.string().trim().min(2, 'Prénom trop court').max(100).optional(),
+  last_name:  z.string().trim().min(2, 'Nom trop court').max(100).optional(),
+}).refine(
+  (d) => d.first_name !== undefined || d.last_name !== undefined,
+  { message: 'Indiquez le prénom et/ou le nom à corriger', path: ['first_name'] },
+);
+
 export const changeManagerStatusSchema = z.object({
   status: z.enum(['active', 'inactive', 'locked']),
   reason: z.string().min(3, 'Le motif est trop court (min 3 caractères)'),
